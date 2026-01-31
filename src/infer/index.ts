@@ -4,7 +4,7 @@
 
 import type { TypeValidator, TypeModifiers } from "../schema/types.js";
 import type { ParamValidator } from "../schema/params.js";
-import type { DatasourceDefinition, SchemaDefinition } from "../schema/datasource.js";
+import type { DatasourceDefinition, SchemaDefinition, ColumnDefinition } from "../schema/datasource.js";
 import type { PipeDefinition, ParamsDefinition, OutputDefinition } from "../schema/pipe.js";
 
 /**
@@ -178,7 +178,14 @@ export type InferSchema<T> = T extends DatasourceDefinition<infer S> ? S : never
 
 /**
  * Helper type to get the Tinybird type string for a schema
+ * Handles both raw TypeValidators and ColumnDefinition wrappers
  */
 export type InferTinybirdTypes<T extends SchemaDefinition> = {
-  [K in keyof T]: T[K] extends TypeValidator<unknown, infer TB, TypeModifiers> ? TB : never;
+  [K in keyof T]: T[K] extends ColumnDefinition<infer V>
+    ? V extends TypeValidator<unknown, infer TB, TypeModifiers>
+      ? TB
+      : never
+    : T[K] extends TypeValidator<unknown, infer TB, TypeModifiers>
+      ? TB
+      : never;
 };
