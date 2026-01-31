@@ -1,0 +1,173 @@
+/**
+ * Configuration loader for tinybird.json
+ */
+
+import * as fs from "fs";
+import * as path from "path";
+
+/**
+ * Tinybird configuration file structure
+ */
+export interface TinybirdConfig {
+  /** Path to the TypeScript schema entry point */
+  schema: string;
+  /** API token (supports ${ENV_VAR} interpolation) */
+  token: string;
+  /** Tinybird API base URL (optional, defaults to EU region) */
+  baseUrl?: string;
+}
+
+/**
+ * Resolved configuration with all values expanded
+ */
+export interface ResolvedConfig {
+  /** Path to the TypeScript schema entry point */
+  schema: string;
+  /** Resolved API token */
+  token: string;
+  /** Tinybird API base URL */
+  baseUrl: string;
+  /** Path to the config file */
+  configPath: string;
+  /** Working directory */
+  cwd: string;
+}
+
+/**
+ * Default base URL (EU region)
+ */
+const DEFAULT_BASE_URL = "https://api.tinybird.co";
+
+/**
+ * Config file name
+ */
+const CONFIG_FILE = "tinybird.json";
+
+/**
+ * Interpolate environment variables in a string
+ *
+ * Supports ${VAR_NAME} syntax
+ */
+function interpolateEnvVars(value: string): string {
+  return value.replace(/\$\{([^}]+)\}/g, (_, envVar) => {
+    const envValue = process.env[envVar];
+    if (envValue === undefined) {
+      throw new Error(`Environment variable ${envVar} is not set`);
+    }
+    return envValue;
+  });
+}
+
+/**
+ * Find the config file by walking up the directory tree
+ */
+function findConfigFile(startDir: string): string | null {
+  let currentDir = startDir;
+
+  while (true) {
+    const configPath = path.join(currentDir, CONFIG_FILE);
+    if (fs.existsSync(configPath)) {
+      return configPath;
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      // Reached root
+      return null;
+    }
+    currentDir = parentDir;
+  }
+}
+
+/**
+ * Load and resolve the tinybird.json configuration
+ *
+ * @param cwd - Working directory to start searching from (defaults to process.cwd())
+ * @returns Resolved configuration
+ *
+ * @example
+ * ```ts
+ * const config = loadConfig();
+ * console.log(config.schema); // 'src/tinybird/schema.ts'
+ * console.log(config.token);  // 'p.xxx' (resolved from ${TINYBIRD_TOKEN})
+ * ```
+ */
+export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
+  const configPath = findConfigFile(cwd);
+
+  if (!configPath) {
+    throw new Error(
+      `Could not find ${CONFIG_FILE}. Run 'npx tinybird init' to create one.`
+    );
+  }
+
+  let rawContent: string;
+  try {
+    rawContent = fs.readFileSync(configPath, "utf-8");
+  } catch (error) {
+    throw new Error(`Failed to read ${configPath}: ${(error as Error).message}`);
+  }
+
+  let config: TinybirdConfig;
+  try {
+    config = JSON.parse(rawContent) as TinybirdConfig;
+  } catch (error) {
+    throw new Error(`Failed to parse ${configPath}: ${(error as Error).message}`);
+  }
+
+  // Validate required fields
+  if (!config.schema) {
+    throw new Error(`Missing 'schema' field in ${configPath}`);
+  }
+
+  if (!config.token) {
+    throw new Error(`Missing 'token' field in ${configPath}`);
+  }
+
+  // Resolve token (may contain env vars)
+  let resolvedToken: string;
+  try {
+    resolvedToken = interpolateEnvVars(config.token);
+  } catch (error) {
+    throw new Error(
+      `Failed to resolve token in ${configPath}: ${(error as Error).message}`
+    );
+  }
+
+  // Resolve base URL
+  let resolvedBaseUrl = DEFAULT_BASE_URL;
+  if (config.baseUrl) {
+    try {
+      resolvedBaseUrl = interpolateEnvVars(config.baseUrl);
+    } catch (error) {
+      throw new Error(
+        `Failed to resolve baseUrl in ${configPath}: ${(error as Error).message}`
+      );
+    }
+  }
+
+  // Get the directory containing the config file
+  const configDir = path.dirname(configPath);
+
+  return {
+    schema: config.schema,
+    token: resolvedToken,
+    baseUrl: resolvedBaseUrl,
+    configPath,
+    cwd: configDir,
+  };
+}
+
+/**
+ * Check if a config file exists in the given directory
+ */
+export function configExists(cwd: string = process.cwd()): boolean {
+  return findConfigFile(cwd) !== null;
+}
+
+/**
+ * Get the expected config file path for a directory
+ */
+export function getConfigPath(cwd: string = process.cwd()): string {
+  return path.join(cwd, CONFIG_FILE);
+}
