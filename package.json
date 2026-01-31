@@ -1,0 +1,41 @@
+{
+  "name": "@tinybird/sdk",
+  "version": "0.0.1",
+  "description": "TypeScript SDK for Tinybird Forward - define datasources and pipes as TypeScript",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "tinybird",
+    "analytics",
+    "typescript",
+    "sdk",
+    "clickhouse"
+  ],
+  "author": "Tinybird",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
