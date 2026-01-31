@@ -7,9 +7,10 @@ import type { AnyTypeValidator } from "./types.js";
 import type { AnyParamValidator } from "./params.js";
 import type { DatasourceDefinition } from "./datasource.js";
 
-// Symbol for brand typing
-const PIPE_BRAND = Symbol("tinybird.pipe");
-const NODE_BRAND = Symbol("tinybird.node");
+/** Symbol for brand typing pipes */
+export const PIPE_BRAND: unique symbol = Symbol("tinybird.pipe");
+/** Symbol for brand typing nodes */
+export const NODE_BRAND: unique symbol = Symbol("tinybird.node");
 
 /**
  * Parameter definition for a pipe
