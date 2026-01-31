@@ -5,6 +5,7 @@
 import { loadConfig, type ResolvedConfig } from "../config.js";
 import { build, type BuildResult } from "../../generator/index.js";
 import { buildToTinybird, type BuildApiResult } from "../../api/build.js";
+import { deployToMain } from "../../api/deploy.js";
 
 /**
  * Build command options
@@ -14,6 +15,10 @@ export interface BuildCommandOptions {
   cwd?: string;
   /** Skip pushing to API (just generate) */
   dryRun?: boolean;
+  /** Override the token from config (used for branch tokens) */
+  tokenOverride?: string;
+  /** Use /v1/deploy instead of /v1/build (for main branch) */
+  useDeployEndpoint?: boolean;
 }
 
 /**
@@ -81,15 +86,29 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
   }
 
   // Deploy to Tinybird
+  // Use token override if provided (for branch tokens)
+  const effectiveToken = options.tokenOverride ?? config.token;
+
   let deployResult: BuildApiResult;
   try {
-    deployResult = await buildToTinybird(
-      {
-        baseUrl: config.baseUrl,
-        token: config.token,
-      },
-      buildResult.resources
-    );
+    // Use /v1/deploy for main branch, /v1/build for feature branches
+    if (options.useDeployEndpoint) {
+      deployResult = await deployToMain(
+        {
+          baseUrl: config.baseUrl,
+          token: effectiveToken,
+        },
+        buildResult.resources
+      );
+    } else {
+      deployResult = await buildToTinybird(
+        {
+          baseUrl: config.baseUrl,
+          token: effectiveToken,
+        },
+        buildResult.resources
+      );
+    }
   } catch (error) {
     return {
       success: false,

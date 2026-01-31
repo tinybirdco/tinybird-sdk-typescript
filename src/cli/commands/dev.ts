@@ -6,6 +6,8 @@ import * as path from "path";
 import { watch } from "chokidar";
 import { loadConfig, type ResolvedConfig } from "../config.js";
 import { runBuild, type BuildCommandResult } from "./build.js";
+import { getOrCreateBranch, type TinybirdBranch } from "../../api/branches.js";
+import { getBranchToken, setBranchToken } from "../branch-store.js";
 
 /**
  * Dev command options
@@ -21,6 +23,22 @@ export interface DevCommandOptions {
   onBuildComplete?: (result: BuildCommandResult) => void;
   /** Callback when an error occurs */
   onError?: (error: Error) => void;
+  /** Callback when branch is created/detected */
+  onBranchReady?: (info: BranchReadyInfo) => void;
+}
+
+/**
+ * Information about the branch being used
+ */
+export interface BranchReadyInfo {
+  /** Git branch name */
+  gitBranch: string | null;
+  /** Whether we're on the main branch */
+  isMainBranch: boolean;
+  /** Tinybird branch info (null if on main) */
+  tinybirdBranch?: TinybirdBranch;
+  /** Whether the branch was newly created */
+  wasCreated?: boolean;
 }
 
 /**
@@ -31,12 +49,35 @@ export interface DevController {
   stop: () => Promise<void>;
   /** Trigger a manual rebuild */
   rebuild: () => Promise<BuildCommandResult>;
+  /** The configuration being used */
+  config: ResolvedConfig;
+  /** The effective token (branch token or main token) */
+  effectiveToken: string;
+  /** Branch info */
+  branchInfo: BranchReadyInfo;
+}
+
+/**
+ * Extract workspace ID from a Tinybird token
+ * Tokens are in format: p.{workspaceId}...
+ */
+function extractWorkspaceId(token: string): string {
+  // Simple extraction - use first part after 'p.'
+  // In reality this would need to be fetched from the API or parsed properly
+  // For now, we'll use a hash of the token as a workspace identifier
+  const hash = token.split("").reduce((acc, char) => {
+    return ((acc << 5) - acc + char.charCodeAt(0)) | 0;
+  }, 0);
+  return `ws_${Math.abs(hash).toString(16)}`;
 }
 
 /**
  * Run the dev command
  *
  * Watches for file changes and automatically rebuilds and pushes to Tinybird.
+ * Automatically manages Tinybird branches based on git branch:
+ * - Main branch: uses workspace token and /v1/deploy
+ * - Feature branches: creates/reuses Tinybird branch and uses /v1/build
  *
  * @param options - Dev options
  * @returns Dev controller
@@ -52,6 +93,73 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
   } catch (error) {
     throw error;
   }
+
+  // Determine effective token based on git branch
+  let effectiveToken = config.token;
+  let branchInfo: BranchReadyInfo = {
+    gitBranch: config.gitBranch,
+    isMainBranch: config.isMainBranch,
+  };
+
+  // If we're on a feature branch, get or create the Tinybird branch
+  // Use tinybirdBranch (sanitized name) for Tinybird API, gitBranch for display
+  if (!config.isMainBranch && config.tinybirdBranch) {
+    const workspaceId = extractWorkspaceId(config.token);
+    const branchName = config.tinybirdBranch; // Sanitized name for Tinybird
+
+    // Check if we have a cached token
+    const cachedBranch = getBranchToken(workspaceId, branchName);
+
+    if (cachedBranch) {
+      // Use cached token
+      effectiveToken = cachedBranch.token;
+      branchInfo = {
+        gitBranch: config.gitBranch, // Original git branch name for display
+        isMainBranch: false,
+        tinybirdBranch: {
+          id: cachedBranch.id,
+          name: branchName,
+          token: cachedBranch.token,
+          created_at: cachedBranch.createdAt,
+        },
+        wasCreated: false,
+      };
+    } else {
+      // Create or get the branch from API
+      const tinybirdBranch = await getOrCreateBranch(
+        {
+          baseUrl: config.baseUrl,
+          token: config.token,
+        },
+        branchName
+      );
+
+      if (!tinybirdBranch.token) {
+        throw new Error(
+          `Branch '${branchName}' was created but no token was returned. ` +
+            `This may be an API issue.`
+        );
+      }
+
+      // Cache the token
+      setBranchToken(workspaceId, branchName, {
+        id: tinybirdBranch.id,
+        token: tinybirdBranch.token,
+        createdAt: tinybirdBranch.created_at,
+      });
+
+      effectiveToken = tinybirdBranch.token;
+      branchInfo = {
+        gitBranch: config.gitBranch, // Original git branch name for display
+        isMainBranch: false,
+        tinybirdBranch,
+        wasCreated: true,
+      };
+    }
+  }
+
+  // Notify about branch readiness
+  options.onBranchReady?.(branchInfo);
 
   // Get the schema directory to watch
   const schemaPath = path.isAbsolute(config.schema)
@@ -75,7 +183,11 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
     options.onBuildStart?.();
 
     try {
-      const result = await runBuild({ cwd: config.cwd });
+      const result = await runBuild({
+        cwd: config.cwd,
+        tokenOverride: effectiveToken,
+        useDeployEndpoint: config.isMainBranch,
+      });
       options.onBuildComplete?.(result);
       return result;
     } catch (error) {
@@ -157,5 +269,8 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
       await watcher.close();
     },
     rebuild: doBuild,
+    config,
+    effectiveToken,
+    branchInfo,
   };
 }
