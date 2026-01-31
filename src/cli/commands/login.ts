@@ -2,6 +2,8 @@
  * Login command - authenticate with Tinybird via browser
  */
 
+import * as fs from "fs";
+import * as path from "path";
 import { browserLogin, type LoginOptions, type AuthResult } from "../auth.js";
 import { getConfigPath, updateConfig, configExists } from "../config.js";
 
@@ -65,13 +67,37 @@ export async function runLogin(options: RunLoginOptions = {}): Promise<LoginResu
     };
   }
 
-  // Update tinybird.json with the new credentials
+  // Save token to .env.local and update baseUrl in tinybird.json
   const configPath = getConfigPath(cwd);
   try {
-    updateConfig(configPath, {
-      token: authResult.token,
-      baseUrl: authResult.baseUrl,
-    });
+    const envLocalPath = path.join(cwd, ".env.local");
+    const envContent = `TINYBIRD_TOKEN=${authResult.token}\n`;
+
+    // Append to existing .env.local or create new one
+    if (fs.existsSync(envLocalPath)) {
+      const existingContent = fs.readFileSync(envLocalPath, "utf-8");
+      // Check if TINYBIRD_TOKEN already exists
+      if (existingContent.includes("TINYBIRD_TOKEN=")) {
+        // Replace existing token
+        const updatedContent = existingContent.replace(
+          /TINYBIRD_TOKEN=.*/,
+          `TINYBIRD_TOKEN=${authResult.token}`
+        );
+        fs.writeFileSync(envLocalPath, updatedContent);
+      } else {
+        // Append token
+        fs.appendFileSync(envLocalPath, envContent);
+      }
+    } else {
+      fs.writeFileSync(envLocalPath, envContent);
+    }
+
+    // Update baseUrl in tinybird.json if it changed
+    if (authResult.baseUrl) {
+      updateConfig(configPath, {
+        baseUrl: authResult.baseUrl,
+      });
+    }
   } catch (error) {
     return {
       success: false,

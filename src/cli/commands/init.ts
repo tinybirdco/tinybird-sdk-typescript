@@ -188,12 +188,37 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     const authResult = await browserLogin();
 
     if (authResult.success && authResult.token) {
-      // Update tinybird.json with the credentials
+      // Save token to .env.local and update baseUrl in tinybird.json
       try {
-        updateConfig(configPath, {
-          token: authResult.token,
-          baseUrl: authResult.baseUrl,
-        });
+        const envLocalPath = path.join(cwd, ".env.local");
+        const envContent = `TINYBIRD_TOKEN=${authResult.token}\n`;
+
+        // Append to existing .env.local or create new one
+        if (fs.existsSync(envLocalPath)) {
+          const existingContent = fs.readFileSync(envLocalPath, "utf-8");
+          // Check if TINYBIRD_TOKEN already exists
+          if (existingContent.includes("TINYBIRD_TOKEN=")) {
+            // Replace existing token
+            const updatedContent = existingContent.replace(
+              /TINYBIRD_TOKEN=.*/,
+              `TINYBIRD_TOKEN=${authResult.token}`
+            );
+            fs.writeFileSync(envLocalPath, updatedContent);
+          } else {
+            // Append token
+            fs.appendFileSync(envLocalPath, envContent);
+          }
+        } else {
+          fs.writeFileSync(envLocalPath, envContent);
+          created.push(".env.local");
+        }
+
+        // Update baseUrl in tinybird.json if it changed
+        if (authResult.baseUrl) {
+          updateConfig(configPath, {
+            baseUrl: authResult.baseUrl,
+          });
+        }
 
         return {
           success: true,
@@ -204,7 +229,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
           userEmail: authResult.userEmail,
         };
       } catch (error) {
-        // Login succeeded but config update failed
+        // Login succeeded but saving credentials failed
         console.error(`Warning: Failed to save credentials: ${(error as Error).message}`);
         return {
           success: true,
