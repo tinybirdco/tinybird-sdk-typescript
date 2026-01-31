@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { tinybird, type TopPagesParams, type TopEventsParams } from "@/tinybird/client";
+import {
+  tinybird,
+  type TopPagesParams,
+  type TopEventsParams,
+} from "@/tinybird/client";
 
 export async function GET() {
   // Check if token is configured

@@ -80,14 +80,14 @@ function createCli(): Command {
         process.exit(1);
       }
 
-      const { build, push } = result;
+      const { build, deploy } = result;
 
       if (build) {
         console.log(`Generated ${build.stats.datasourceCount} datasource(s), ${build.stats.pipeCount} pipe(s)`);
       }
 
       if (options.dryRun) {
-        console.log("\n[Dry run] Resources not pushed to API");
+        console.log("\n[Dry run] Resources not deployed to API");
 
         // Show generated content
         if (build) {
@@ -103,11 +103,11 @@ function createCli(): Command {
             console.log(pipe.content);
           });
         }
-      } else if (push) {
-        if (push.result === "no_changes") {
+      } else if (deploy) {
+        if (deploy.result === "no_changes") {
           console.log("No changes detected - already up to date");
         } else {
-          console.log(`Pushed to Tinybird successfully`);
+          console.log(`Deployed to Tinybird successfully`);
         }
       }
 
@@ -133,14 +133,14 @@ function createCli(): Command {
               return;
             }
 
-            const { build, push } = result;
+            const { build, deploy } = result;
 
-            if (build && push) {
-              if (push.result === "no_changes") {
+            if (build && deploy) {
+              if (deploy.result === "no_changes") {
                 console.log(`[${formatTime()}] No changes detected`);
               } else {
                 console.log(
-                  `[${formatTime()}] Pushed ${build.stats.datasourceCount} datasource(s), ${build.stats.pipeCount} pipe(s) in ${result.durationMs}ms`
+                  `[${formatTime()}] Deployed ${build.stats.datasourceCount} datasource(s), ${build.stats.pipeCount} pipe(s) in ${result.durationMs}ms`
                 );
               }
             }

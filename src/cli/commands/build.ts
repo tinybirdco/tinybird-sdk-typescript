@@ -4,7 +4,7 @@
 
 import { loadConfig, type ResolvedConfig } from "../config.js";
 import { build, type BuildResult } from "../../generator/index.js";
-import { pushToTinybird, type PushResult } from "../../api/push.js";
+import { buildToTinybird, type BuildApiResult } from "../../api/build.js";
 
 /**
  * Build command options
@@ -24,8 +24,8 @@ export interface BuildCommandResult {
   success: boolean;
   /** Build result with generated resources */
   build?: BuildResult;
-  /** Push result (if not dry run) */
-  push?: PushResult;
+  /** Build API result (if not dry run) */
+  deploy?: BuildApiResult;
   /** Error message if failed */
   error?: string;
   /** Duration in milliseconds */
@@ -80,10 +80,10 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
     };
   }
 
-  // Push to Tinybird
-  let pushResult: PushResult;
+  // Deploy to Tinybird
+  let deployResult: BuildApiResult;
   try {
-    pushResult = await pushToTinybird(
+    deployResult = await buildToTinybird(
       {
         baseUrl: config.baseUrl,
         token: config.token,
@@ -94,17 +94,17 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
     return {
       success: false,
       build: buildResult,
-      error: `Push failed: ${(error as Error).message}`,
+      error: `Deploy failed: ${(error as Error).message}`,
       durationMs: Date.now() - startTime,
     };
   }
 
-  if (!pushResult.success) {
+  if (!deployResult.success) {
     return {
       success: false,
       build: buildResult,
-      push: pushResult,
-      error: pushResult.error,
+      deploy: deployResult,
+      error: deployResult.error,
       durationMs: Date.now() - startTime,
     };
   }
@@ -112,7 +112,7 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
   return {
     success: true,
     build: buildResult,
-    push: pushResult,
+    deploy: deployResult,
     durationMs: Date.now() - startTime,
   };
 }

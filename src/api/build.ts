@@ -1,14 +1,14 @@
 /**
- * Push resources to Tinybird API
+ * Build and deploy resources to Tinybird API
  * Uses the /v1/build endpoint to deploy all resources at once
  */
 
 import type { GeneratedResources } from "../generator/index.js";
 
 /**
- * Configuration for pushing to Tinybird
+ * Configuration for building/deploying to Tinybird
  */
-export interface PushConfig {
+export interface BuildConfig {
   /** Tinybird API base URL */
   baseUrl: string;
   /** API token for authentication */
@@ -51,36 +51,36 @@ export interface BuildResponse {
 }
 
 /**
- * Push result with additional metadata
+ * Build result with additional metadata
  */
-export interface PushResult {
-  /** Whether the push was successful */
+export interface BuildApiResult {
+  /** Whether the build was successful */
   success: boolean;
   /** Result status from API */
   result: "success" | "failed" | "no_changes";
   /** Error message if failed */
   error?: string;
-  /** Number of datasources pushed */
+  /** Number of datasources deployed */
   datasourceCount: number;
-  /** Number of pipes pushed */
+  /** Number of pipes deployed */
   pipeCount: number;
   /** Build ID if successful */
   buildId?: string;
 }
 
 /**
- * Push generated resources to Tinybird API
+ * Build and deploy generated resources to Tinybird API
  *
  * Uses the /v1/build endpoint which accepts all resources in a single
  * multipart form request.
  *
- * @param config - Push configuration with API URL and token
- * @param resources - Generated resources to push
- * @returns Push result
+ * @param config - Build configuration with API URL and token
+ * @param resources - Generated resources to deploy
+ * @returns Build result
  *
  * @example
  * ```ts
- * const result = await pushToTinybird(
+ * const result = await buildToTinybird(
  *   {
  *     baseUrl: 'https://api.tinybird.co',
  *     token: 'p.xxx',
@@ -92,15 +92,15 @@ export interface PushResult {
  * );
  *
  * if (result.success) {
- *   console.log('Pushed successfully!');
+ *   console.log('Build deployed successfully!');
  * }
  * ```
  */
-export async function pushToTinybird(
-  config: PushConfig,
+export async function buildToTinybird(
+  config: BuildConfig,
   resources: GeneratedResources,
   options?: { debug?: boolean }
-): Promise<PushResult> {
+): Promise<BuildApiResult> {
   const debug = options?.debug ?? !!process.env.TINYBIRD_DEBUG;
   const formData = new FormData();
 
@@ -211,7 +211,7 @@ export async function pushToTinybird(
 /**
  * Validate that the configuration is complete
  */
-export function validatePushConfig(config: Partial<PushConfig>): asserts config is PushConfig {
+export function validateBuildConfig(config: Partial<BuildConfig>): asserts config is BuildConfig {
   if (!config.baseUrl) {
     throw new Error("Missing baseUrl in configuration");
   }
