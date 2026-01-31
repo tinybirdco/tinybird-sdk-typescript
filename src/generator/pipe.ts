@@ -42,17 +42,15 @@ function generateNode(node: NodeDefinition): string {
 
   parts.push(`SQL >`);
 
-  // Check if SQL has dynamic parameters - if so, prefix with %
+  // Check if SQL has dynamic parameters - if so, add % on its own line
   const isDynamic = hasDynamicParameters(node.sql);
-  const sqlLines = node.sql.trim().split("\n");
+  if (isDynamic) {
+    parts.push(`    %`);
+  }
 
-  sqlLines.forEach((line, index) => {
-    // Add % prefix to the first non-empty line if SQL is dynamic
-    if (isDynamic && index === 0) {
-      parts.push(`    %${line}`);
-    } else {
-      parts.push(`    ${line}`);
-    }
+  const sqlLines = node.sql.trim().split("\n");
+  sqlLines.forEach((line) => {
+    parts.push(`    ${line}`);
   });
 
   return parts.join("\n");
