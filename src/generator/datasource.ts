@@ -63,8 +63,17 @@ function formatDefaultValue(value: unknown, tinybirdType: string): string {
     return `'${value.toISOString().replace("T", " ").slice(0, 19)}'`;
   }
 
-  // For complex types, use JSON
-  return `'${JSON.stringify(value).replace(/'/g, "\\'")}'`;
+  // For arrays and objects, use raw JSON (no quotes)
+  if (Array.isArray(value)) {
+    return JSON.stringify(value);
+  }
+
+  if (typeof value === "object" && value !== null) {
+    return JSON.stringify(value);
+  }
+
+  // Fallback for other types - stringify as string literal
+  return `'${String(value).replace(/'/g, "\\'")}'`;
 }
 
 /**
