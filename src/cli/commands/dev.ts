@@ -2,13 +2,25 @@
  * Dev command - watch mode with automatic sync
  */
 
+import * as fs from "fs";
 import * as path from "path";
 import { watch } from "chokidar";
-import { loadConfig, type ResolvedConfig } from "../config.js";
+import { loadConfig, configExists, getConfigPath, hasValidToken, updateConfig, type ResolvedConfig } from "../config.js";
 import { runBuild, type BuildCommandResult } from "./build.js";
 import { getOrCreateBranch, type TinybirdBranch } from "../../api/branches.js";
 import { getWorkspace } from "../../api/workspaces.js";
 import { getBranchToken, setBranchToken } from "../branch-store.js";
+import { browserLogin } from "../auth.js";
+
+/**
+ * Login result info
+ */
+export interface LoginInfo {
+  /** Workspace name */
+  workspaceName?: string;
+  /** User email */
+  userEmail?: string;
+}
 
 /**
  * Dev command options
@@ -26,6 +38,8 @@ export interface DevCommandOptions {
   onError?: (error: Error) => void;
   /** Callback when branch is created/detected */
   onBranchReady?: (info: BranchReadyInfo) => void;
+  /** Callback when login is needed and completed */
+  onLoginComplete?: (info: LoginInfo) => void;
 }
 
 /**
@@ -73,7 +87,62 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
   const cwd = options.cwd ?? process.cwd();
   const debounceMs = options.debounce ?? 100;
 
-  // Load config
+  // Check if project is initialized
+  if (!configExists(cwd)) {
+    throw new Error(
+      "No tinybird.json found. Run 'npx tinybird init' to initialize a project."
+    );
+  }
+
+  // Check if authentication is set up, if not trigger login
+  if (!hasValidToken(cwd)) {
+    console.log("No authentication found. Starting login flow...\n");
+
+    const authResult = await browserLogin();
+
+    if (!authResult.success || !authResult.token) {
+      throw new Error(
+        authResult.error ?? "Login failed. Run 'npx tinybird login' to authenticate."
+      );
+    }
+
+    // Save token to .env.local
+    const envLocalPath = path.join(cwd, ".env.local");
+    const envContent = `TINYBIRD_TOKEN=${authResult.token}\n`;
+
+    if (fs.existsSync(envLocalPath)) {
+      const existingContent = fs.readFileSync(envLocalPath, "utf-8");
+      if (existingContent.includes("TINYBIRD_TOKEN=")) {
+        const updatedContent = existingContent.replace(
+          /TINYBIRD_TOKEN=.*/,
+          `TINYBIRD_TOKEN=${authResult.token}`
+        );
+        fs.writeFileSync(envLocalPath, updatedContent);
+      } else {
+        fs.appendFileSync(envLocalPath, envContent);
+      }
+    } else {
+      fs.writeFileSync(envLocalPath, envContent);
+    }
+
+    // Update baseUrl in tinybird.json if it changed
+    if (authResult.baseUrl) {
+      const configPath = getConfigPath(cwd);
+      updateConfig(configPath, {
+        baseUrl: authResult.baseUrl,
+      });
+    }
+
+    // Set the token in the environment for this session
+    process.env.TINYBIRD_TOKEN = authResult.token;
+
+    options.onLoginComplete?.({
+      workspaceName: authResult.workspaceName,
+      userEmail: authResult.userEmail,
+    });
+  }
+
+  // Load config (now should have valid token)
   let config: ResolvedConfig;
   try {
     config = loadConfig(cwd);

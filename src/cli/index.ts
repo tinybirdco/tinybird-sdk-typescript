@@ -186,6 +186,16 @@ function createCli(): Command {
 
       try {
         const controller = await runDev({
+          onLoginComplete: (info) => {
+            console.log("\nAuthentication successful!");
+            if (info.workspaceName) {
+              console.log(`  Workspace: ${info.workspaceName}`);
+            }
+            if (info.userEmail) {
+              console.log(`  User: ${info.userEmail}`);
+            }
+            console.log("");
+          },
           onBranchReady: (info) => {
             if (info.isMainBranch) {
               console.log("On main branch - deploying to workspace\n");
