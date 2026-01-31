@@ -6,6 +6,7 @@
 import * as esbuild from "esbuild";
 import * as path from "path";
 import * as fs from "fs";
+import { watch as chokidarWatch, type FSWatcher } from "chokidar";
 import { isProjectDefinition, type ProjectDefinition } from "../schema/project.js";
 
 /**
@@ -146,4 +147,96 @@ export interface WatchOptions extends LoaderOptions {
   onError?: (error: Error) => void;
   /** Debounce delay in milliseconds (default: 100) */
   debounce?: number;
+}
+
+/**
+ * Schema watcher controller
+ */
+export interface SchemaWatcher {
+  /** Stop watching for changes */
+  close: () => Promise<void>;
+  /** The initial loaded schema */
+  initialSchema: LoadedSchema;
+}
+
+/**
+ * Watch a TypeScript schema file for changes
+ *
+ * Performs an initial load, then watches for file changes and reloads.
+ * Uses debouncing to coalesce rapid file system events.
+ *
+ * @param options - Watch options
+ * @returns A controller to stop watching
+ *
+ * @example
+ * ```ts
+ * const watcher = await watchSchema({
+ *   schemaPath: 'src/tinybird/schema.ts',
+ *   onChange: (schema) => {
+ *     console.log('Schema updated:', schema.project);
+ *   },
+ *   onError: (err) => {
+ *     console.error('Load error:', err.message);
+ *   },
+ * });
+ *
+ * // Later, stop watching
+ * await watcher.close();
+ * ```
+ */
+export async function watchSchema(options: WatchOptions): Promise<SchemaWatcher> {
+  const debounceMs = options.debounce ?? 100;
+
+  // Perform initial load
+  const initialSchema = await loadSchema(options);
+
+  const schemaPath = initialSchema.schemaPath;
+  const schemaDir = initialSchema.schemaDir;
+
+  // Set up debounced reload
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const reload = async () => {
+    try {
+      const result = await loadSchema(options);
+      await options.onChange(result);
+    } catch (error) {
+      if (options.onError) {
+        options.onError(error as Error);
+      }
+    }
+  };
+
+  const debouncedReload = () => {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      reload();
+    }, debounceMs);
+  };
+
+  // Watch the schema file and its directory for TypeScript files
+  const watcher: FSWatcher = chokidarWatch([schemaPath, path.join(schemaDir, "**/*.ts")], {
+    ignoreInitial: true,
+    ignored: [
+      /node_modules/,
+      /\.tinybird-schema-.*\.mjs$/,
+    ],
+  });
+
+  watcher.on("change", debouncedReload);
+  watcher.on("add", debouncedReload);
+  watcher.on("unlink", debouncedReload);
+
+  return {
+    close: async () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      await watcher.close();
+    },
+    initialSchema,
+  };
 }
