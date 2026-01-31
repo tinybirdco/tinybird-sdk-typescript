@@ -211,12 +211,11 @@ export async function pushToTinybird(
 /**
  * Validate that the configuration is complete
  */
-export function validatePushConfig(config: Partial<PushConfig>): config is PushConfig {
+export function validatePushConfig(config: Partial<PushConfig>): asserts config is PushConfig {
   if (!config.baseUrl) {
     throw new Error("Missing baseUrl in configuration");
   }
   if (!config.token) {
     throw new Error("Missing token in configuration");
   }
-  return true;
 }
