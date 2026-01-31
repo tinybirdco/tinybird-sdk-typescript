@@ -123,6 +123,12 @@ describe("Git utilities", () => {
       expect(sanitizeBranchName("feature/JIRA-123/add-user-auth")).toBe("feature_JIRA_123_add_user_auth");
       expect(sanitizeBranchName("user@name/branch")).toBe("user_name_branch");
     });
+
+    it("returns empty string for all-symbol branch names", () => {
+      expect(sanitizeBranchName("----")).toBe("");
+      expect(sanitizeBranchName("///")).toBe("");
+      expect(sanitizeBranchName("@#$%")).toBe("");
+    });
   });
 
   describe("getTinybirdBranchName", () => {

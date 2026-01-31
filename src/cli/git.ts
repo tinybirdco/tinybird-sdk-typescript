@@ -113,10 +113,13 @@ export function sanitizeBranchName(branchName: string): string {
 
 /**
  * Get the current git branch name sanitized for Tinybird
- * Returns null if not in a git repo or on detached HEAD
+ * Returns null if not in a git repo, on detached HEAD, or if the
+ * sanitized name would be empty (e.g., branch name "----")
  */
 export function getTinybirdBranchName(): string | null {
   const branch = getCurrentGitBranch();
   if (!branch) return null;
-  return sanitizeBranchName(branch);
+  const sanitized = sanitizeBranchName(branch);
+  if (!sanitized) return null;
+  return sanitized;
 }
