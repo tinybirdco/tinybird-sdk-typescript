@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n next,tinybird -c blue,magenta \"next dev\" \"node ../bin/tinybird.js dev\"",
+    "dev": "concurrently -n next,tinybird -c blue,magenta \"next dev\" \"dotenv -e .env.local -- node ../bin/tinybird.js dev\"",
     "dev:next": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "tinybird": "node ../bin/tinybird.js",
-    "tinybird:dev": "node ../bin/tinybird.js dev",
-    "tinybird:build": "node ../bin/tinybird.js build"
+    "tinybird": "dotenv -e .env.local -- node ../bin/tinybird.js",
+    "tinybird:dev": "dotenv -e .env.local -- node ../bin/tinybird.js dev",
+    "tinybird:build": "dotenv -e .env.local -- node ../bin/tinybird.js build"
   },
   "dependencies": {
     "@tinybird/sdk": "file:..",
@@ -24,6 +24,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "concurrently": "^9.2.1",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
