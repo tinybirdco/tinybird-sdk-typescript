@@ -213,7 +213,11 @@ export async function watchSchema(options: WatchOptions): Promise<SchemaWatcher>
     }
     debounceTimer = setTimeout(() => {
       debounceTimer = null;
-      reload();
+      reload().catch((error) => {
+        if (options.onError) {
+          options.onError(error as Error);
+        }
+      });
     }, debounceMs);
   };
 

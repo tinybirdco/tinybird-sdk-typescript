@@ -4,6 +4,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { getCurrentGitBranch, isMainBranch, getTinybirdBranchName } from "./git.js";
 
 /**
  * Tinybird configuration file structure
@@ -23,7 +24,7 @@ export interface TinybirdConfig {
 export interface ResolvedConfig {
   /** Path to the TypeScript schema entry point */
   schema: string;
-  /** Resolved API token */
+  /** Resolved API token (workspace main token) */
   token: string;
   /** Tinybird API base URL */
   baseUrl: string;
@@ -31,6 +32,12 @@ export interface ResolvedConfig {
   configPath: string;
   /** Working directory */
   cwd: string;
+  /** Current git branch (null if not in git repo or detached HEAD) */
+  gitBranch: string | null;
+  /** Sanitized branch name for Tinybird (symbols replaced with underscores) */
+  tinybirdBranch: string | null;
+  /** Whether we're on the main/master branch */
+  isMainBranch: boolean;
 }
 
 /**
@@ -149,12 +156,19 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
   // Get the directory containing the config file
   const configDir = path.dirname(configPath);
 
+  // Detect git branch
+  const gitBranch = getCurrentGitBranch();
+  const tinybirdBranch = getTinybirdBranchName();
+
   return {
     schema: config.schema,
     token: resolvedToken,
     baseUrl: resolvedBaseUrl,
     configPath,
     cwd: configDir,
+    gitBranch,
+    tinybirdBranch,
+    isMainBranch: isMainBranch(),
   };
 }
 
