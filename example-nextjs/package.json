@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "tinybird": "node ../bin/tinybird.js",
+    "tinybird:dev": "node ../bin/tinybird.js dev",
+    "tinybird:build": "node ../bin/tinybird.js build"
   },
   "dependencies": {
     "@tinybird/sdk": "file:..",

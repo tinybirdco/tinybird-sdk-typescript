@@ -1,0 +1,5 @@
+{
+  "schema": "src/tinybird/schema.ts",
+  "token": "${TINYBIRD_TOKEN}",
+  "baseUrl": "https://api.tinybird.co"
+}
