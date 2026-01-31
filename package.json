@@ -24,7 +24,10 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "tinybird",
@@ -43,7 +46,9 @@
   },
   "devDependencies": {
     "@types/node": "^25.1.0",
-    "typescript": "^5.3.0"
+    "@vitest/coverage-v8": "^4.0.18",
+    "typescript": "^5.3.0",
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=18.0.0"
