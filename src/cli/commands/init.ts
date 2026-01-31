@@ -4,7 +4,8 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { getConfigPath } from "../config.js";
+import { getConfigPath, updateConfig, hasValidToken } from "../config.js";
+import { browserLogin } from "../auth.js";
 
 /**
  * Default schema content
@@ -98,6 +99,8 @@ export interface InitOptions {
   cwd?: string;
   /** Force overwrite existing files */
   force?: boolean;
+  /** Skip the login flow */
+  skipLogin?: boolean;
 }
 
 /**
@@ -112,6 +115,12 @@ export interface InitResult {
   skipped: string[];
   /** Error message if failed */
   error?: string;
+  /** Whether login was completed */
+  loggedIn?: boolean;
+  /** Workspace name after login */
+  workspaceName?: string;
+  /** User email after login */
+  userEmail?: string;
 }
 
 /**
@@ -127,6 +136,7 @@ export interface InitResult {
 export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   const cwd = options.cwd ?? process.cwd();
   const force = options.force ?? false;
+  const skipLogin = options.skipLogin ?? false;
 
   const created: string[] = [];
   const skipped: string[] = [];
@@ -167,6 +177,49 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         created,
         skipped,
         error: `Failed to create schema file: ${(error as Error).message}`,
+      };
+    }
+  }
+
+  // Check if login is needed
+  if (!skipLogin && !hasValidToken(cwd)) {
+    console.log("\nNo authentication found. Starting login flow...\n");
+
+    const authResult = await browserLogin();
+
+    if (authResult.success && authResult.token) {
+      // Update tinybird.json with the credentials
+      try {
+        updateConfig(configPath, {
+          token: authResult.token,
+          baseUrl: authResult.baseUrl,
+        });
+
+        return {
+          success: true,
+          created,
+          skipped,
+          loggedIn: true,
+          workspaceName: authResult.workspaceName,
+          userEmail: authResult.userEmail,
+        };
+      } catch (error) {
+        // Login succeeded but config update failed
+        console.error(`Warning: Failed to save credentials: ${(error as Error).message}`);
+        return {
+          success: true,
+          created,
+          skipped,
+          loggedIn: false,
+        };
+      }
+    } else {
+      // Login failed or was cancelled
+      return {
+        success: true,
+        created,
+        skipped,
+        loggedIn: false,
       };
     }
   }
