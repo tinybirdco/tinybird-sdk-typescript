@@ -2,10 +2,10 @@
  * Login command - authenticate with Tinybird via browser
  */
 
-import * as fs from "fs";
 import * as path from "path";
 import { browserLogin, type LoginOptions, type AuthResult } from "../auth.js";
 import { updateConfig, findConfigFile } from "../config.js";
+import { saveTinybirdToken } from "../env.js";
 
 /**
  * Login command options
@@ -74,27 +74,7 @@ export async function runLogin(options: RunLoginOptions = {}): Promise<LoginResu
 
   // Save token to .env.local (in same directory as tinybird.json)
   try {
-    const envLocalPath = path.join(configDir, ".env.local");
-    const envContent = `TINYBIRD_TOKEN=${authResult.token}\n`;
-
-    // Append to existing .env.local or create new one
-    if (fs.existsSync(envLocalPath)) {
-      const existingContent = fs.readFileSync(envLocalPath, "utf-8");
-      // Check if TINYBIRD_TOKEN already exists
-      if (existingContent.includes("TINYBIRD_TOKEN=")) {
-        // Replace existing token
-        const updatedContent = existingContent.replace(
-          /TINYBIRD_TOKEN=.*/,
-          `TINYBIRD_TOKEN=${authResult.token}`
-        );
-        fs.writeFileSync(envLocalPath, updatedContent);
-      } else {
-        // Append token
-        fs.appendFileSync(envLocalPath, envContent);
-      }
-    } else {
-      fs.writeFileSync(envLocalPath, envContent);
-    }
+    saveTinybirdToken(configDir, authResult.token);
 
     // Update baseUrl in tinybird.json if it changed
     if (authResult.baseUrl) {

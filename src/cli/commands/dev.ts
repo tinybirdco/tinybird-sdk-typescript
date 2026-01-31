@@ -2,15 +2,15 @@
  * Dev command - watch mode with automatic sync
  */
 
-import * as fs from "fs";
 import * as path from "path";
 import { watch } from "chokidar";
-import { loadConfig, configExists, getConfigPath, hasValidToken, updateConfig, type ResolvedConfig } from "../config.js";
+import { loadConfig, configExists, findConfigFile, hasValidToken, updateConfig, type ResolvedConfig } from "../config.js";
 import { runBuild, type BuildCommandResult } from "./build.js";
 import { getOrCreateBranch, type TinybirdBranch } from "../../api/branches.js";
 import { getWorkspace } from "../../api/workspaces.js";
 import { getBranchToken, setBranchToken } from "../branch-store.js";
 import { browserLogin } from "../auth.js";
+import { saveTinybirdToken } from "../env.js";
 
 /**
  * Login result info
@@ -106,28 +106,18 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
       );
     }
 
-    // Save token to .env.local
-    const envLocalPath = path.join(cwd, ".env.local");
-    const envContent = `TINYBIRD_TOKEN=${authResult.token}\n`;
-
-    if (fs.existsSync(envLocalPath)) {
-      const existingContent = fs.readFileSync(envLocalPath, "utf-8");
-      if (existingContent.includes("TINYBIRD_TOKEN=")) {
-        const updatedContent = existingContent.replace(
-          /TINYBIRD_TOKEN=.*/,
-          `TINYBIRD_TOKEN=${authResult.token}`
-        );
-        fs.writeFileSync(envLocalPath, updatedContent);
-      } else {
-        fs.appendFileSync(envLocalPath, envContent);
-      }
-    } else {
-      fs.writeFileSync(envLocalPath, envContent);
+    // Find the config file (may be in parent directory)
+    const configPath = findConfigFile(cwd);
+    if (!configPath) {
+      throw new Error("No tinybird.json found. Run 'npx tinybird init' first.");
     }
+
+    // Save token to .env.local (in same directory as tinybird.json)
+    const configDir = path.dirname(configPath);
+    saveTinybirdToken(configDir, authResult.token);
 
     // Update baseUrl in tinybird.json if it changed
     if (authResult.baseUrl) {
-      const configPath = getConfigPath(cwd);
       updateConfig(configPath, {
         baseUrl: authResult.baseUrl,
       });

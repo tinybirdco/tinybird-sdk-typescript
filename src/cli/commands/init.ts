@@ -6,6 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { getConfigPath, updateConfig, hasValidToken } from "../config.js";
 import { browserLogin } from "../auth.js";
+import { saveTinybirdToken } from "../env.js";
 
 /**
  * Default schema content
@@ -190,26 +191,8 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     if (authResult.success && authResult.token) {
       // Save token to .env.local and update baseUrl in tinybird.json
       try {
-        const envLocalPath = path.join(cwd, ".env.local");
-        const envContent = `TINYBIRD_TOKEN=${authResult.token}\n`;
-
-        // Append to existing .env.local or create new one
-        if (fs.existsSync(envLocalPath)) {
-          const existingContent = fs.readFileSync(envLocalPath, "utf-8");
-          // Check if TINYBIRD_TOKEN already exists
-          if (existingContent.includes("TINYBIRD_TOKEN=")) {
-            // Replace existing token
-            const updatedContent = existingContent.replace(
-              /TINYBIRD_TOKEN=.*/,
-              `TINYBIRD_TOKEN=${authResult.token}`
-            );
-            fs.writeFileSync(envLocalPath, updatedContent);
-          } else {
-            // Append token
-            fs.appendFileSync(envLocalPath, envContent);
-          }
-        } else {
-          fs.writeFileSync(envLocalPath, envContent);
+        const saveResult = saveTinybirdToken(cwd, authResult.token);
+        if (saveResult.created) {
           created.push(".env.local");
         }
 
