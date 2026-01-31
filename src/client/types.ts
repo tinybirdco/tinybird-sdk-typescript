@@ -14,6 +14,12 @@ export interface ClientConfig {
   fetch?: typeof fetch;
   /** Default timeout in milliseconds (optional) */
   timeout?: number;
+  /**
+   * Enable dev mode to automatically use branch tokens when on a feature branch.
+   * When enabled, the client will detect the git branch and use the corresponding
+   * Tinybird branch token instead of the workspace token.
+   */
+  devMode?: boolean;
 }
 
 /**
