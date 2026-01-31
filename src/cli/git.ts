@@ -5,6 +5,52 @@
 import { execSync } from "child_process";
 
 /**
+ * Get the branch name from CI environment variables
+ * Returns null if not in a known CI environment
+ */
+function getBranchFromCIEnv(): string | null {
+  // GitHub Actions
+  // GITHUB_HEAD_REF is set for pull requests, GITHUB_REF_NAME for pushes
+  const githubBranch = process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME;
+  if (githubBranch) {
+    return githubBranch;
+  }
+
+  // GitLab CI
+  if (process.env.CI_COMMIT_BRANCH) {
+    return process.env.CI_COMMIT_BRANCH;
+  }
+
+  // CircleCI
+  if (process.env.CIRCLE_BRANCH) {
+    return process.env.CIRCLE_BRANCH;
+  }
+
+  // Azure Pipelines
+  if (process.env.BUILD_SOURCEBRANCHNAME) {
+    return process.env.BUILD_SOURCEBRANCHNAME;
+  }
+
+  // Bitbucket Pipelines
+  if (process.env.BITBUCKET_BRANCH) {
+    return process.env.BITBUCKET_BRANCH;
+  }
+
+  // Jenkins
+  if (process.env.GIT_BRANCH) {
+    // Jenkins prefixes with origin/, remove it
+    return process.env.GIT_BRANCH.replace(/^origin\//, "");
+  }
+
+  // Travis CI
+  if (process.env.TRAVIS_BRANCH) {
+    return process.env.TRAVIS_BRANCH;
+  }
+
+  return null;
+}
+
+/**
  * Get the current git branch name
  * Returns null if not in a git repo or on detached HEAD
  */
@@ -15,15 +61,16 @@ export function getCurrentGitBranch(): string | null {
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
 
-    // HEAD means detached HEAD state
+    // HEAD means detached HEAD state - try CI environment variables
     if (branch === "HEAD") {
-      return null;
+      return getBranchFromCIEnv();
     }
 
     return branch;
   } catch {
     // Not in a git repo or git not available
-    return null;
+    // Still check CI env vars as fallback
+    return getBranchFromCIEnv();
   }
 }
 

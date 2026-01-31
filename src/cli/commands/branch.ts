@@ -10,6 +10,7 @@ import {
   type TinybirdBranch,
   BranchApiError,
 } from "../../api/branches.js";
+import { getWorkspace } from "../../api/workspaces.js";
 import {
   getBranchToken,
   removeBranch as removeCachedBranch,
@@ -64,16 +65,6 @@ export interface BranchDeleteResult {
   success: boolean;
   /** Error message if failed */
   error?: string;
-}
-
-/**
- * Extract workspace ID from a Tinybird token
- */
-function extractWorkspaceId(token: string): string {
-  const hash = token.split("").reduce((acc, char) => {
-    return ((acc << 5) - acc + char.charCodeAt(0)) | 0;
-  }, 0);
-  return `ws_${Math.abs(hash).toString(16)}`;
 }
 
 /**
@@ -140,10 +131,28 @@ export async function runBranchStatus(
     };
   }
 
-  const workspaceId = extractWorkspaceId(config.token);
   const gitBranch = config.gitBranch;
   const tinybirdBranchName = config.tinybirdBranch; // Sanitized name
   const isMainBranch = config.isMainBranch;
+
+  // Fetch the workspace ID from the API
+  let workspaceId: string;
+  try {
+    const workspace = await getWorkspace({
+      baseUrl: config.baseUrl,
+      token: config.token,
+    });
+    workspaceId = workspace.id;
+  } catch (error) {
+    return {
+      success: false,
+      gitBranch,
+      tinybirdBranchName,
+      isMainBranch,
+      hasCachedToken: false,
+      error: (error as Error).message,
+    };
+  }
 
   // Check for cached token (use sanitized name)
   const cachedBranch = tinybirdBranchName ? getBranchToken(workspaceId, tinybirdBranchName) : null;
@@ -224,9 +233,14 @@ export async function runBranchDelete(
     };
   }
 
-  const workspaceId = extractWorkspaceId(config.token);
-
   try {
+    // Fetch the workspace ID from the API
+    const workspace = await getWorkspace({
+      baseUrl: config.baseUrl,
+      token: config.token,
+    });
+    const workspaceId = workspace.id;
+
     // Delete from Tinybird API
     await deleteBranch(
       {
@@ -251,11 +265,11 @@ export async function runBranchDelete(
 }
 
 /**
- * List cached branches (local only, no API call)
+ * List cached branches (requires API call to get workspace ID)
  */
-export function runBranchListCached(
+export async function runBranchListCached(
   options: BranchCommandOptions = {}
-): { branches: Record<string, { id: string; createdAt: string }> } {
+): Promise<{ branches: Record<string, { id: string; createdAt: string }> }> {
   const cwd = options.cwd ?? process.cwd();
 
   let config: ResolvedConfig;
@@ -265,7 +279,18 @@ export function runBranchListCached(
     return { branches: {} };
   }
 
-  const workspaceId = extractWorkspaceId(config.token);
+  // Fetch the workspace ID from the API
+  let workspaceId: string;
+  try {
+    const workspace = await getWorkspace({
+      baseUrl: config.baseUrl,
+      token: config.token,
+    });
+    workspaceId = workspace.id;
+  } catch {
+    return { branches: {} };
+  }
+
   const cached = listCachedBranches(workspaceId);
 
   // Return without tokens for security

@@ -7,6 +7,7 @@ import { watch } from "chokidar";
 import { loadConfig, type ResolvedConfig } from "../config.js";
 import { runBuild, type BuildCommandResult } from "./build.js";
 import { getOrCreateBranch, type TinybirdBranch } from "../../api/branches.js";
+import { getWorkspace } from "../../api/workspaces.js";
 import { getBranchToken, setBranchToken } from "../branch-store.js";
 
 /**
@@ -58,20 +59,6 @@ export interface DevController {
 }
 
 /**
- * Extract workspace ID from a Tinybird token
- * Tokens are in format: p.{workspaceId}...
- */
-function extractWorkspaceId(token: string): string {
-  // Simple extraction - use first part after 'p.'
-  // In reality this would need to be fetched from the API or parsed properly
-  // For now, we'll use a hash of the token as a workspace identifier
-  const hash = token.split("").reduce((acc, char) => {
-    return ((acc << 5) - acc + char.charCodeAt(0)) | 0;
-  }, 0);
-  return `ws_${Math.abs(hash).toString(16)}`;
-}
-
-/**
  * Run the dev command
  *
  * Watches for file changes and automatically rebuilds and pushes to Tinybird.
@@ -104,7 +91,12 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
   // If we're on a feature branch, get or create the Tinybird branch
   // Use tinybirdBranch (sanitized name) for Tinybird API, gitBranch for display
   if (!config.isMainBranch && config.tinybirdBranch) {
-    const workspaceId = extractWorkspaceId(config.token);
+    // Fetch the workspace ID from the API
+    const workspace = await getWorkspace({
+      baseUrl: config.baseUrl,
+      token: config.token,
+    });
+    const workspaceId = workspace.id;
     const branchName = config.tinybirdBranch; // Sanitized name for Tinybird
 
     // Check if we have a cached token
