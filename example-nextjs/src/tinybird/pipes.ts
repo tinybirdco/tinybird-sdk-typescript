@@ -50,7 +50,13 @@ export const pageViewsOverTime = definePipe("page_views_over_time", {
       name: "time_series",
       sql: `
         SELECT
-          toStartOfHour(timestamp) AS time_bucket,
+          {% if granularity == 'day' %}
+          toStartOfDay(timestamp)
+          {% elif granularity == 'week' %}
+          toStartOfWeek(timestamp)
+          {% else %}
+          toStartOfHour(timestamp)
+          {% end %} AS time_bucket,
           count() AS views,
           uniqExact(session_id) AS unique_sessions
         FROM page_views
