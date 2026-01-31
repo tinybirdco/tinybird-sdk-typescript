@@ -287,18 +287,15 @@ export async function deleteBranch(
  *
  * @param config - API configuration
  * @param name - Branch name to check
- * @returns true if branch exists
+ * @returns true if branch exists, false if not
+ * @throws BranchApiError on API/network/auth failures
  */
 export async function branchExists(
   config: BranchApiConfig,
   name: string
 ): Promise<boolean> {
-  try {
-    const branches = await listBranches(config);
-    return branches.some((b) => b.name === name);
-  } catch {
-    return false;
-  }
+  const branches = await listBranches(config);
+  return branches.some((b) => b.name === name);
 }
 
 /**

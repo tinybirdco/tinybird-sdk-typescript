@@ -307,11 +307,10 @@ describe("Branch API client", () => {
       expect(result).toBe(false);
     });
 
-    it("returns false on API error", async () => {
+    it("throws on API error", async () => {
       mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
-      const result = await branchExists(config, "any");
-      expect(result).toBe(false);
+      await expect(branchExists(config, "any")).rejects.toThrow("Network error");
     });
   });
 
