@@ -67,8 +67,11 @@ function interpolateEnvVars(value: string): string {
 
 /**
  * Find the config file by walking up the directory tree
+ *
+ * @param startDir - Directory to start searching from
+ * @returns Path to the config file, or null if not found
  */
-function findConfigFile(startDir: string): string | null {
+export function findConfigFile(startDir: string): string | null {
   let currentDir = startDir;
 
   while (true) {
@@ -189,19 +192,23 @@ export function getConfigPath(cwd: string = process.cwd()): string {
 /**
  * Update specific fields in tinybird.json
  *
+ * Throws an error if the config file doesn't exist to prevent creating
+ * partial config files that would break loadConfig.
+ *
  * @param configPath - Path to the config file
  * @param updates - Fields to update
+ * @throws Error if config file doesn't exist
  */
 export function updateConfig(
   configPath: string,
   updates: Partial<TinybirdConfig>
 ): void {
-  let config: Partial<TinybirdConfig> = {};
-
-  if (fs.existsSync(configPath)) {
-    const content = fs.readFileSync(configPath, "utf-8");
-    config = JSON.parse(content) as TinybirdConfig;
+  if (!fs.existsSync(configPath)) {
+    throw new Error(`Config not found at ${configPath}`);
   }
+
+  const content = fs.readFileSync(configPath, "utf-8");
+  const config = JSON.parse(content) as TinybirdConfig;
 
   // Merge updates
   const updated = { ...config, ...updates };

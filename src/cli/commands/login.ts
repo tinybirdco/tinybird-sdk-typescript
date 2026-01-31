@@ -5,7 +5,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { browserLogin, type LoginOptions, type AuthResult } from "../auth.js";
-import { getConfigPath, updateConfig, configExists } from "../config.js";
+import { updateConfig, findConfigFile } from "../config.js";
 
 /**
  * Login command options
@@ -44,13 +44,17 @@ export interface LoginResult {
 export async function runLogin(options: RunLoginOptions = {}): Promise<LoginResult> {
   const cwd = options.cwd ?? process.cwd();
 
-  // Check if config exists - if not, suggest running init first
-  if (!configExists(cwd)) {
+  // Find the actual config file (may be in parent directory)
+  const configPath = findConfigFile(cwd);
+  if (!configPath) {
     return {
       success: false,
       error: "No tinybird.json found. Run 'npx tinybird init' first.",
     };
   }
+
+  // Get the directory containing the config file for .env.local
+  const configDir = path.dirname(configPath);
 
   const loginOptions: LoginOptions = {};
   if (options.apiHost) {
@@ -60,17 +64,17 @@ export async function runLogin(options: RunLoginOptions = {}): Promise<LoginResu
   // Perform browser login
   const authResult: AuthResult = await browserLogin(loginOptions);
 
-  if (!authResult.success) {
+  // Guard against missing token in auth response
+  if (!authResult.success || !authResult.token) {
     return {
       success: false,
       error: authResult.error ?? "Login failed",
     };
   }
 
-  // Save token to .env.local and update baseUrl in tinybird.json
-  const configPath = getConfigPath(cwd);
+  // Save token to .env.local (in same directory as tinybird.json)
   try {
-    const envLocalPath = path.join(cwd, ".env.local");
+    const envLocalPath = path.join(configDir, ".env.local");
     const envContent = `TINYBIRD_TOKEN=${authResult.token}\n`;
 
     // Append to existing .env.local or create new one
