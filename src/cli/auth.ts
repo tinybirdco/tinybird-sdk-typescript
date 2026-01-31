@@ -5,7 +5,6 @@
  */
 
 import * as http from "node:http";
-import * as crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import { platform } from "node:os";
 import { URL } from "node:url";
@@ -71,18 +70,14 @@ interface TokenResponse {
 }
 
 /**
- * Generate a cryptographically strong random state for OAuth
- */
-function generateState(): string {
-  return crypto.randomBytes(32).toString("hex");
-}
-
-/**
  * Generate the HTML callback page served by the local server
  *
- * This page extracts the code and state from the query string and POSTs them back to the server
+ * This page extracts the code from the query string and POSTs it back to the server
+ *
+ * NOTE: State parameter validation is disabled until Tinybird backend supports it.
+ * TODO: Re-enable state validation once /api/cli-login echoes back the state parameter.
  */
-function getCallbackHtml(authHost: string, expectedState: string): string {
+function getCallbackHtml(authHost: string): string {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -123,19 +118,15 @@ function getCallbackHtml(authHost: string, expectedState: string): string {
   <script>
     const searchParams = new URLSearchParams(window.location.search);
     const code = searchParams.get('code');
-    const state = searchParams.get('state');
     const workspace = searchParams.get('workspace');
     const region = searchParams.get('region');
     const provider = searchParams.get('provider');
     const host = "${authHost}";
-    const expectedState = "${expectedState}";
 
     if (!code) {
       document.querySelector('.container').innerHTML = '<p>Missing authentication code. Please try again.</p>';
-    } else if (state !== expectedState) {
-      document.querySelector('.container').innerHTML = '<p>Invalid state parameter. This may be a security issue. Please try again.</p>';
     } else {
-      fetch('/?code=' + encodeURIComponent(code) + '&state=' + encodeURIComponent(state), { method: 'POST' })
+      fetch('/?code=' + encodeURIComponent(code), { method: 'POST' })
         .then(() => {
           if (provider && region && workspace) {
             window.location.href = host + "/" + provider + "/" + region + "/cli-login?workspace=" + workspace;
@@ -155,15 +146,15 @@ function getCallbackHtml(authHost: string, expectedState: string): string {
 /**
  * Start a local HTTP server to receive the OAuth callback
  *
- * @param onCode - Callback invoked when auth code is received with valid state
+ * @param onCode - Callback invoked when auth code is received
  * @param authHost - Auth host for redirect URL in HTML
- * @param expectedState - The expected OAuth state parameter for validation
  * @returns Promise that resolves to the server instance
+ *
+ * NOTE: State parameter validation is disabled until Tinybird backend supports it.
  */
 function startAuthServer(
   onCode: (code: string) => void,
-  authHost: string,
-  expectedState: string
+  authHost: string
 ): Promise<http.Server> {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
@@ -172,21 +163,14 @@ function startAuthServer(
       if (req.method === "GET") {
         // Serve the callback HTML page
         res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(getCallbackHtml(authHost, expectedState));
+        res.end(getCallbackHtml(authHost));
       } else if (req.method === "POST") {
-        // Receive the auth code and validate state
+        // Receive the auth code
         const code = url.searchParams.get("code");
-        const state = url.searchParams.get("state");
 
         if (!code) {
           res.writeHead(400);
           res.end("Missing code parameter");
-          return;
-        }
-
-        if (state !== expectedState) {
-          res.writeHead(400);
-          res.end("Invalid state parameter");
           return;
         }
 
@@ -304,9 +288,6 @@ export async function browserLogin(
   const authHost = options.authHost ?? getAuthHost();
   const apiHost = options.apiHost ?? DEFAULT_API_HOST;
 
-  // Generate a cryptographically strong state for CSRF protection
-  const state = generateState();
-
   let server: http.Server | null = null;
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -325,8 +306,7 @@ export async function browserLogin(
             resolve({ server, code });
           }
         },
-        authHost,
-        state
+        authHost
       )
         .then((srv) => {
           server = srv;
@@ -337,10 +317,9 @@ export async function browserLogin(
     // Wait for server to start
     await new Promise<void>((resolve) => setTimeout(resolve, 100));
 
-    // Build auth URL with state parameter
+    // Build auth URL
     const authUrl = new URL("/api/cli-login", authHost);
     authUrl.searchParams.set("apiHost", apiHost);
-    authUrl.searchParams.set("state", state);
 
     console.log("Opening browser for authentication...");
 

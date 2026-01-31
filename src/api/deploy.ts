@@ -146,5 +146,18 @@ export async function deployToMain(
     datasourceCount: resources.datasources.length,
     pipeCount: resources.pipes.length,
     buildId: body.build?.id,
+    pipes: {
+      changed: body.build?.changed_pipe_names ?? [],
+      created: body.build?.new_pipe_names ?? [],
+      deleted: body.build?.deleted_pipe_names ?? [],
+    },
+    datasources: {
+      changed: body.build?.changed_datasource_names ?? [],
+      created: body.build?.new_datasource_names ?? [],
+      deleted: body.build?.deleted_datasource_names ?? [],
+    },
+    // Keep deprecated fields for backwards compatibility
+    changedPipeNames: body.build?.changed_pipe_names ?? [],
+    newPipeNames: body.build?.new_pipe_names ?? [],
   };
 }

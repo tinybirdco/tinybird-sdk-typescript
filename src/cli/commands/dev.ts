@@ -11,6 +11,10 @@ import { getWorkspace } from "../../api/workspaces.js";
 import { getBranchToken, setBranchToken } from "../branch-store.js";
 import { browserLogin } from "../auth.js";
 import { saveTinybirdToken } from "../env.js";
+import {
+  validatePipeSchemas,
+  type SchemaValidationResult,
+} from "../utils/schema-validation.js";
 
 /**
  * Login result info
@@ -40,6 +44,8 @@ export interface DevCommandOptions {
   onBranchReady?: (info: BranchReadyInfo) => void;
   /** Callback when login is needed and completed */
   onLoginComplete?: (info: LoginInfo) => void;
+  /** Callback when schema validation completes */
+  onSchemaValidation?: (result: SchemaValidationResult) => void;
 }
 
 /**
@@ -240,6 +246,32 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
         useDeployEndpoint: config.isMainBranch,
       });
       options.onBuildComplete?.(result);
+
+      // Validate pipe schemas after successful deploy
+      if (
+        result.success &&
+        result.build?.project &&
+        result.deploy?.pipes &&
+        options.onSchemaValidation
+      ) {
+        // Get changed pipes from deploy result
+        const changedPipes = [
+          ...result.deploy.pipes.created,
+          ...result.deploy.pipes.changed,
+        ];
+
+        if (changedPipes.length > 0) {
+          const validation = await validatePipeSchemas({
+            project: result.build.project,
+            pipeNames: changedPipes,
+            baseUrl: config.baseUrl,
+            token: effectiveToken,
+          });
+
+          options.onSchemaValidation(validation);
+        }
+      }
+
       return result;
     } catch (error) {
       const result: BuildCommandResult = {
