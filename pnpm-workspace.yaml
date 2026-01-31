@@ -1,6 +1,7 @@
 packages:
   - "."
   - "example-nextjs"
+
 onlyBuiltDependencies:
   - esbuild
   - sharp
