@@ -195,4 +195,53 @@ describe('Engine Configurations', () => {
       expect(getPrimaryKey(config)).toEqual(['id']);
     });
   });
+
+  describe('ENGINE_SETTINGS string escaping', () => {
+    it('quotes string values in settings', () => {
+      const config = engine.mergeTree({
+        sortingKey: ['id'],
+        settings: {
+          storage_policy: 'tiered',
+        },
+      });
+      const clause = getEngineClause(config);
+      expect(clause).toContain("storage_policy='tiered'");
+    });
+
+    it('does not quote numeric values in settings', () => {
+      const config = engine.mergeTree({
+        sortingKey: ['id'],
+        settings: {
+          index_granularity: 8192,
+        },
+      });
+      const clause = getEngineClause(config);
+      expect(clause).toContain('index_granularity=8192');
+      expect(clause).not.toContain("index_granularity='8192'");
+    });
+
+    it('escapes single quotes in string values', () => {
+      const config = engine.mergeTree({
+        sortingKey: ['id'],
+        settings: {
+          comment: "it's a test",
+        },
+      });
+      const clause = getEngineClause(config);
+      expect(clause).toContain("comment='it\\'s a test'");
+    });
+
+    it('handles mixed string and numeric settings', () => {
+      const config = engine.mergeTree({
+        sortingKey: ['id'],
+        settings: {
+          storage_policy: 'default',
+          index_granularity: 8192,
+        },
+      });
+      const clause = getEngineClause(config);
+      expect(clause).toContain("storage_policy='default'");
+      expect(clause).toContain('index_granularity=8192');
+    });
+  });
 });

@@ -256,7 +256,13 @@ export function getEngineClause(config: EngineConfig): string {
 
   if (config.settings && Object.keys(config.settings).length > 0) {
     const settingsStr = Object.entries(config.settings)
-      .map(([k, v]) => `${k}=${v}`)
+      .map(([k, v]) => {
+        if (typeof v === "string") {
+          const escaped = v.replace(/'/g, "\\'");
+          return `${k}='${escaped}'`;
+        }
+        return `${k}=${v}`;
+      })
       .join(", ");
     parts.push(`ENGINE_SETTINGS "${settingsStr}"`);
   }
