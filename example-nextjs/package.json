@@ -13,7 +13,7 @@
     "tinybird:build": "dotenv -e .env.local -- node ../bin/tinybird.js build"
   },
   "dependencies": {
-    "@tinybird/sdk": "file:..",
+    "@tinybird/sdk": "workspace:*",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"
