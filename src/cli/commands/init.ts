@@ -4,7 +4,9 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { getConfigPath } from "../config.js";
+import { getConfigPath, updateConfig, hasValidToken } from "../config.js";
+import { browserLogin } from "../auth.js";
+import { saveTinybirdToken } from "../env.js";
 
 /**
  * Default schema content
@@ -98,6 +100,8 @@ export interface InitOptions {
   cwd?: string;
   /** Force overwrite existing files */
   force?: boolean;
+  /** Skip the login flow */
+  skipLogin?: boolean;
 }
 
 /**
@@ -112,6 +116,12 @@ export interface InitResult {
   skipped: string[];
   /** Error message if failed */
   error?: string;
+  /** Whether login was completed */
+  loggedIn?: boolean;
+  /** Workspace name after login */
+  workspaceName?: string;
+  /** User email after login */
+  userEmail?: string;
 }
 
 /**
@@ -127,6 +137,7 @@ export interface InitResult {
 export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   const cwd = options.cwd ?? process.cwd();
   const force = options.force ?? false;
+  const skipLogin = options.skipLogin ?? false;
 
   const created: string[] = [];
   const skipped: string[] = [];
@@ -167,6 +178,56 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         created,
         skipped,
         error: `Failed to create schema file: ${(error as Error).message}`,
+      };
+    }
+  }
+
+  // Check if login is needed
+  if (!skipLogin && !hasValidToken(cwd)) {
+    console.log("\nNo authentication found. Starting login flow...\n");
+
+    const authResult = await browserLogin();
+
+    if (authResult.success && authResult.token) {
+      // Save token to .env.local and update baseUrl in tinybird.json
+      try {
+        const saveResult = saveTinybirdToken(cwd, authResult.token);
+        if (saveResult.created) {
+          created.push(".env.local");
+        }
+
+        // Update baseUrl in tinybird.json if it changed
+        if (authResult.baseUrl) {
+          updateConfig(configPath, {
+            baseUrl: authResult.baseUrl,
+          });
+        }
+
+        return {
+          success: true,
+          created,
+          skipped,
+          loggedIn: true,
+          workspaceName: authResult.workspaceName,
+          userEmail: authResult.userEmail,
+        };
+      } catch (error) {
+        // Login succeeded but saving credentials failed
+        console.error(`Warning: Failed to save credentials: ${(error as Error).message}`);
+        return {
+          success: true,
+          created,
+          skipped,
+          loggedIn: false,
+        };
+      }
+    } else {
+      // Login failed or was cancelled
+      return {
+        success: true,
+        created,
+        skipped,
+        loggedIn: false,
       };
     }
   }

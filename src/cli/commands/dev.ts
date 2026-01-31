@@ -4,11 +4,23 @@
 
 import * as path from "path";
 import { watch } from "chokidar";
-import { loadConfig, type ResolvedConfig } from "../config.js";
+import { loadConfig, configExists, findConfigFile, hasValidToken, updateConfig, type ResolvedConfig } from "../config.js";
 import { runBuild, type BuildCommandResult } from "./build.js";
 import { getOrCreateBranch, type TinybirdBranch } from "../../api/branches.js";
 import { getWorkspace } from "../../api/workspaces.js";
 import { getBranchToken, setBranchToken } from "../branch-store.js";
+import { browserLogin } from "../auth.js";
+import { saveTinybirdToken } from "../env.js";
+
+/**
+ * Login result info
+ */
+export interface LoginInfo {
+  /** Workspace name */
+  workspaceName?: string;
+  /** User email */
+  userEmail?: string;
+}
 
 /**
  * Dev command options
@@ -26,6 +38,8 @@ export interface DevCommandOptions {
   onError?: (error: Error) => void;
   /** Callback when branch is created/detected */
   onBranchReady?: (info: BranchReadyInfo) => void;
+  /** Callback when login is needed and completed */
+  onLoginComplete?: (info: LoginInfo) => void;
 }
 
 /**
@@ -73,7 +87,52 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
   const cwd = options.cwd ?? process.cwd();
   const debounceMs = options.debounce ?? 100;
 
-  // Load config
+  // Check if project is initialized
+  if (!configExists(cwd)) {
+    throw new Error(
+      "No tinybird.json found. Run 'npx tinybird init' to initialize a project."
+    );
+  }
+
+  // Check if authentication is set up, if not trigger login
+  if (!hasValidToken(cwd)) {
+    console.log("No authentication found. Starting login flow...\n");
+
+    const authResult = await browserLogin();
+
+    if (!authResult.success || !authResult.token) {
+      throw new Error(
+        authResult.error ?? "Login failed. Run 'npx tinybird login' to authenticate."
+      );
+    }
+
+    // Find the config file (may be in parent directory)
+    const configPath = findConfigFile(cwd);
+    if (!configPath) {
+      throw new Error("No tinybird.json found. Run 'npx tinybird init' first.");
+    }
+
+    // Save token to .env.local (in same directory as tinybird.json)
+    const configDir = path.dirname(configPath);
+    saveTinybirdToken(configDir, authResult.token);
+
+    // Update baseUrl in tinybird.json if it changed
+    if (authResult.baseUrl) {
+      updateConfig(configPath, {
+        baseUrl: authResult.baseUrl,
+      });
+    }
+
+    // Set the token in the environment for this session
+    process.env.TINYBIRD_TOKEN = authResult.token;
+
+    options.onLoginComplete?.({
+      workspaceName: authResult.workspaceName,
+      userEmail: authResult.userEmail,
+    });
+  }
+
+  // Load config (now should have valid token)
   let config: ResolvedConfig;
   try {
     config = loadConfig(cwd);

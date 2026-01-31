@@ -67,8 +67,11 @@ function interpolateEnvVars(value: string): string {
 
 /**
  * Find the config file by walking up the directory tree
+ *
+ * @param startDir - Directory to start searching from
+ * @returns Path to the config file, or null if not found
  */
-function findConfigFile(startDir: string): string | null {
+export function findConfigFile(startDir: string): string | null {
   let currentDir = startDir;
 
   while (true) {
@@ -184,4 +187,69 @@ export function configExists(cwd: string = process.cwd()): boolean {
  */
 export function getConfigPath(cwd: string = process.cwd()): string {
   return path.join(cwd, CONFIG_FILE);
+}
+
+/**
+ * Update specific fields in tinybird.json
+ *
+ * Throws an error if the config file doesn't exist to prevent creating
+ * partial config files that would break loadConfig.
+ *
+ * @param configPath - Path to the config file
+ * @param updates - Fields to update
+ * @throws Error if config file doesn't exist
+ */
+export function updateConfig(
+  configPath: string,
+  updates: Partial<TinybirdConfig>
+): void {
+  if (!fs.existsSync(configPath)) {
+    throw new Error(`Config not found at ${configPath}`);
+  }
+
+  const content = fs.readFileSync(configPath, "utf-8");
+  const config = JSON.parse(content) as TinybirdConfig;
+
+  // Merge updates
+  const updated = { ...config, ...updates };
+
+  fs.writeFileSync(configPath, JSON.stringify(updated, null, 2) + "\n");
+}
+
+/**
+ * Check if a valid token is configured (either in file or via env var)
+ *
+ * @param cwd - Working directory to search from
+ * @returns true if a valid token exists
+ */
+export function hasValidToken(cwd: string = process.cwd()): boolean {
+  try {
+    const configPath = findConfigFile(cwd);
+    if (!configPath) {
+      return false;
+    }
+
+    const content = fs.readFileSync(configPath, "utf-8");
+    const config = JSON.parse(content) as TinybirdConfig;
+
+    if (!config.token) {
+      return false;
+    }
+
+    // Check if token is a placeholder or env var reference
+    if (config.token.includes("${")) {
+      // Try to resolve the env var
+      try {
+        const resolved = interpolateEnvVars(config.token);
+        return Boolean(resolved);
+      } catch {
+        return false;
+      }
+    }
+
+    // Token is a literal value
+    return Boolean(config.token);
+  } catch {
+    return false;
+  }
 }
