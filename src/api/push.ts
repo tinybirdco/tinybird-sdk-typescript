@@ -24,13 +24,24 @@ export interface ResourceInfo {
 }
 
 /**
+ * Error details from the build endpoint
+ */
+export interface BuildError {
+  filename?: string;
+  type?: string;
+  error: string;
+}
+
+/**
  * Build response from the /v1/build endpoint
  */
 export interface BuildResponse {
   /** Result status */
   result: "success" | "failed" | "no_changes";
-  /** Error message if failed */
+  /** Error message if failed (simple error) */
   error?: string;
+  /** Array of errors if multiple (validation errors) */
+  errors?: BuildError[];
   /** Build details */
   build?: {
     id: string;
@@ -87,28 +98,48 @@ export interface PushResult {
  */
 export async function pushToTinybird(
   config: PushConfig,
-  resources: GeneratedResources
+  resources: GeneratedResources,
+  options?: { debug?: boolean }
 ): Promise<PushResult> {
+  const debug = options?.debug ?? !!process.env.TINYBIRD_DEBUG;
   const formData = new FormData();
 
   // Add datasources
   for (const ds of resources.datasources) {
+    const fieldName = `data_project://`;
+    const fileName = `${ds.name}.datasource`;
+    if (debug) {
+      console.log(`[debug] Adding datasource: ${fieldName} (filename: ${fileName})`);
+      console.log(`[debug] Content:\n${ds.content}\n`);
+    }
     formData.append(
-      `data_project://${ds.name}.datasource`,
-      new Blob([ds.content], { type: "text/plain" })
+      fieldName,
+      new Blob([ds.content], { type: "text/plain" }),
+      fileName
     );
   }
 
   // Add pipes
   for (const pipe of resources.pipes) {
+    const fieldName = `data_project://`;
+    const fileName = `${pipe.name}.pipe`;
+    if (debug) {
+      console.log(`[debug] Adding pipe: ${fieldName} (filename: ${fileName})`);
+      console.log(`[debug] Content:\n${pipe.content}\n`);
+    }
     formData.append(
-      `data_project://${pipe.name}.pipe`,
-      new Blob([pipe.content], { type: "text/plain" })
+      fieldName,
+      new Blob([pipe.content], { type: "text/plain" }),
+      fileName
     );
   }
 
   // Make the request
   const url = `${config.baseUrl.replace(/\/$/, "")}/v1/build`;
+
+  if (debug) {
+    console.log(`[debug] POST ${url}`);
+  }
 
   const response = await fetch(url, {
     method: "POST",
@@ -120,20 +151,38 @@ export async function pushToTinybird(
 
   // Parse response
   let body: BuildResponse;
+  const rawBody = await response.text();
+
+  if (debug) {
+    console.log(`[debug] Response status: ${response.status}`);
+    console.log(`[debug] Response body: ${rawBody}`);
+  }
+
   try {
-    body = (await response.json()) as BuildResponse;
+    body = JSON.parse(rawBody) as BuildResponse;
   } catch {
     throw new Error(
-      `Failed to parse response from Tinybird API: ${response.status} ${response.statusText}`
+      `Failed to parse response from Tinybird API: ${response.status} ${response.statusText}\nBody: ${rawBody}`
     );
   }
+
+  // Helper to format errors
+  const formatErrors = (): string => {
+    if (body.errors && body.errors.length > 0) {
+      return body.errors.map(e => {
+        const prefix = e.filename ? `[${e.filename}] ` : '';
+        return `${prefix}${e.error}`;
+      }).join('\n');
+    }
+    return body.error || `HTTP ${response.status}: ${response.statusText}`;
+  };
 
   // Handle non-OK responses
   if (!response.ok) {
     return {
       success: false,
       result: "failed",
-      error: body.error || `HTTP ${response.status}: ${response.statusText}`,
+      error: formatErrors(),
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
     };
@@ -144,7 +193,7 @@ export async function pushToTinybird(
     return {
       success: false,
       result: "failed",
-      error: body.error || "Build failed with unknown error",
+      error: formatErrors(),
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
     };

@@ -32,7 +32,7 @@ export const events = defineDatasource("events", {
     session_id: t.string(),
     user_id: t.string().nullable(),
     event_name: t.string().lowCardinality(),
-    properties: t.json<Record<string, unknown>>(),
+    properties: t.string(), // Store JSON as string - use JSONExtract in queries
   },
   engine: engine.mergeTree({
     sortingKey: ["event_name", "timestamp"],

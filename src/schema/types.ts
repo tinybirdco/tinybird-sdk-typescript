@@ -61,6 +61,17 @@ function createValidator<TType, TTinybirdType extends string>(
     modifiers,
 
     nullable() {
+      // If already has LowCardinality, we need to move Nullable inside
+      // ClickHouse requires: LowCardinality(Nullable(X)), not Nullable(LowCardinality(X))
+      if (modifiers.lowCardinality) {
+        // Extract base type from LowCardinality(X) and wrap as LowCardinality(Nullable(X))
+        const baseType = tinybirdType.replace(/^LowCardinality\((.+)\)$/, '$1');
+        const newType = `LowCardinality(Nullable(${baseType}))`;
+        return createValidator<TType | null, `LowCardinality(Nullable(${string}))`>(
+          newType as `LowCardinality(Nullable(${string}))`,
+          { ...modifiers, nullable: true }
+        ) as unknown as TypeValidator<TType | null, `Nullable(${TTinybirdType})`, TypeModifiers & { nullable: true }>;
+      }
       return createValidator<TType | null, `Nullable(${TTinybirdType})`>(
         `Nullable(${tinybirdType})` as `Nullable(${TTinybirdType})`,
         { ...modifiers, nullable: true }
@@ -68,6 +79,16 @@ function createValidator<TType, TTinybirdType extends string>(
     },
 
     lowCardinality() {
+      // If already nullable, wrap as LowCardinality(Nullable(X))
+      if (modifiers.nullable) {
+        // Extract base type from Nullable(X) and wrap as LowCardinality(Nullable(X))
+        const baseType = tinybirdType.replace(/^Nullable\((.+)\)$/, '$1');
+        const newType = `LowCardinality(Nullable(${baseType}))`;
+        return createValidator<TType, `LowCardinality(Nullable(${string}))`>(
+          newType as `LowCardinality(Nullable(${string}))`,
+          { ...modifiers, lowCardinality: true }
+        ) as unknown as TypeValidator<TType, `LowCardinality(${TTinybirdType})`, TypeModifiers & { lowCardinality: true }>;
+      }
       return createValidator<TType, `LowCardinality(${TTinybirdType})`>(
         `LowCardinality(${tinybirdType})` as `LowCardinality(${TTinybirdType})`,
         { ...modifiers, lowCardinality: true }

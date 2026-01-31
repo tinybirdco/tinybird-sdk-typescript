@@ -21,6 +21,13 @@ export interface GeneratedPipe {
 }
 
 /**
+ * Check if SQL contains template parameters like {{...}}
+ */
+function hasDynamicParameters(sql: string): boolean {
+  return /\{\{[^}]+\}\}/.test(sql);
+}
+
+/**
  * Generate a NODE section for the pipe
  */
 function generateNode(node: NodeDefinition): string {
@@ -34,10 +41,18 @@ function generateNode(node: NodeDefinition): string {
   }
 
   parts.push(`SQL >`);
-  // Indent the SQL properly
+
+  // Check if SQL has dynamic parameters - if so, prefix with %
+  const isDynamic = hasDynamicParameters(node.sql);
   const sqlLines = node.sql.trim().split("\n");
-  sqlLines.forEach((line) => {
-    parts.push(`    ${line}`);
+
+  sqlLines.forEach((line, index) => {
+    // Add % prefix to the first non-empty line if SQL is dynamic
+    if (isDynamic && index === 0) {
+      parts.push(`    %${line}`);
+    } else {
+      parts.push(`    ${line}`);
+    }
   });
 
   return parts.join("\n");

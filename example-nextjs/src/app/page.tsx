@@ -64,10 +64,10 @@ export default function Home() {
       session_id: crypto.randomUUID(),
       user_id: null,
       event_name: "button_click",
-      properties: {
+      properties: JSON.stringify({
         button: "track_event",
         page: window.location.pathname,
-      },
+      }),
     };
 
     try {
