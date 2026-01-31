@@ -143,13 +143,14 @@ function createCli(): Command {
             if (info.isMainBranch) {
               console.log("On main branch - deploying to workspace\n");
             } else if (info.gitBranch) {
+              const tinybirdName = info.tinybirdBranch?.name ?? info.gitBranch;
               if (info.wasCreated) {
                 console.log(`Detected git branch: ${info.gitBranch}`);
-                console.log(`Creating Tinybird branch '${info.gitBranch}'...`);
+                console.log(`Creating Tinybird branch '${tinybirdName}'...`);
                 console.log("Branch created and token cached.\n");
               } else {
                 console.log(`Detected git branch: ${info.gitBranch}`);
-                console.log(`Using existing Tinybird branch '${info.gitBranch}'\n`);
+                console.log(`Using existing Tinybird branch '${tinybirdName}'\n`);
               }
             } else {
               console.log("Not in a git repository - deploying to workspace\n");

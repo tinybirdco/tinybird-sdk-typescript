@@ -43,7 +43,15 @@ export function getBranchStorePath(): string {
 function ensureTinybirdDir(): void {
   const tinybirdDir = path.join(os.homedir(), ".tinybird");
   if (!fs.existsSync(tinybirdDir)) {
-    fs.mkdirSync(tinybirdDir, { recursive: true });
+    try {
+      fs.mkdirSync(tinybirdDir, { recursive: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Failed to create Tinybird config directory at ${tinybirdDir}: ${message}. ` +
+          `Please ensure you have write permissions to your home directory.`
+      );
+    }
   }
 }
 
