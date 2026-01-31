@@ -1,0 +1,8 @@
+packages:
+  - "."
+  - "example-nextjs"
+
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - unrs-resolver
