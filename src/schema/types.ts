@@ -272,12 +272,24 @@ export const t = {
   // ============ Enum Types ============
 
   /** Enum8 - enumeration stored as Int8 */
-  enum8: <TValues extends readonly string[]>(..._values: TValues) =>
-    createValidator<TValues[number], "Enum8">("Enum8"),
+  enum8: <TValues extends readonly string[]>(...values: TValues) => {
+    const enumMapping = values
+      .map((v, i) => `'${v.replace(/'/g, "\\'")}' = ${i + 1}`)
+      .join(", ");
+    return createValidator<TValues[number], `Enum8(${string})`>(
+      `Enum8(${enumMapping})` as `Enum8(${string})`
+    );
+  },
 
   /** Enum16 - enumeration stored as Int16 */
-  enum16: <TValues extends readonly string[]>(..._values: TValues) =>
-    createValidator<TValues[number], "Enum16">("Enum16"),
+  enum16: <TValues extends readonly string[]>(...values: TValues) => {
+    const enumMapping = values
+      .map((v, i) => `'${v.replace(/'/g, "\\'")}' = ${i + 1}`)
+      .join(", ");
+    return createValidator<TValues[number], `Enum16(${string})`>(
+      `Enum16(${enumMapping})` as `Enum16(${string})`
+    );
+  },
 
   // ============ Special Types ============
 

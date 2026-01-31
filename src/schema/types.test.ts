@@ -187,4 +187,26 @@ describe('Type Validators (t.*)', () => {
       expect(type._modifiers.defaultValue).toBe('test');
     });
   });
+
+  describe('Enum types', () => {
+    it('generates Enum8 with value mapping', () => {
+      const type = t.enum8('active', 'inactive', 'pending');
+      expect(type._tinybirdType).toBe("Enum8('active' = 1, 'inactive' = 2, 'pending' = 3)");
+    });
+
+    it('generates Enum16 with value mapping', () => {
+      const type = t.enum16('draft', 'published', 'archived');
+      expect(type._tinybirdType).toBe("Enum16('draft' = 1, 'published' = 2, 'archived' = 3)");
+    });
+
+    it('escapes single quotes in enum values', () => {
+      const type = t.enum8("it's ok", 'normal');
+      expect(type._tinybirdType).toBe("Enum8('it\\'s ok' = 1, 'normal' = 2)");
+    });
+
+    it('handles single enum value', () => {
+      const type = t.enum8('only');
+      expect(type._tinybirdType).toBe("Enum8('only' = 1)");
+    });
+  });
 });
