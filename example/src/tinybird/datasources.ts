@@ -14,7 +14,6 @@ export const pageViews = defineDatasource("page_views", {
     user_agent: t.string(),
     country: t.string().lowCardinality().nullable(),
     device_type: t.string().lowCardinality(),
-    dummy: t.string().default("default value"),
   },
   engine: engine.mergeTree({
     sortingKey: ["pathname", "timestamp"],

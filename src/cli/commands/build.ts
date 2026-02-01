@@ -6,6 +6,7 @@ import { loadConfig, type ResolvedConfig } from "../config.js";
 import { buildFromInclude, type BuildFromIncludeResult } from "../../generator/index.js";
 import { buildToTinybird, type BuildApiResult } from "../../api/build.js";
 import { deployToMain } from "../../api/deploy.js";
+import { getOrCreateBranch } from "../../api/branches.js";
 
 /**
  * Build command options
@@ -66,7 +67,6 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
   try {
     buildResult = await buildFromInclude({
       includePaths: config.include,
-      outputPath: config.output,
       cwd: config.cwd,
     });
   } catch (error) {
@@ -87,13 +87,58 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
   }
 
   // Deploy to Tinybird
-  // Use token override if provided (for branch tokens)
-  const effectiveToken = options.tokenOverride ?? config.token;
+  // Determine token and endpoint based on git branch
+  let effectiveToken = options.tokenOverride ?? config.token;
+  let useDeployEndpoint = options.useDeployEndpoint ?? config.isMainBranch;
+
+  // For feature branches, get or create the Tinybird branch and use its token
+  const debug = !!process.env.TINYBIRD_DEBUG;
+  if (debug) {
+    console.log(`[debug] isMainBranch: ${config.isMainBranch}`);
+    console.log(`[debug] tinybirdBranch: ${config.tinybirdBranch}`);
+    console.log(`[debug] tokenOverride: ${!!options.tokenOverride}`);
+  }
+  if (!config.isMainBranch && config.tinybirdBranch && !options.tokenOverride) {
+    if (debug) {
+      console.log(`[debug] Getting/creating Tinybird branch: ${config.tinybirdBranch}`);
+    }
+    try {
+      const tinybirdBranch = await getOrCreateBranch(
+        {
+          baseUrl: config.baseUrl,
+          token: config.token,
+        },
+        config.tinybirdBranch
+      );
+
+      if (!tinybirdBranch.token) {
+        return {
+          success: false,
+          build: buildResult,
+          error: `Branch '${config.tinybirdBranch}' was created but no token was returned.`,
+          durationMs: Date.now() - startTime,
+        };
+      }
+
+      effectiveToken = tinybirdBranch.token;
+      useDeployEndpoint = false; // Always use /v1/build for branches
+      if (debug) {
+        console.log(`[debug] Using branch token for branch: ${config.tinybirdBranch}`);
+      }
+    } catch (error) {
+      return {
+        success: false,
+        build: buildResult,
+        error: `Failed to get/create branch: ${(error as Error).message}`,
+        durationMs: Date.now() - startTime,
+      };
+    }
+  }
 
   let deployResult: BuildApiResult;
   try {
     // Use /v1/deploy for main branch, /v1/build for feature branches
-    if (options.useDeployEndpoint) {
+    if (useDeployEndpoint) {
       deployResult = await deployToMain(
         {
           baseUrl: config.baseUrl,

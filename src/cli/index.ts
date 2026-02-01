@@ -130,7 +130,11 @@ function createCli(): Command {
     .command("build")
     .description("Build and push resources to Tinybird")
     .option("--dry-run", "Generate without pushing to API")
+    .option("--debug", "Show debug output including API requests/responses")
     .action(async (options) => {
+      if (options.debug) {
+        process.env.TINYBIRD_DEBUG = "1";
+      }
       console.log(`[${formatTime()}] Building...\n`);
 
       const result = await runBuild({

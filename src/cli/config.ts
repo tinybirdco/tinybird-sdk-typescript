@@ -18,8 +18,6 @@ export interface TinybirdConfig {
   token: string;
   /** Tinybird API base URL (optional, defaults to EU region) */
   baseUrl?: string;
-  /** Path to generated client file (defaults to src/tinybird.ts or tinybird.ts) */
-  output?: string;
 }
 
 /**
@@ -28,8 +26,6 @@ export interface TinybirdConfig {
 export interface ResolvedConfig {
   /** Array of TypeScript files to scan for datasources and pipes */
   include: string[];
-  /** Path to generated client file */
-  output: string;
   /** Resolved API token (workspace main token) */
   token: string;
   /** Tinybird API base URL */
@@ -120,22 +116,6 @@ export function getTinybirdSchemaPath(cwd: string): string {
 
 export function getRelativeSchemaPath(cwd: string): string {
   return `${getRelativeTinybirdDir(cwd)}/datasources.ts`;
-}
-
-/**
- * Get the default output path for generated client file
- * Generates to src/tinybird.ts (works with tsconfig path alias)
- */
-export function getDefaultOutputPath(cwd: string): string {
-  return hasSrcFolder(cwd) ? "src/tinybird.ts" : "tinybird.ts";
-}
-
-/**
- * Get the absolute output path for generated client file
- */
-export function getOutputPath(cwd: string, configOutput?: string): string {
-  const relativePath = configOutput ?? getDefaultOutputPath(cwd);
-  return path.join(cwd, relativePath);
 }
 
 /**
@@ -234,11 +214,8 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
     include = [];
   }
 
-  // Get the directory containing the config file for resolving output path
+  // Get the directory containing the config file
   const configDir = path.dirname(configPath);
-
-  // Resolve output path
-  const output = config.output ?? getDefaultOutputPath(configDir);
 
   // Resolve token (may contain env vars)
   let resolvedToken: string;
@@ -268,7 +245,6 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
 
   return {
     include,
-    output,
     token: resolvedToken,
     baseUrl: resolvedBaseUrl,
     configPath,
