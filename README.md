@@ -174,6 +174,7 @@ Build and push resources to Tinybird.
 ```bash
 npx tinybird build
 npx tinybird build --dry-run  # Preview without pushing
+npx tinybird build --local    # Build to local Tinybird container
 ```
 
 ### `npx tinybird dev`
@@ -182,6 +183,7 @@ Watch for changes and sync with Tinybird automatically.
 
 ```bash
 npx tinybird dev
+npx tinybird dev --local  # Sync with local Tinybird container
 ```
 
 ## Configuration
@@ -195,13 +197,41 @@ Create a `tinybird.json` in your project root:
     "src/tinybird/pipes.ts"
   ],
   "token": "${TINYBIRD_TOKEN}",
-  "baseUrl": "https://api.tinybird.co"
+  "baseUrl": "https://api.tinybird.co",
+  "devMode": "branch"
 }
 ```
 
 - `include` - Array of TypeScript files to scan for datasources and pipes
 - `token` - API token (supports environment variable interpolation)
 - `baseUrl` - Tinybird API URL (defaults to EU region)
+- `devMode` - Development mode: `"branch"` (default) or `"local"`
+
+### Local Development Mode
+
+Use a local Tinybird container for development without affecting your cloud workspace:
+
+1. Start the local container:
+   ```bash
+   docker run -d -p 7181:7181 --name tinybird-local tinybirdco/tinybird-local:latest
+   ```
+
+2. Configure your project:
+   ```json
+   {
+     "devMode": "local"
+   }
+   ```
+
+   Or use the CLI flag:
+   ```bash
+   npx tinybird dev --local
+   ```
+
+In local mode:
+- Tokens are automatically obtained from the local container
+- A workspace is created per git branch
+- No cloud authentication required
 
 ## Defining Resources
 
