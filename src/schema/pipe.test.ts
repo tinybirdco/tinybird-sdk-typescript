@@ -1,9 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   definePipe,
+  defineMaterializedView,
   node,
   isPipeDefinition,
   getEndpointConfig,
+  getMaterializedConfig,
+  isMaterializedView,
   getNodeNames,
   getNode,
   sql,
@@ -11,6 +14,7 @@ import {
 import { defineDatasource } from "./datasource.js";
 import { t } from "./types.js";
 import { p } from "./params.js";
+import { engine } from "./engines.js";
 
 describe("Pipe Schema", () => {
   describe("node", () => {
@@ -286,6 +290,268 @@ describe("Pipe Schema", () => {
     it("handles no interpolations", () => {
       const query = sql`SELECT 1`;
       expect(query).toBe("SELECT 1");
+    });
+  });
+
+  describe("Materialized Views", () => {
+    const salesByHour = defineDatasource("sales_by_hour", {
+      schema: {
+        day: t.date(),
+        country: t.string().lowCardinality(),
+        total_sales: t.simpleAggregateFunction("sum", t.uint64()),
+      },
+      engine: engine.aggregatingMergeTree({
+        sortingKey: ["day", "country"],
+      }),
+    });
+
+    describe("definePipe with materialized", () => {
+      it("creates a materialized view pipe", () => {
+        const pipe = definePipe("sales_by_hour_mv", {
+          description: "Aggregate sales per hour",
+          nodes: [
+            node({
+              name: "daily_sales",
+              sql: `
+                SELECT
+                  toStartOfDay(starting_date) as day,
+                  country,
+                  sum(sales) as total_sales
+                FROM teams
+                GROUP BY day, country
+              `,
+            }),
+          ],
+          output: {
+            day: t.date(),
+            country: t.string().lowCardinality(),
+            total_sales: t.simpleAggregateFunction("sum", t.uint64()),
+          },
+          materialized: {
+            datasource: salesByHour,
+          },
+        });
+
+        expect(pipe._name).toBe("sales_by_hour_mv");
+        expect(pipe.options.materialized).toBeDefined();
+        expect(pipe.options.materialized?.datasource._name).toBe("sales_by_hour");
+      });
+
+      it("creates a materialized view with deployment method", () => {
+        const pipe = definePipe("sales_by_hour_mv", {
+          nodes: [node({ name: "mv", sql: "SELECT 1 as day, 'US' as country, 100 as total_sales" })],
+          output: {
+            day: t.date(),
+            country: t.string().lowCardinality(),
+            total_sales: t.simpleAggregateFunction("sum", t.uint64()),
+          },
+          materialized: {
+            datasource: salesByHour,
+            deploymentMethod: "alter",
+          },
+        });
+
+        expect(pipe.options.materialized?.deploymentMethod).toBe("alter");
+      });
+
+      it("throws error when both endpoint and materialized are set", () => {
+        expect(() =>
+          definePipe("invalid_pipe", {
+            nodes: [node({ name: "endpoint", sql: "SELECT 1 as day, 'US' as country, 100 as total_sales" })],
+            output: {
+              day: t.date(),
+              country: t.string().lowCardinality(),
+              total_sales: t.simpleAggregateFunction("sum", t.uint64()),
+            },
+            endpoint: true,
+            materialized: {
+              datasource: salesByHour,
+            },
+          })
+        ).toThrow("cannot have both endpoint and materialized");
+      });
+    });
+
+    describe("Schema validation", () => {
+      it("throws error when output is missing columns", () => {
+        expect(() =>
+          definePipe("invalid_mv", {
+            nodes: [node({ name: "mv", sql: "SELECT 1" })],
+            output: {
+              day: t.date(),
+              // missing country and total_sales
+            },
+            materialized: {
+              datasource: salesByHour,
+            },
+          })
+        ).toThrow("missing columns from target datasource");
+      });
+
+      it("throws error when output has extra columns", () => {
+        expect(() =>
+          definePipe("invalid_mv", {
+            nodes: [node({ name: "mv", sql: "SELECT 1" })],
+            output: {
+              day: t.date(),
+              country: t.string().lowCardinality(),
+              total_sales: t.simpleAggregateFunction("sum", t.uint64()),
+              extra_column: t.string(), // extra column
+            },
+            materialized: {
+              datasource: salesByHour,
+            },
+          })
+        ).toThrow("columns not in target datasource");
+      });
+
+      it("throws error when column types do not match", () => {
+        expect(() =>
+          definePipe("invalid_mv", {
+            nodes: [node({ name: "mv", sql: "SELECT 1" })],
+            output: {
+              day: t.string(), // should be date
+              country: t.string().lowCardinality(),
+              total_sales: t.simpleAggregateFunction("sum", t.uint64()),
+            },
+            materialized: {
+              datasource: salesByHour,
+            },
+          })
+        ).toThrow("type mismatch");
+      });
+
+      it("allows compatible types (base type to aggregate function)", () => {
+        // When the output has UInt64 and datasource has SimpleAggregateFunction(sum, UInt64)
+        // they should be compatible
+        const simpleDatasource = defineDatasource("simple_agg", {
+          schema: {
+            value: t.simpleAggregateFunction("sum", t.uint64()),
+          },
+        });
+
+        const pipe = definePipe("valid_mv", {
+          nodes: [node({ name: "mv", sql: "SELECT sum(x) as value FROM table" })],
+          output: {
+            value: t.uint64(), // base type compatible with SimpleAggregateFunction(sum, UInt64)
+          },
+          materialized: {
+            datasource: simpleDatasource,
+          },
+        });
+
+        expect(pipe.options.materialized).toBeDefined();
+      });
+
+      it("allows compatible types with modifiers (nullable, low cardinality)", () => {
+        const datasource = defineDatasource("test_ds", {
+          schema: {
+            name: t.string().lowCardinality().nullable(),
+          },
+        });
+
+        const pipe = definePipe("valid_mv", {
+          nodes: [node({ name: "mv", sql: "SELECT name FROM table" })],
+          output: {
+            name: t.string().lowCardinality().nullable(),
+          },
+          materialized: {
+            datasource: datasource,
+          },
+        });
+
+        expect(pipe.options.materialized).toBeDefined();
+      });
+    });
+
+    describe("getMaterializedConfig", () => {
+      it("returns null for endpoint pipe", () => {
+        const pipe = definePipe("endpoint_pipe", {
+          nodes: [node({ name: "endpoint", sql: "SELECT 1" })],
+          output: { value: t.int32() },
+          endpoint: true,
+        });
+
+        expect(getMaterializedConfig(pipe)).toBeNull();
+      });
+
+      it("returns config for materialized view", () => {
+        const pipe = definePipe("mv_pipe", {
+          nodes: [node({ name: "mv", sql: "SELECT 1 as day, 'US' as country, 100 as total_sales" })],
+          output: {
+            day: t.date(),
+            country: t.string().lowCardinality(),
+            total_sales: t.simpleAggregateFunction("sum", t.uint64()),
+          },
+          materialized: {
+            datasource: salesByHour,
+            deploymentMethod: "alter",
+          },
+        });
+
+        const config = getMaterializedConfig(pipe);
+        expect(config).toBeDefined();
+        expect(config?.datasource._name).toBe("sales_by_hour");
+        expect(config?.deploymentMethod).toBe("alter");
+      });
+    });
+
+    describe("isMaterializedView", () => {
+      it("returns false for endpoint pipe", () => {
+        const pipe = definePipe("endpoint_pipe", {
+          nodes: [node({ name: "endpoint", sql: "SELECT 1" })],
+          output: { value: t.int32() },
+          endpoint: true,
+        });
+
+        expect(isMaterializedView(pipe)).toBe(false);
+      });
+
+      it("returns true for materialized view", () => {
+        const pipe = definePipe("mv_pipe", {
+          nodes: [node({ name: "mv", sql: "SELECT 1 as day, 'US' as country, 100 as total_sales" })],
+          output: {
+            day: t.date(),
+            country: t.string().lowCardinality(),
+            total_sales: t.simpleAggregateFunction("sum", t.uint64()),
+          },
+          materialized: {
+            datasource: salesByHour,
+          },
+        });
+
+        expect(isMaterializedView(pipe)).toBe(true);
+      });
+    });
+
+    describe("defineMaterializedView", () => {
+      it("creates a materialized view with inferred output schema", () => {
+        const pipe = defineMaterializedView("sales_mv", {
+          description: "Sales materialized view",
+          datasource: salesByHour,
+          nodes: [
+            node({
+              name: "daily_sales",
+              sql: "SELECT toStartOfDay(date) as day, country, sum(sales) as total_sales FROM events GROUP BY day, country",
+            }),
+          ],
+        });
+
+        expect(pipe._name).toBe("sales_mv");
+        expect(pipe.options.description).toBe("Sales materialized view");
+        expect(pipe.options.materialized?.datasource._name).toBe("sales_by_hour");
+        expect(Object.keys(pipe._output)).toEqual(["day", "country", "total_sales"]);
+      });
+
+      it("creates a materialized view with deployment method", () => {
+        const pipe = defineMaterializedView("sales_mv", {
+          datasource: salesByHour,
+          nodes: [node({ name: "mv", sql: "SELECT 1" })],
+          deploymentMethod: "alter",
+        });
+
+        expect(pipe.options.materialized?.deploymentMethod).toBe("alter");
+      });
     });
   });
 });

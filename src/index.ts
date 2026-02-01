@@ -109,7 +109,19 @@ export type {
 } from "./schema/datasource.js";
 
 // ============ Pipe ============
-export { definePipe, node, isPipeDefinition, isNodeDefinition, getEndpointConfig, getNodeNames, getNode, sql } from "./schema/pipe.js";
+export {
+  definePipe,
+  defineMaterializedView,
+  node,
+  isPipeDefinition,
+  isNodeDefinition,
+  getEndpointConfig,
+  getMaterializedConfig,
+  isMaterializedView,
+  getNodeNames,
+  getNode,
+  sql,
+} from "./schema/pipe.js";
 export type {
   PipeDefinition,
   PipeOptions,
@@ -118,6 +130,8 @@ export type {
   ParamsDefinition,
   OutputDefinition,
   EndpointConfig,
+  MaterializedConfig,
+  MaterializedViewOptions,
   PipeTokenConfig,
   ExtractParams,
   ExtractOutput,
@@ -148,6 +162,9 @@ export type {
   PartialRow,
   InferSchema,
   InferTinybirdTypes,
+  InferMaterializedTarget,
+  InferMaterializedTargetRow,
+  IsMaterializedPipe,
 } from "./infer/index.js";
 
 // ============ Client ============

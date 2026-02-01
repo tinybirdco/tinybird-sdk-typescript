@@ -5,6 +5,8 @@
 
 import {
   defineDatasource,
+  defineMaterializedView,
+  InferMaterializedTarget,
   definePipe,
   defineProject,
   node,
@@ -58,7 +60,36 @@ export const users = defineDatasource("users", {
   }),
 });
 
+/**
+ * Events Daily Stats Target Datasource
+ */
+
+export const events_daily_stats = defineDatasource("events_daily_stats", {
+  description: "Daily stats for events",
+  schema: {
+    day: t.date(),
+    event_type: t.string(),
+    count: t.simpleAggregateFunction('sum', t.uint64()),
+  },
+  engine: engine.aggregatingMergeTree({
+    sortingKey: ["day", "event_type"],
+  })
+});
+
 // ============ Pipes ============
+/**
+ * Events Daily Stats Materialized View
+ */
+export const events_daily_stats_mv = defineMaterializedView("events_daily_stats_mv", {
+  description: "Daily stats for events",
+  datasource: events_daily_stats,
+  nodes: [
+    node({
+      name: "daily_stats",
+      sql: "SELECT toStartOfDay(timestamp) as day, event_type, count() as count FROM events GROUP BY day, event_type",
+    }),
+  ],
+});
 
 /**
  * Top events pipe - get top events by count
@@ -140,6 +171,40 @@ export const userActivity = definePipe("user_activity", {
   endpoint: true,
 });
 
+export const events_by_day_and_type = definePipe("events_by_day_and_type", {
+  description: "Get events by day and type",
+  params: {
+    start_date: p.date().optional().describe("From date"),
+    end_date: p.date().optional().describe("To date"),
+    event_type: p.string().optional().describe("Filter by event type"),
+  },
+  nodes: [
+    node({
+      name: "events_by_day_and_type_node",
+      sql: `
+        SELECT *
+        FROM events_daily_stats
+        WHERE 1=1 
+        {% if defined(start_date) %} 
+        AND day >= {{Date(start_date)}} 
+        {% end %}
+        {% if defined(end_date) %} 
+        AND day <= {{Date(end_date)}} 
+        {% end %}
+        {% if defined(event_type) %} 
+        AND event_type = {{String(event_type)}} 
+        {% end %}
+      `,
+    }),
+  ],
+  output: {
+    day: t.date(),
+    event_type: t.string(),
+    count: t.uint64(),
+  },
+  endpoint: true,
+});
+
 // ============ Project ============
 
 /**
@@ -150,10 +215,13 @@ export default defineProject({
   datasources: {
     events,
     users,
+    events_daily_stats,
   },
   pipes: {
     topEvents,
     userActivity,
+    events_daily_stats_mv,
+    events_by_day_and_type,
   },
 });
 
@@ -165,6 +233,12 @@ export type EventRow = InferRow<typeof events>;
 
 export type UserRow = InferRow<typeof users>;
 // { user_id: string; email: string; name: string | null; ... }
+
+export type EventsDailyStatsMV = InferMaterializedTarget<typeof events_daily_stats_mv>;
+// { day: Date; event_type: string; count: number }
+
+export type EventsDailyStatsRow = InferRow<typeof events_daily_stats>;
+// { day: Date; event_type: string; count: number }
 
 // Infer parameter types from pipes
 export type TopEventsParams = InferParams<typeof topEvents>;

@@ -5,7 +5,9 @@
 
 import type { AnyTypeValidator } from "./types.js";
 import type { AnyParamValidator } from "./params.js";
-import type { DatasourceDefinition } from "./datasource.js";
+import type { DatasourceDefinition, SchemaDefinition, ColumnDefinition } from "./datasource.js";
+import { getColumnType } from "./datasource.js";
+import { getTinybirdType } from "./types.js";
 
 /** Symbol for brand typing pipes */
 export const PIPE_BRAND: unique symbol = Symbol("tinybird.pipe");
@@ -114,6 +116,22 @@ export interface EndpointConfig {
 }
 
 /**
+ * Materialized view configuration for a pipe
+ */
+export interface MaterializedConfig<
+  TDatasource extends DatasourceDefinition<SchemaDefinition> = DatasourceDefinition<SchemaDefinition>
+> {
+  /** Target datasource where materialized data is written */
+  datasource: TDatasource;
+  /**
+   * Deployment method for materialized views.
+   * Use 'alter' to update existing materialized views using ALTER TABLE ... MODIFY QUERY
+   * instead of recreating the table. This preserves existing data and reduces deployment time.
+   */
+  deploymentMethod?: "alter";
+}
+
+/**
  * Token configuration for pipe access
  */
 export interface PipeTokenConfig {
@@ -136,8 +154,10 @@ export interface PipeOptions<
   nodes: readonly NodeDefinition[];
   /** Output schema (required for type safety) */
   output: TOutput;
-  /** Whether this pipe is an API endpoint (shorthand for { enabled: true }) */
+  /** Whether this pipe is an API endpoint (shorthand for { enabled: true }). Mutually exclusive with materialized. */
   endpoint?: boolean | EndpointConfig;
+  /** Materialized view configuration. Mutually exclusive with endpoint. */
+  materialized?: MaterializedConfig;
   /** Access tokens for this pipe */
   tokens?: readonly PipeTokenConfig[];
 }
@@ -212,6 +232,104 @@ export interface PipeDefinition<
  * });
  * ```
  */
+/**
+ * Normalize a Tinybird type for comparison by removing wrappers that don't affect compatibility
+ */
+function normalizeTypeForComparison(type: string): string {
+  // Remove Nullable wrapper for comparison
+  let normalized = type.replace(/^Nullable\((.+)\)$/, "$1");
+  // Remove LowCardinality wrapper
+  normalized = normalized.replace(/^LowCardinality\((.+)\)$/, "$1");
+  // Handle LowCardinality(Nullable(...))
+  normalized = normalized.replace(/^LowCardinality\(Nullable\((.+)\)\)$/, "$1");
+  // Remove timezone from DateTime types
+  normalized = normalized.replace(/^DateTime\('[^']+'\)$/, "DateTime");
+  normalized = normalized.replace(/^DateTime64\((\d+),\s*'[^']+'\)$/, "DateTime64($1)");
+  return normalized;
+}
+
+/**
+ * Check if two Tinybird types are compatible
+ */
+function typesAreCompatible(outputType: string, datasourceType: string): boolean {
+  const normalizedOutput = normalizeTypeForComparison(outputType);
+  const normalizedDatasource = normalizeTypeForComparison(datasourceType);
+
+  // Direct match
+  if (normalizedOutput === normalizedDatasource) {
+    return true;
+  }
+
+  // SimpleAggregateFunction compatibility: output can be the base type
+  // e.g., output UInt64 -> datasource SimpleAggregateFunction(sum, UInt64)
+  const simpleAggMatch = normalizedDatasource.match(
+    /^SimpleAggregateFunction\([^,]+,\s*(.+)\)$/
+  );
+  if (simpleAggMatch && normalizedOutput === simpleAggMatch[1]) {
+    return true;
+  }
+
+  // AggregateFunction compatibility
+  const aggMatch = normalizedDatasource.match(
+    /^AggregateFunction\([^,]+,\s*(.+)\)$/
+  );
+  if (aggMatch && normalizedOutput === aggMatch[1]) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Validate that the pipe output schema matches the target datasource schema
+ */
+function validateMaterializedSchema(
+  pipeName: string,
+  output: OutputDefinition,
+  datasource: DatasourceDefinition
+): void {
+  const outputColumns = Object.keys(output);
+  const datasourceSchema = datasource._schema;
+  const datasourceColumns = Object.keys(datasourceSchema);
+
+  // Check for missing columns in output
+  const missingInOutput = datasourceColumns.filter(
+    (col) => !outputColumns.includes(col)
+  );
+  if (missingInOutput.length > 0) {
+    throw new Error(
+      `Materialized view "${pipeName}" output schema is missing columns from target datasource "${datasource._name}": ${missingInOutput.join(", ")}`
+    );
+  }
+
+  // Check for extra columns in output
+  const extraInOutput = outputColumns.filter(
+    (col) => !datasourceColumns.includes(col)
+  );
+  if (extraInOutput.length > 0) {
+    throw new Error(
+      `Materialized view "${pipeName}" output schema has columns not in target datasource "${datasource._name}": ${extraInOutput.join(", ")}`
+    );
+  }
+
+  // Check type compatibility for each column
+  for (const columnName of outputColumns) {
+    const outputValidator = output[columnName];
+    const datasourceColumn = datasourceSchema[columnName];
+
+    const outputType = getTinybirdType(outputValidator);
+    const datasourceValidator = getColumnType(datasourceColumn);
+    const datasourceType = getTinybirdType(datasourceValidator);
+
+    if (!typesAreCompatible(outputType, datasourceType)) {
+      throw new Error(
+        `Materialized view "${pipeName}" column "${columnName}" type mismatch: ` +
+          `output has "${outputType}" but target datasource "${datasource._name}" expects "${datasourceType}"`
+      );
+    }
+  }
+}
+
 export function definePipe<
   TParams extends ParamsDefinition,
   TOutput extends OutputDefinition
@@ -238,6 +356,23 @@ export function definePipe<
     );
   }
 
+  // Validate mutual exclusivity of endpoint and materialized
+  if (options.endpoint && options.materialized) {
+    throw new Error(
+      `Pipe "${name}" cannot have both endpoint and materialized configurations. ` +
+        `A pipe must be either an API endpoint OR a materialized view, not both.`
+    );
+  }
+
+  // Validate materialized view schema compatibility
+  if (options.materialized) {
+    validateMaterializedSchema(
+      name,
+      options.output,
+      options.materialized.datasource
+    );
+  }
+
   const params = (options.params ?? {}) as TParams;
 
   return {
@@ -251,6 +386,114 @@ export function definePipe<
       params,
     },
   };
+}
+
+/**
+ * Options for defining a materialized view
+ */
+export interface MaterializedViewOptions<
+  TDatasource extends DatasourceDefinition<SchemaDefinition>
+> {
+  /** Human-readable description of the materialized view */
+  description?: string;
+  /** Nodes in the transformation pipeline */
+  nodes: readonly NodeDefinition[];
+  /** Target datasource where materialized data is written */
+  datasource: TDatasource;
+  /**
+   * Deployment method for materialized views.
+   * Use 'alter' to update existing materialized views using ALTER TABLE ... MODIFY QUERY
+   * instead of recreating the table. This preserves existing data and reduces deployment time.
+   */
+  deploymentMethod?: "alter";
+  /** Access tokens for this pipe */
+  tokens?: readonly PipeTokenConfig[];
+}
+
+/**
+ * Helper type to extract the output definition from a datasource schema
+ */
+type DatasourceSchemaToOutput<TSchema extends SchemaDefinition> = {
+  [K in keyof TSchema]: TSchema[K] extends ColumnDefinition<infer V>
+    ? V
+    : TSchema[K] extends AnyTypeValidator
+      ? TSchema[K]
+      : never;
+};
+
+/**
+ * Define a Tinybird materialized view
+ *
+ * This is a convenience function that simplifies creating materialized views.
+ * The output schema is automatically derived from the target datasource, ensuring
+ * type safety between the pipe output and the target.
+ *
+ * @param name - The pipe name (must be valid identifier)
+ * @param options - Materialized view configuration
+ * @returns A pipe definition configured as a materialized view
+ *
+ * @example
+ * ```ts
+ * import { defineDatasource, defineMaterializedView, node, t, engine } from '@tinybird/sdk';
+ *
+ * // Target datasource for aggregated data
+ * const salesByHour = defineDatasource('sales_by_hour', {
+ *   schema: {
+ *     day: t.date(),
+ *     country: t.string().lowCardinality(),
+ *     total_sales: t.simpleAggregateFunction('sum', t.uint64()),
+ *   },
+ *   engine: engine.aggregatingMergeTree({
+ *     sortingKey: ['day', 'country'],
+ *   }),
+ * });
+ *
+ * // Materialized view - output schema is inferred from datasource
+ * export const salesByHourMv = defineMaterializedView('sales_by_hour_mv', {
+ *   description: 'Aggregate sales per hour',
+ *   datasource: salesByHour,
+ *   nodes: [
+ *     node({
+ *       name: 'daily_sales',
+ *       sql: `
+ *         SELECT
+ *           toStartOfDay(starting_date) as day,
+ *           country,
+ *           sum(sales) as total_sales
+ *         FROM teams
+ *         GROUP BY day, country
+ *       `,
+ *     }),
+ *   ],
+ *   deploymentMethod: 'alter', // optional
+ * });
+ * ```
+ */
+export function defineMaterializedView<
+  TSchema extends SchemaDefinition,
+  TDatasource extends DatasourceDefinition<TSchema>
+>(
+  name: string,
+  options: MaterializedViewOptions<TDatasource>
+): PipeDefinition<Record<string, never>, DatasourceSchemaToOutput<TSchema>> {
+  // Extract the schema from the datasource to build the output
+  const datasourceSchema = options.datasource._schema as TSchema;
+  const output: Record<string, AnyTypeValidator> = {};
+
+  for (const [columnName, column] of Object.entries(datasourceSchema)) {
+    output[columnName] = getColumnType(column);
+  }
+
+  return definePipe(name, {
+    description: options.description,
+    nodes: options.nodes,
+    output: output as DatasourceSchemaToOutput<TSchema>,
+    materialized: {
+      datasource: options.datasource,
+      deploymentMethod: options.deploymentMethod,
+    },
+    tokens: options.tokens,
+  });
 }
 
 /**
@@ -280,6 +523,20 @@ export function getEndpointConfig(pipe: PipeDefinition): EndpointConfig | null {
   }
 
   return endpoint.enabled ? endpoint : null;
+}
+
+/**
+ * Get the materialized view configuration from a pipe
+ */
+export function getMaterializedConfig(pipe: PipeDefinition): MaterializedConfig | null {
+  return pipe.options.materialized ?? null;
+}
+
+/**
+ * Check if a pipe is a materialized view
+ */
+export function isMaterializedView(pipe: PipeDefinition): boolean {
+  return pipe.options.materialized !== undefined;
 }
 
 /**

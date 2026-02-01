@@ -189,3 +189,59 @@ export type InferTinybirdTypes<T extends SchemaDefinition> = {
       ? TB
       : never;
 };
+
+/**
+ * Extract the target datasource from a materialized view pipe
+ *
+ * @example
+ * ```ts
+ * import { definePipe, defineDatasource, t, engine, InferMaterializedTarget } from '@tinybird/sdk';
+ *
+ * const salesByHour = defineDatasource('sales_by_hour', {
+ *   schema: { day: t.date(), total: t.uint64() },
+ *   engine: engine.aggregatingMergeTree({ sortingKey: ['day'] }),
+ * });
+ *
+ * const salesMv = definePipe('sales_mv', {
+ *   nodes: [...],
+ *   output: { day: t.date(), total: t.uint64() },
+ *   materialized: { datasource: salesByHour },
+ * });
+ *
+ * type Target = InferMaterializedTarget<typeof salesMv>;
+ * // typeof salesByHour
+ * ```
+ */
+export type InferMaterializedTarget<T> = T extends PipeDefinition<
+  ParamsDefinition,
+  OutputDefinition
+>
+  ? T["options"]["materialized"] extends { datasource: infer D }
+    ? D extends DatasourceDefinition<SchemaDefinition>
+      ? D
+      : never
+    : never
+  : never;
+
+/**
+ * Extract the target datasource row type from a materialized view pipe
+ *
+ * @example
+ * ```ts
+ * type TargetRow = InferMaterializedTargetRow<typeof salesMv>;
+ * // { day: Date; total: number }
+ * ```
+ */
+export type InferMaterializedTargetRow<T> = InferRow<InferMaterializedTarget<T>>;
+
+/**
+ * Check if a pipe definition is a materialized view (type-level)
+ */
+export type IsMaterializedPipe<T> = T extends PipeDefinition<
+  ParamsDefinition,
+  OutputDefinition
+>
+  ? T["options"]["materialized"] extends { datasource: DatasourceDefinition<SchemaDefinition> }
+    ? true
+    : false
+  : false;

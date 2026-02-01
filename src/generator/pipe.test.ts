@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { generatePipe, generateAllPipes } from './pipe.js';
-import { definePipe, node } from '../schema/pipe.js';
+import { definePipe, defineMaterializedView, node } from '../schema/pipe.js';
+import { defineDatasource } from '../schema/datasource.js';
 import { t } from '../schema/types.js';
 import { p } from '../schema/params.js';
+import { engine } from '../schema/engines.js';
 
 // Helper to create a simple output schema for tests
 const simpleOutput = { result: t.int32() };
@@ -262,6 +264,154 @@ LIMIT {{Int32(limit, 10)}}
       expect(result.content).toContain('{{DateTime(start_date)}}');
       expect(result.content).toContain('{{Int32(limit, 10)}}');
       expect(result.content).toContain('TYPE endpoint');
+    });
+  });
+
+  describe('Materialized Views', () => {
+    const salesByHour = defineDatasource('sales_by_hour', {
+      schema: {
+        day: t.date(),
+        country: t.string().lowCardinality(),
+        total_sales: t.simpleAggregateFunction('sum', t.uint64()),
+      },
+      engine: engine.aggregatingMergeTree({
+        sortingKey: ['day', 'country'],
+      }),
+    });
+
+    it('generates TYPE MATERIALIZED and DATASOURCE', () => {
+      const pipe = definePipe('sales_by_hour_mv', {
+        nodes: [
+          node({
+            name: 'daily_sales',
+            sql: 'SELECT toStartOfDay(date) as day, country, sum(sales) as total_sales FROM teams GROUP BY day, country',
+          }),
+        ],
+        output: {
+          day: t.date(),
+          country: t.string().lowCardinality(),
+          total_sales: t.simpleAggregateFunction('sum', t.uint64()),
+        },
+        materialized: {
+          datasource: salesByHour,
+        },
+      });
+
+      const result = generatePipe(pipe);
+
+      expect(result.content).toContain('TYPE MATERIALIZED');
+      expect(result.content).toContain('DATASOURCE sales_by_hour');
+      expect(result.content).not.toContain('TYPE endpoint');
+    });
+
+    it('generates DEPLOYMENT_METHOD alter when specified', () => {
+      const pipe = definePipe('sales_by_hour_mv', {
+        nodes: [
+          node({
+            name: 'daily_sales',
+            sql: 'SELECT toStartOfDay(date) as day, country, sum(sales) as total_sales FROM teams GROUP BY day, country',
+          }),
+        ],
+        output: {
+          day: t.date(),
+          country: t.string().lowCardinality(),
+          total_sales: t.simpleAggregateFunction('sum', t.uint64()),
+        },
+        materialized: {
+          datasource: salesByHour,
+          deploymentMethod: 'alter',
+        },
+      });
+
+      const result = generatePipe(pipe);
+
+      expect(result.content).toContain('TYPE MATERIALIZED');
+      expect(result.content).toContain('DATASOURCE sales_by_hour');
+      expect(result.content).toContain('DEPLOYMENT_METHOD alter');
+    });
+
+    it('does not include DEPLOYMENT_METHOD when not specified', () => {
+      const pipe = definePipe('sales_by_hour_mv', {
+        nodes: [
+          node({
+            name: 'daily_sales',
+            sql: 'SELECT toStartOfDay(date) as day, country, sum(sales) as total_sales FROM teams GROUP BY day, country',
+          }),
+        ],
+        output: {
+          day: t.date(),
+          country: t.string().lowCardinality(),
+          total_sales: t.simpleAggregateFunction('sum', t.uint64()),
+        },
+        materialized: {
+          datasource: salesByHour,
+        },
+      });
+
+      const result = generatePipe(pipe);
+
+      expect(result.content).not.toContain('DEPLOYMENT_METHOD');
+    });
+
+    it('generates complete materialized view pipe file', () => {
+      const pipe = definePipe('sales_by_hour_mv', {
+        description: 'Aggregate sales per hour',
+        nodes: [
+          node({
+            name: 'daily_sales',
+            sql: `
+SELECT
+  toStartOfDay(starting_date) as day,
+  country,
+  sum(sales) as total_sales
+FROM teams
+GROUP BY day, country
+            `.trim(),
+          }),
+        ],
+        output: {
+          day: t.date(),
+          country: t.string().lowCardinality(),
+          total_sales: t.simpleAggregateFunction('sum', t.uint64()),
+        },
+        materialized: {
+          datasource: salesByHour,
+          deploymentMethod: 'alter',
+        },
+      });
+
+      const result = generatePipe(pipe);
+
+      expect(result.name).toBe('sales_by_hour_mv');
+      expect(result.content).toContain('DESCRIPTION >');
+      expect(result.content).toContain('Aggregate sales per hour');
+      expect(result.content).toContain('NODE daily_sales');
+      expect(result.content).toContain('SQL >');
+      expect(result.content).toContain('toStartOfDay(starting_date) as day');
+      expect(result.content).toContain('TYPE MATERIALIZED');
+      expect(result.content).toContain('DATASOURCE sales_by_hour');
+      expect(result.content).toContain('DEPLOYMENT_METHOD alter');
+    });
+
+    it('works with defineMaterializedView helper', () => {
+      const pipe = defineMaterializedView('sales_mv', {
+        description: 'Sales materialized view',
+        datasource: salesByHour,
+        nodes: [
+          node({
+            name: 'daily_sales',
+            sql: 'SELECT toStartOfDay(date) as day, country, sum(sales) as total_sales FROM events GROUP BY day, country',
+          }),
+        ],
+        deploymentMethod: 'alter',
+      });
+
+      const result = generatePipe(pipe);
+
+      expect(result.name).toBe('sales_mv');
+      expect(result.content).toContain('TYPE MATERIALIZED');
+      expect(result.content).toContain('DATASOURCE sales_by_hour');
+      expect(result.content).toContain('DEPLOYMENT_METHOD alter');
     });
   });
 });

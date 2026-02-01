@@ -7,8 +7,9 @@ import type {
   PipeDefinition,
   NodeDefinition,
   EndpointConfig,
+  MaterializedConfig,
 } from "../schema/pipe.js";
-import { getEndpointConfig } from "../schema/pipe.js";
+import { getEndpointConfig, getMaterializedConfig } from "../schema/pipe.js";
 
 /**
  * Generated pipe content
@@ -68,6 +69,20 @@ function generateEndpoint(endpoint: EndpointConfig): string {
     } else {
       parts.push("CACHE 60"); // Default cache TTL
     }
+  }
+
+  return parts.join("\n");
+}
+
+/**
+ * Generate the TYPE MATERIALIZED section
+ */
+function generateMaterialized(config: MaterializedConfig): string {
+  const parts: string[] = ["TYPE MATERIALIZED"];
+  parts.push(`DATASOURCE ${config.datasource._name}`);
+
+  if (config.deploymentMethod === "alter") {
+    parts.push("DEPLOYMENT_METHOD alter");
   }
 
   return parts.join("\n");
@@ -145,6 +160,13 @@ export function generatePipe(pipe: PipeDefinition): GeneratedPipe {
   if (endpointConfig) {
     parts.push("");
     parts.push(generateEndpoint(endpointConfig));
+  }
+
+  // Add materialized view configuration if this is a materialized view
+  const materializedConfig = getMaterializedConfig(pipe);
+  if (materializedConfig) {
+    parts.push("");
+    parts.push(generateMaterialized(materializedConfig));
   }
 
   return {
