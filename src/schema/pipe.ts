@@ -165,6 +165,29 @@ export function getTargetDatasource<TDatasource extends DatasourceDefinition<Sch
 }
 
 /**
+ * Copy pipe configuration
+ */
+export interface CopyConfig<
+  TDatasource extends DatasourceDefinition<SchemaDefinition> = DatasourceDefinition<SchemaDefinition>
+> {
+  /** Target datasource where copied data is written */
+  target_datasource: TDatasource;
+  /**
+   * Copy mode: how data is ingested
+   * - 'append': Appends the result to the target data source (default)
+   * - 'replace': Every run completely replaces the destination Data Source content
+   */
+  copy_mode?: "append" | "replace";
+  /**
+   * Copy schedule: when the copy job runs
+   * - A cron expression (e.g., "0 * * * *" for hourly)
+   * - "@on-demand" for manual execution only
+   * Defaults to "@on-demand" if not specified
+   */
+  copy_schedule?: string;
+}
+
+/**
  * Token configuration for pipe access
  */
 export interface PipeTokenConfig {
@@ -187,10 +210,12 @@ export interface PipeOptions<
   nodes: readonly NodeDefinition[];
   /** Output schema (optional for reusable pipes, required for endpoints) */
   output?: TOutput;
-  /** Whether this pipe is an API endpoint (shorthand for { enabled: true }). Mutually exclusive with materialized. */
+  /** Whether this pipe is an API endpoint (shorthand for { enabled: true }). Mutually exclusive with materialized and copy. */
   endpoint?: boolean | EndpointConfig;
-  /** Materialized view configuration. Mutually exclusive with endpoint. */
+  /** Materialized view configuration. Mutually exclusive with endpoint and copy. */
   materialized?: MaterializedConfig;
+  /** Copy pipe configuration. Mutually exclusive with endpoint and materialized. */
+  copy?: CopyConfig;
   /** Access tokens for this pipe */
   tokens?: readonly PipeTokenConfig[];
 }
@@ -218,6 +243,36 @@ export interface EndpointOptions<
     ttl?: number;
   };
   /** Access tokens for this endpoint */
+  tokens?: readonly PipeTokenConfig[];
+}
+
+/**
+ * Options for defining a copy pipe
+ */
+export interface CopyPipeOptions<
+  TSchema extends SchemaDefinition,
+  TDatasource extends DatasourceDefinition<TSchema>
+> {
+  /** Human-readable description of the copy pipe */
+  description?: string;
+  /** Nodes in the transformation pipeline */
+  nodes: readonly NodeDefinition[];
+  /** Target datasource where copied data is written */
+  target_datasource: TDatasource;
+  /**
+   * Copy mode: how data is ingested
+   * - 'append': Appends the result to the target data source (default)
+   * - 'replace': Every run completely replaces the destination Data Source content
+   */
+  copy_mode?: "append" | "replace";
+  /**
+   * Copy schedule: when the copy job runs
+   * - A cron expression (e.g., "0 * * * *" for hourly)
+   * - "@on-demand" for manual execution only
+   * Defaults to "@on-demand" if not specified
+   */
+  copy_schedule?: string;
+  /** Access tokens for this copy pipe */
   tokens?: readonly PipeTokenConfig[];
 }
 
@@ -415,11 +470,12 @@ export function definePipe<
     );
   }
 
-  // Validate mutual exclusivity of endpoint and materialized
-  if (options.endpoint && options.materialized) {
+  // Count how many types are configured
+  const typeCount = [options.endpoint, options.materialized, options.copy].filter(Boolean).length;
+  if (typeCount > 1) {
     throw new Error(
-      `Pipe "${name}" cannot have both endpoint and materialized configurations. ` +
-        `A pipe must be either an API endpoint OR a materialized view, not both.`
+      `Pipe "${name}" can only have one of: endpoint, materialized, or copy configuration. ` +
+        `A pipe must be exactly one type.`
     );
   }
 
@@ -633,6 +689,87 @@ export function defineEndpoint<
 }
 
 /**
+ * Define a Tinybird copy pipe
+ *
+ * Copy pipes capture the result of a pipe at a moment in time and write
+ * the result into a target data source. They can be run on a schedule,
+ * or executed on demand.
+ *
+ * Unlike materialized views which continuously update as new events are inserted,
+ * copy pipes generate a single snapshot at a specific point in time.
+ *
+ * @param name - The copy pipe name (must be valid identifier)
+ * @param options - Copy pipe configuration
+ * @returns A pipe definition configured as a copy pipe
+ *
+ * @example
+ * ```ts
+ * import { defineCopyPipe, defineDatasource, node, t, engine } from '@tinybird/sdk';
+ *
+ * // Target datasource for daily snapshots
+ * const dailySalesSnapshot = defineDatasource('daily_sales_snapshot', {
+ *   schema: {
+ *     snapshot_date: t.date(),
+ *     country: t.string(),
+ *     total_sales: t.uint64(),
+ *   },
+ *   engine: engine.mergeTree({
+ *     sortingKey: ['snapshot_date', 'country'],
+ *   }),
+ * });
+ *
+ * // Copy pipe that runs daily at midnight
+ * export const dailySalesCopy = defineCopyPipe('daily_sales_copy', {
+ *   description: 'Daily snapshot of sales by country',
+ *   target_datasource: dailySalesSnapshot,
+ *   copy_schedule: '0 0 * * *', // Daily at midnight UTC
+ *   copy_mode: 'append',
+ *   nodes: [
+ *     node({
+ *       name: 'snapshot',
+ *       sql: `
+ *         SELECT
+ *           today() AS snapshot_date,
+ *           country,
+ *           sum(sales) AS total_sales
+ *         FROM sales
+ *         WHERE date = today() - 1
+ *         GROUP BY country
+ *       `,
+ *     }),
+ *   ],
+ * });
+ * ```
+ */
+export function defineCopyPipe<
+  TSchema extends SchemaDefinition,
+  TDatasource extends DatasourceDefinition<TSchema>
+>(
+  name: string,
+  options: CopyPipeOptions<TSchema, TDatasource>
+): PipeDefinition<Record<string, never>, DatasourceSchemaToOutput<TSchema>> {
+  // Extract the schema from the datasource to build the output
+  const datasourceSchema = options.target_datasource._schema as TSchema;
+  const output: Record<string, AnyTypeValidator> = {};
+
+  for (const [columnName, column] of Object.entries(datasourceSchema)) {
+    output[columnName] = getColumnType(column);
+  }
+
+  return definePipe(name, {
+    description: options.description,
+    nodes: options.nodes,
+    output: output as DatasourceSchemaToOutput<TSchema>,
+    copy: {
+      target_datasource: options.target_datasource,
+      copy_mode: options.copy_mode,
+      copy_schedule: options.copy_schedule,
+    },
+    tokens: options.tokens,
+  });
+}
+
+/**
  * Check if a value is a pipe definition
  */
 export function isPipeDefinition(value: unknown): value is PipeDefinition {
@@ -673,6 +810,20 @@ export function getMaterializedConfig(pipe: PipeDefinition): MaterializedConfig 
  */
 export function isMaterializedView(pipe: PipeDefinition): boolean {
   return pipe.options.materialized !== undefined;
+}
+
+/**
+ * Get the copy pipe configuration from a pipe
+ */
+export function getCopyConfig(pipe: PipeDefinition): CopyConfig | null {
+  return pipe.options.copy ?? null;
+}
+
+/**
+ * Check if a pipe is a copy pipe
+ */
+export function isCopyPipe(pipe: PipeDefinition): boolean {
+  return pipe.options.copy !== undefined;
 }
 
 /**

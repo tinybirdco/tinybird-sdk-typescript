@@ -389,7 +389,7 @@ describe("Pipe Schema", () => {
               target_datasource: salesByHour,
             },
           })
-        ).toThrow("cannot have both endpoint and materialized");
+        ).toThrow("can only have one of: endpoint, materialized, or copy");
       });
 
       it("throws error when neither target_datasource nor datasource is provided", () => {

@@ -8,8 +8,9 @@ import type {
   NodeDefinition,
   EndpointConfig,
   MaterializedConfig,
+  CopyConfig,
 } from "../schema/pipe.js";
-import { getEndpointConfig, getMaterializedConfig } from "../schema/pipe.js";
+import { getEndpointConfig, getMaterializedConfig, getCopyConfig } from "../schema/pipe.js";
 
 /**
  * Generated pipe content
@@ -79,7 +80,7 @@ function generateEndpoint(endpoint: EndpointConfig): string {
  */
 function generateMaterialized(config: MaterializedConfig): string {
   const parts: string[] = ["TYPE MATERIALIZED"];
-  
+
   // The config is normalized by definePipe to always have `datasource` set.
   // Use non-null assertion since we know it's always present after normalization.
   const datasourceName = config.datasource!._name;
@@ -87,6 +88,26 @@ function generateMaterialized(config: MaterializedConfig): string {
 
   if (config.deploymentMethod === "alter") {
     parts.push("DEPLOYMENT_METHOD alter");
+  }
+
+  return parts.join("\n");
+}
+
+/**
+ * Generate the TYPE COPY section
+ */
+function generateCopy(config: CopyConfig): string {
+  const parts: string[] = ["TYPE COPY"];
+
+  const datasourceName = config.target_datasource._name;
+  parts.push(`TARGET_DATASOURCE ${datasourceName}`);
+
+  if (config.copy_schedule) {
+    parts.push(`COPY_SCHEDULE ${config.copy_schedule}`);
+  }
+
+  if (config.copy_mode) {
+    parts.push(`COPY_MODE ${config.copy_mode}`);
   }
 
   return parts.join("\n");
@@ -171,6 +192,13 @@ export function generatePipe(pipe: PipeDefinition): GeneratedPipe {
   if (materializedConfig) {
     parts.push("");
     parts.push(generateMaterialized(materializedConfig));
+  }
+
+  // Add copy pipe configuration if this is a copy pipe
+  const copyConfig = getCopyConfig(pipe);
+  if (copyConfig) {
+    parts.push("");
+    parts.push(generateCopy(copyConfig));
   }
 
   return {
