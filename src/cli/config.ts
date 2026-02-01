@@ -100,10 +100,14 @@ export function getRelativeSchemaPath(cwd: string): string {
 
 /**
  * Get the default output path for generated client file
- * Generates to node_modules/@tinybird/client like Prisma does
+ * Generates to src/tinybird.ts if src exists, otherwise tinybird.ts
  */
-export function getDefaultOutputPath(_cwd: string): string {
-  return "node_modules/@tinybird/client/index.ts";
+export function getDefaultOutputPath(cwd: string): string {
+  const srcDir = path.join(cwd, "src");
+  if (fs.existsSync(srcDir) && fs.statSync(srcDir).isDirectory()) {
+    return "src/tinybird.ts";
+  }
+  return "tinybird.ts";
 }
 
 /**

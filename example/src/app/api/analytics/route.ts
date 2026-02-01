@@ -3,7 +3,7 @@ import {
   tinybird,
   type TopPagesParams,
   type TopEventsParams,
-} from "@tinybird/client";
+} from "@/tinybird";
 
 export async function GET() {
   // Check if token is configured

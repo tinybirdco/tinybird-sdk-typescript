@@ -6,7 +6,7 @@ import type {
   TopEventsOutput,
   PageViewsRow,
   EventsRow,
-} from "@tinybird/client";
+} from "@/tinybird";
 
 export default function Home() {
   const [topPages, setTopPages] = useState<TopPagesOutput[]>([]);

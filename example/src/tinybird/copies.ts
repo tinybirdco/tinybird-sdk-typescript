@@ -57,19 +57,19 @@ export const dailyStatsCopy = defineCopyPipe("daily_stats_copy", {
 export const topPagesReport = defineCopyPipe("top_pages_report", {
   description: "On-demand report of top pages",
   datasource: dailyStatsSnapshot,
-  copy_mode: "replace", // Replace all data on each run
-  // No copy_schedule means it defaults to @on-demand
+  copy_mode: "replace",
+  copy_schedule: "@on-demand",
   nodes: [
     node({
       name: "report",
       sql: `
         SELECT
-          toDate({{DateTime(job_timestamp, now())}}) AS snapshot_date,
+          toDate(now()) AS snapshot_date,
           pathname,
           count() AS total_views,
           uniqExact(session_id) AS total_unique_sessions
         FROM page_views
-        WHERE timestamp >= {{DateTime(job_timestamp, now())}} - interval 7 day
+        WHERE timestamp >= now() - interval 7 day
         GROUP BY pathname
         ORDER BY total_views DESC
         LIMIT 100
