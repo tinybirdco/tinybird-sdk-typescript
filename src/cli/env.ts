@@ -53,3 +53,34 @@ export function saveTinybirdToken(
     return { created: true };
   }
 }
+
+/**
+ * Save the TINYBIRD_URL to .env.local
+ *
+ * @param directory - Directory where .env.local should be saved
+ * @param baseUrl - The base URL to save
+ */
+export function saveTinybirdBaseUrl(directory: string, baseUrl: string): void {
+  const envLocalPath = path.join(directory, ".env.local");
+  const envContent = `TINYBIRD_URL=${baseUrl}\n`;
+
+  if (fs.existsSync(envLocalPath)) {
+    const existingContent = fs.readFileSync(envLocalPath, "utf-8");
+
+    if (existingContent.includes("TINYBIRD_URL=")) {
+      // Replace existing URL
+      const updatedContent = existingContent.replace(
+        /TINYBIRD_URL=.*/,
+        `TINYBIRD_URL=${baseUrl}`
+      );
+      fs.writeFileSync(envLocalPath, updatedContent);
+    } else {
+      // Append URL, ensuring proper newline
+      const needsNewline = existingContent.length > 0 && !existingContent.endsWith("\n");
+      fs.appendFileSync(envLocalPath, (needsNewline ? "\n" : "") + envContent);
+    }
+  } else {
+    // Create new file
+    fs.writeFileSync(envLocalPath, envContent);
+  }
+}

@@ -4,93 +4,37 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { getConfigPath, updateConfig, hasValidToken } from "../config.js";
+import {
+  hasValidToken,
+  getTinybirdSchemaPath,
+  getRelativeSchemaPath,
+  getConfigPath,
+  updateConfig,
+} from "../config.js";
 import { browserLogin } from "../auth.js";
 import { saveTinybirdToken } from "../env.js";
 
 /**
  * Default schema content
  */
-const DEFAULT_SCHEMA = `import {
-  defineProject,
-  defineDatasource,
-  definePipe,
-  node,
-  t,
-  p,
-  engine,
-} from "@tinybird/sdk";
-
-// ============ Datasources ============
-
-export const events = defineDatasource("events", {
-  description: "User events tracking",
-  schema: {
-    timestamp: t.dateTime(),
-    event_id: t.uuid(),
-    user_id: t.string(),
-    event_type: t.string().lowCardinality(),
-    properties: t.json(),
-  },
-  engine: engine.mergeTree({
-    sortingKey: ["user_id", "timestamp"],
-    partitionKey: "toYYYYMM(timestamp)",
-  }),
-});
-
-// ============ Pipes ============
-
-export const topEvents = definePipe("top_events", {
-  description: "Get top events by count",
-  params: {
-    start_date: p.dateTime(),
-    end_date: p.dateTime(),
-    limit: p.int32().optional(10),
-  },
-  nodes: [
-    node({
-      name: "endpoint",
-      sql: \`
-        SELECT
-          event_type,
-          count() as event_count,
-          uniqExact(user_id) as unique_users
-        FROM events
-        WHERE timestamp BETWEEN {{DateTime(start_date)}} AND {{DateTime(end_date)}}
-        GROUP BY event_type
-        ORDER BY event_count DESC
-        LIMIT {{Int32(limit, 10)}}
-      \`,
-    }),
-  ],
-  output: {
-    event_type: t.string(),
-    event_count: t.uint64(),
-    unique_users: t.uint64(),
-  },
-  endpoint: true,
-});
-
-// ============ Project ============
+const DEFAULT_SCHEMA = `import { defineProject } from "@tinybird/sdk";
 
 export default defineProject({
-  datasources: {
-    events,
-  },
-  pipes: {
-    topEvents,
-  },
+  datasources: {},
+  pipes: {},
 });
 `;
 
 /**
- * Default config content
+ * Default config content generator
  */
-const DEFAULT_CONFIG = {
-  schema: "src/tinybird/schema.ts",
-  token: "${TINYBIRD_TOKEN}",
-  baseUrl: "https://api.tinybird.co",
-};
+function createDefaultConfig(schemaPath: string) {
+  return {
+    schema: schemaPath,
+    token: "${TINYBIRD_TOKEN}",
+    baseUrl: "https://api.tinybird.co",
+  };
+}
 
 /**
  * Init command options
@@ -129,7 +73,7 @@ export interface InitResult {
  *
  * Creates:
  * - tinybird.json in the project root
- * - src/tinybird/schema.ts with example schema
+ * - lib/tinybird.ts (or src/lib/tinybird.ts if project has src folder)
  *
  * @param options - Init options
  * @returns Init result
@@ -142,13 +86,19 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   const created: string[] = [];
   const skipped: string[] = [];
 
-  // Create config file
+  // Determine schema path based on project structure
+  const schemaPath = getTinybirdSchemaPath(cwd);
+  const schemaDir = path.dirname(schemaPath);
+  const relativeSchemaPath = getRelativeSchemaPath(cwd);
+
+  // Create config file (tinybird.json)
   const configPath = getConfigPath(cwd);
   if (fs.existsSync(configPath) && !force) {
     skipped.push("tinybird.json");
   } else {
     try {
-      fs.writeFileSync(configPath, JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n");
+      const config = createDefaultConfig(relativeSchemaPath);
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
       created.push("tinybird.json");
     } catch (error) {
       return {
@@ -160,18 +110,15 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     }
   }
 
-  // Create schema directory and file
-  const schemaDir = path.join(cwd, "src", "tinybird");
-  const schemaPath = path.join(schemaDir, "schema.ts");
-
+  // Create schema file
   if (fs.existsSync(schemaPath) && !force) {
-    skipped.push("src/tinybird/schema.ts");
+    skipped.push(relativeSchemaPath);
   } else {
     try {
       // Create directory if needed
       fs.mkdirSync(schemaDir, { recursive: true });
       fs.writeFileSync(schemaPath, DEFAULT_SCHEMA);
-      created.push("src/tinybird/schema.ts");
+      created.push(relativeSchemaPath);
     } catch (error) {
       return {
         success: false,
@@ -189,18 +136,16 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     const authResult = await browserLogin();
 
     if (authResult.success && authResult.token) {
-      // Save token to .env.local and update baseUrl in tinybird.json
+      // Save token to .env.local
       try {
         const saveResult = saveTinybirdToken(cwd, authResult.token);
         if (saveResult.created) {
           created.push(".env.local");
         }
 
-        // Update baseUrl in tinybird.json if it changed
-        if (authResult.baseUrl) {
-          updateConfig(configPath, {
-            baseUrl: authResult.baseUrl,
-          });
+        // If custom base URL, update tinybird.json
+        if (authResult.baseUrl && authResult.baseUrl !== "https://api.tinybird.co") {
+          updateConfig(configPath, { baseUrl: authResult.baseUrl });
         }
 
         return {

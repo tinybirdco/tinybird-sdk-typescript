@@ -51,6 +51,48 @@ const DEFAULT_BASE_URL = "https://api.tinybird.co";
 const CONFIG_FILE = "tinybird.json";
 
 /**
+ * Tinybird schema file name
+ */
+const TINYBIRD_SCHEMA_FILE = "tinybird.ts";
+
+/**
+ * Detect if project has a src folder
+ */
+export function hasSrcFolder(cwd: string): boolean {
+  const srcPath = path.join(cwd, "src");
+  return fs.existsSync(srcPath) && fs.statSync(srcPath).isDirectory();
+}
+
+/**
+ * Get the lib directory path based on project structure
+ * Returns 'src/lib' if project has src folder, otherwise 'lib'
+ */
+export function getLibDir(cwd: string): string {
+  return hasSrcFolder(cwd) ? path.join(cwd, "src", "lib") : path.join(cwd, "lib");
+}
+
+/**
+ * Get the relative lib directory path based on project structure
+ */
+export function getRelativeLibDir(cwd: string): string {
+  return hasSrcFolder(cwd) ? "src/lib" : "lib";
+}
+
+/**
+ * Get the tinybird.ts schema path based on project structure
+ */
+export function getTinybirdSchemaPath(cwd: string): string {
+  return path.join(getLibDir(cwd), TINYBIRD_SCHEMA_FILE);
+}
+
+/**
+ * Get the relative schema path based on project structure
+ */
+export function getRelativeSchemaPath(cwd: string): string {
+  return `${getRelativeLibDir(cwd)}/${TINYBIRD_SCHEMA_FILE}`;
+}
+
+/**
  * Interpolate environment variables in a string
  *
  * Supports ${VAR_NAME} syntax
@@ -98,7 +140,7 @@ export function findConfigFile(startDir: string): string | null {
  * @example
  * ```ts
  * const config = loadConfig();
- * console.log(config.schema); // 'src/tinybird/schema.ts'
+ * console.log(config.schema); // 'lib/tinybird.ts' or 'src/lib/tinybird.ts'
  * console.log(config.token);  // 'p.xxx' (resolved from ${TINYBIRD_TOKEN})
  * ```
  */
