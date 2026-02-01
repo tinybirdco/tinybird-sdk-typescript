@@ -32,7 +32,7 @@ export const dailyPageStats = defineDatasource("daily_page_stats", {
  */
 export const dailyPageStatsMv = defineMaterializedView("daily_page_stats_mv", {
   description: "Materialize daily page view aggregations",
-  target_datasource: dailyPageStats,
+  datasource: dailyPageStats,
   nodes: [
     node({
       name: "aggregate",

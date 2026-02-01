@@ -30,7 +30,7 @@ export const dailyStatsSnapshot = defineDatasource("daily_stats_snapshot", {
  */
 export const dailyStatsCopy = defineCopyPipe("daily_stats_copy", {
   description: "Daily snapshot of page statistics",
-  target_datasource: dailyStatsSnapshot,
+  datasource: dailyStatsSnapshot,
   copy_schedule: "0 0 * * *", // Daily at midnight UTC
   copy_mode: "append",
   nodes: [
@@ -56,7 +56,7 @@ export const dailyStatsCopy = defineCopyPipe("daily_stats_copy", {
  */
 export const topPagesReport = defineCopyPipe("top_pages_report", {
   description: "On-demand report of top pages",
-  target_datasource: dailyStatsSnapshot,
+  datasource: dailyStatsSnapshot,
   copy_mode: "replace", // Replace all data on each run
   // No copy_schedule means it defaults to @on-demand
   nodes: [

@@ -120,7 +120,6 @@ export {
   getEndpointConfig,
   getMaterializedConfig,
   getCopyConfig,
-  getTargetDatasource,
   isMaterializedView,
   isCopyPipe,
   getNodeNames,

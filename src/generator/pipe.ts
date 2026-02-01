@@ -99,7 +99,7 @@ function generateMaterialized(config: MaterializedConfig): string {
 function generateCopy(config: CopyConfig): string {
   const parts: string[] = ["TYPE COPY"];
 
-  const datasourceName = config.target_datasource._name;
+  const datasourceName = config.datasource._name;
   parts.push(`TARGET_DATASOURCE ${datasourceName}`);
 
   if (config.copy_schedule) {
