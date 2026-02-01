@@ -88,6 +88,8 @@ export interface BuildApiResult {
   datasourceCount: number;
   /** Number of pipes deployed */
   pipeCount: number;
+  /** Number of connections deployed */
+  connectionCount: number;
   /** Build ID if successful */
   buildId?: string;
   /** Pipe changes in this build */
@@ -166,6 +168,21 @@ export async function buildToTinybird(
     );
   }
 
+  // Add connections
+  for (const conn of resources.connections ?? []) {
+    const fieldName = `data_project://`;
+    const fileName = `${conn.name}.connection`;
+    if (debug) {
+      console.log(`[debug] Adding connection: ${fieldName} (filename: ${fileName})`);
+      console.log(`[debug] Content:\n${conn.content}\n`);
+    }
+    formData.append(
+      fieldName,
+      new Blob([conn.content], { type: "text/plain" }),
+      fileName
+    );
+  }
+
   // Make the request
   const url = `${config.baseUrl.replace(/\/$/, "")}/v1/build`;
 
@@ -217,6 +234,7 @@ export async function buildToTinybird(
       error: formatErrors(),
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
+      connectionCount: resources.connections?.length ?? 0,
     };
   }
 
@@ -228,6 +246,7 @@ export async function buildToTinybird(
       error: formatErrors(),
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
+      connectionCount: resources.connections?.length ?? 0,
     };
   }
 
@@ -236,6 +255,7 @@ export async function buildToTinybird(
     result: body.result,
     datasourceCount: resources.datasources.length,
     pipeCount: resources.pipes.length,
+    connectionCount: resources.connections?.length ?? 0,
     buildId: body.build?.id,
     pipes: {
       changed: body.build?.changed_pipe_names ?? [],

@@ -106,7 +106,18 @@ export type {
   ColumnDefinition,
   TokenConfig,
   ExtractSchema,
+  KafkaConfig,
 } from "./schema/datasource.js";
+
+// ============ Connection ============
+export { createKafkaConnection, isConnectionDefinition, isKafkaConnectionDefinition, getConnectionType } from "./schema/connection.js";
+export type {
+  ConnectionDefinition,
+  KafkaConnectionDefinition,
+  KafkaConnectionOptions,
+  KafkaSecurityProtocol,
+  KafkaSaslMechanism,
+} from "./schema/connection.js";
 
 // ============ Pipe ============
 export {
@@ -153,6 +164,7 @@ export type {
   TinybirdClientConfig,
   DatasourcesDefinition,
   PipesDefinition,
+  ConnectionsDefinition,
   ExtractDatasources,
   ExtractPipes,
   DataModel,

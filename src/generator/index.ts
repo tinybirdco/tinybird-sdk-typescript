@@ -6,7 +6,8 @@
 import { loadSchema, loadEntities, entitiesToProject, type LoadedEntities } from "./loader.js";
 import { generateAllDatasources, type GeneratedDatasource } from "./datasource.js";
 import { generateAllPipes, type GeneratedPipe } from "./pipe.js";
-import type { ProjectDefinition, DatasourcesDefinition, PipesDefinition } from "../schema/project.js";
+import { generateAllConnections, type GeneratedConnection } from "./connection.js";
+import type { ProjectDefinition, DatasourcesDefinition, PipesDefinition, ConnectionsDefinition } from "../schema/project.js";
 
 /**
  * Generated resources ready for API push
@@ -16,6 +17,8 @@ export interface GeneratedResources {
   datasources: GeneratedDatasource[];
   /** Generated pipe files */
   pipes: GeneratedPipe[];
+  /** Generated connection files */
+  connections: GeneratedConnection[];
 }
 
 /**
@@ -34,6 +37,7 @@ export interface BuildResult {
   stats: {
     datasourceCount: number;
     pipeCount: number;
+    connectionCount: number;
   };
 }
 
@@ -46,10 +50,12 @@ export interface BuildResult {
 export function generateResources(project: ProjectDefinition): GeneratedResources {
   const datasources = generateAllDatasources(project.datasources);
   const pipes = generateAllPipes(project.pipes);
+  const connections = generateAllConnections(project.connections);
 
   return {
     datasources,
     pipes,
+    connections,
   };
 }
 
@@ -107,6 +113,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     stats: {
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
+      connectionCount: resources.connections.length,
     },
   };
 }
@@ -133,6 +140,7 @@ export interface BuildFromIncludeResult {
   stats: {
     datasourceCount: number;
     pipeCount: number;
+    connectionCount: number;
   };
 }
 
@@ -141,11 +149,13 @@ export interface BuildFromIncludeResult {
  */
 export function generateResourcesFromEntities(
   datasources: DatasourcesDefinition,
-  pipes: PipesDefinition
+  pipes: PipesDefinition,
+  connections: ConnectionsDefinition = {}
 ): GeneratedResources {
   return {
     datasources: generateAllDatasources(datasources),
     pipes: generateAllPipes(pipes),
+    connections: generateAllConnections(connections),
   };
 }
 
@@ -181,10 +191,10 @@ export async function buildFromInclude(
   });
 
   // Convert to format for generators
-  const { datasources, pipes } = entitiesToProject(entities);
+  const { datasources, pipes, connections } = entitiesToProject(entities);
 
   // Generate resources
-  const resources = generateResourcesFromEntities(datasources, pipes);
+  const resources = generateResourcesFromEntities(datasources, pipes, connections);
 
   return {
     resources,
@@ -192,6 +202,7 @@ export async function buildFromInclude(
     stats: {
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
+      connectionCount: resources.connections.length,
     },
   };
 }
@@ -200,4 +211,5 @@ export async function buildFromInclude(
 export { loadSchema, loadEntities, entitiesToProject, type LoaderOptions, type LoadedSchema, type LoadedEntities, type LoadEntitiesOptions } from "./loader.js";
 export { generateDatasource, generateAllDatasources, type GeneratedDatasource } from "./datasource.js";
 export { generatePipe, generateAllPipes, type GeneratedPipe } from "./pipe.js";
+export { generateConnection, generateAllConnections, type GeneratedConnection } from "./connection.js";
 export { generateClientFile, type GenerateClientOptions, type GeneratedClient } from "./client.js";

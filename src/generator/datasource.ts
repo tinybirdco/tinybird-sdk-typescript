@@ -3,7 +3,7 @@
  * Converts DatasourceDefinition to native .datasource file format
  */
 
-import type { DatasourceDefinition, SchemaDefinition, ColumnDefinition } from "../schema/datasource.js";
+import type { DatasourceDefinition, SchemaDefinition, ColumnDefinition, KafkaConfig } from "../schema/datasource.js";
 import type { AnyTypeValidator, TypeModifiers } from "../schema/types.js";
 import { getColumnType, getColumnJsonPath } from "../schema/datasource.js";
 import { getEngineClause, type EngineConfig } from "../schema/engines.js";
@@ -144,6 +144,26 @@ function generateEngineConfig(engine?: EngineConfig): string {
 }
 
 /**
+ * Generate Kafka configuration lines
+ */
+function generateKafkaConfig(kafka: KafkaConfig): string {
+  const parts: string[] = [];
+
+  parts.push(`KAFKA_CONNECTION_NAME ${kafka.connection._name}`);
+  parts.push(`KAFKA_TOPIC ${kafka.topic}`);
+
+  if (kafka.groupId) {
+    parts.push(`KAFKA_GROUP_ID ${kafka.groupId}`);
+  }
+
+  if (kafka.autoOffsetReset) {
+    parts.push(`KAFKA_AUTO_OFFSET_RESET ${kafka.autoOffsetReset}`);
+  }
+
+  return parts.join("\n");
+}
+
+/**
  * Generate a .datasource file content from a DatasourceDefinition
  *
  * @param datasource - The datasource definition
@@ -197,6 +217,12 @@ export function generateDatasource(
 
   // Add engine configuration
   parts.push(generateEngineConfig(datasource.options.engine));
+
+  // Add Kafka configuration if present
+  if (datasource.options.kafka) {
+    parts.push("");
+    parts.push(generateKafkaConfig(datasource.options.kafka));
+  }
 
   return {
     name: datasource._name,

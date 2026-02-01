@@ -126,6 +126,7 @@ export async function deployToMain(
       error: formatErrors(),
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
+      connectionCount: resources.connections?.length ?? 0,
     };
   }
 
@@ -137,6 +138,7 @@ export async function deployToMain(
       error: formatErrors(),
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
+      connectionCount: resources.connections?.length ?? 0,
     };
   }
 
@@ -145,6 +147,7 @@ export async function deployToMain(
     result: body.result,
     datasourceCount: resources.datasources.length,
     pipeCount: resources.pipes.length,
+    connectionCount: resources.connections?.length ?? 0,
     buildId: body.build?.id,
     pipes: {
       changed: body.build?.changed_pipe_names ?? [],

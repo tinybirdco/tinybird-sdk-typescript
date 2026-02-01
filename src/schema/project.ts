@@ -5,6 +5,7 @@
 
 import type { DatasourceDefinition, SchemaDefinition } from "./datasource.js";
 import type { PipeDefinition, ParamsDefinition, OutputDefinition } from "./pipe.js";
+import type { ConnectionDefinition } from "./connection.js";
 import { getEndpointConfig } from "./pipe.js";
 import type { TinybirdClient } from "../client/base.js";
 import type { QueryResult } from "../client/types.js";
@@ -22,6 +23,11 @@ export type DatasourcesDefinition = Record<string, DatasourceDefinition<SchemaDe
  * Collection of pipe definitions
  */
 export type PipesDefinition = Record<string, PipeDefinition<ParamsDefinition, OutputDefinition>>;
+
+/**
+ * Collection of connection definitions
+ */
+export type ConnectionsDefinition = Record<string, ConnectionDefinition>;
 
 /**
  * Type for a single query method
@@ -101,12 +107,15 @@ export interface TinybirdClientConfig<
  */
 export interface ProjectConfig<
   TDatasources extends DatasourcesDefinition = DatasourcesDefinition,
-  TPipes extends PipesDefinition = PipesDefinition
+  TPipes extends PipesDefinition = PipesDefinition,
+  TConnections extends ConnectionsDefinition = ConnectionsDefinition
 > {
   /** All datasources in this project */
   datasources?: TDatasources;
   /** All pipes in this project */
   pipes?: TPipes;
+  /** All connections in this project */
+  connections?: TConnections;
 }
 
 /**
@@ -114,7 +123,8 @@ export interface ProjectConfig<
  */
 export interface ProjectDefinition<
   TDatasources extends DatasourcesDefinition = DatasourcesDefinition,
-  TPipes extends PipesDefinition = PipesDefinition
+  TPipes extends PipesDefinition = PipesDefinition,
+  TConnections extends ConnectionsDefinition = ConnectionsDefinition
 > {
   readonly [PROJECT_BRAND]: true;
   /** Type marker for inference */
@@ -123,6 +133,8 @@ export interface ProjectDefinition<
   readonly datasources: TDatasources;
   /** All pipes */
   readonly pipes: TPipes;
+  /** All connections */
+  readonly connections: TConnections;
   /** Typed Tinybird client */
   readonly tinybird: ProjectClient<TDatasources, TPipes>;
 }
@@ -157,12 +169,14 @@ export interface ProjectDefinition<
  */
 export function defineProject<
   TDatasources extends DatasourcesDefinition,
-  TPipes extends PipesDefinition
+  TPipes extends PipesDefinition,
+  TConnections extends ConnectionsDefinition
 >(
-  config: ProjectConfig<TDatasources, TPipes>
-): ProjectDefinition<TDatasources, TPipes> {
+  config: ProjectConfig<TDatasources, TPipes, TConnections>
+): ProjectDefinition<TDatasources, TPipes, TConnections> {
   const datasources = (config.datasources ?? {}) as TDatasources;
   const pipes = (config.pipes ?? {}) as TPipes;
+  const connections = (config.connections ?? {}) as TConnections;
 
   // Use the shared client builder
   const tinybird = buildProjectClient(datasources, pipes);
@@ -172,6 +186,7 @@ export function defineProject<
     _type: "project",
     datasources,
     pipes,
+    connections,
     tinybird,
   };
 }

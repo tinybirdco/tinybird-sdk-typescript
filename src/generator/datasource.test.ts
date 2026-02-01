@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateDatasource, generateAllDatasources } from './datasource.js';
 import { defineDatasource } from '../schema/datasource.js';
+import { createKafkaConnection } from '../schema/connection.js';
 import { t } from '../schema/types.js';
 import { engine } from '../schema/engines.js';
 
@@ -292,6 +293,113 @@ describe('Datasource Generator', () => {
       expect(result.content).toContain('ENGINE_PARTITION_KEY "toYYYYMM(timestamp)"');
       expect(result.content).toContain('ENGINE_SORTING_KEY "pathname, timestamp"');
       expect(result.content).toContain('ENGINE_TTL "timestamp + INTERVAL 90 DAY"');
+    });
+  });
+
+  describe('Kafka configuration', () => {
+    it('includes Kafka connection name and topic', () => {
+      const kafkaConn = createKafkaConnection('my_kafka', {
+        bootstrapServers: 'kafka.example.com:9092',
+      });
+
+      const ds = defineDatasource('kafka_events', {
+        schema: {
+          timestamp: t.dateTime(),
+          event: t.string(),
+        },
+        engine: engine.mergeTree({ sortingKey: ['timestamp'] }),
+        kafka: {
+          connection: kafkaConn,
+          topic: 'events',
+        },
+      });
+
+      const result = generateDatasource(ds);
+
+      expect(result.content).toContain('KAFKA_CONNECTION_NAME my_kafka');
+      expect(result.content).toContain('KAFKA_TOPIC events');
+    });
+
+    it('includes Kafka group ID when provided', () => {
+      const kafkaConn = createKafkaConnection('my_kafka', {
+        bootstrapServers: 'kafka.example.com:9092',
+      });
+
+      const ds = defineDatasource('kafka_events', {
+        schema: {
+          timestamp: t.dateTime(),
+          event: t.string(),
+        },
+        engine: engine.mergeTree({ sortingKey: ['timestamp'] }),
+        kafka: {
+          connection: kafkaConn,
+          topic: 'events',
+          groupId: 'my-consumer-group',
+        },
+      });
+
+      const result = generateDatasource(ds);
+
+      expect(result.content).toContain('KAFKA_GROUP_ID my-consumer-group');
+    });
+
+    it('includes auto offset reset when provided', () => {
+      const kafkaConn = createKafkaConnection('my_kafka', {
+        bootstrapServers: 'kafka.example.com:9092',
+      });
+
+      const ds = defineDatasource('kafka_events', {
+        schema: {
+          timestamp: t.dateTime(),
+          event: t.string(),
+        },
+        engine: engine.mergeTree({ sortingKey: ['timestamp'] }),
+        kafka: {
+          connection: kafkaConn,
+          topic: 'events',
+          autoOffsetReset: 'earliest',
+        },
+      });
+
+      const result = generateDatasource(ds);
+
+      expect(result.content).toContain('KAFKA_AUTO_OFFSET_RESET earliest');
+    });
+
+    it('generates complete Kafka datasource with all options', () => {
+      const kafkaConn = createKafkaConnection('my_kafka', {
+        bootstrapServers: 'kafka.example.com:9092',
+        securityProtocol: 'SASL_SSL',
+        saslMechanism: 'PLAIN',
+      });
+
+      const ds = defineDatasource('kafka_events', {
+        description: 'Events from Kafka',
+        schema: {
+          timestamp: t.dateTime(),
+          event_type: t.string(),
+          payload: t.string(),
+        },
+        engine: engine.mergeTree({ sortingKey: ['timestamp'] }),
+        kafka: {
+          connection: kafkaConn,
+          topic: 'events',
+          groupId: 'my-consumer-group',
+          autoOffsetReset: 'earliest',
+        },
+      });
+
+      const result = generateDatasource(ds);
+
+      expect(result.name).toBe('kafka_events');
+      expect(result.content).toContain('DESCRIPTION >');
+      expect(result.content).toContain('Events from Kafka');
+      expect(result.content).toContain('SCHEMA >');
+      expect(result.content).toContain('ENGINE "MergeTree"');
+      expect(result.content).toContain('KAFKA_CONNECTION_NAME my_kafka');
+      expect(result.content).toContain('KAFKA_TOPIC events');
+      expect(result.content).toContain('KAFKA_GROUP_ID my-consumer-group');
+      expect(result.content).toContain('KAFKA_AUTO_OFFSET_RESET earliest');
     });
   });
 });
