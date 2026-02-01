@@ -6,7 +6,7 @@
 import { loadSchema, loadEntities, entitiesToProject, type LoadedEntities } from "./loader.js";
 import { generateAllDatasources, type GeneratedDatasource } from "./datasource.js";
 import { generateAllPipes, type GeneratedPipe } from "./pipe.js";
-import { generateClientFile } from "./client-generator.js";
+import { generateClientFile } from "./client.js";
 import type { ProjectDefinition, DatasourcesDefinition, PipesDefinition } from "../schema/project.js";
 
 /**
@@ -233,4 +233,4 @@ export async function buildFromInclude(
 export { loadSchema, loadEntities, entitiesToProject, type LoaderOptions, type LoadedSchema, type LoadedEntities, type LoadEntitiesOptions } from "./loader.js";
 export { generateDatasource, generateAllDatasources, type GeneratedDatasource } from "./datasource.js";
 export { generatePipe, generateAllPipes, type GeneratedPipe } from "./pipe.js";
-export { generateClientFile, type GenerateClientOptions, type GeneratedClient } from "./client-generator.js";
+export { generateClientFile, type GenerateClientOptions, type GeneratedClient } from "./client.js";
