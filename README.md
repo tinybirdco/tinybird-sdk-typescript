@@ -467,15 +467,16 @@ For Next.js projects, add these scripts to your `package.json`:
 ```json
 {
   "scripts": {
-    "dev": "concurrently -n next,tinybird \"next dev\" \"dotenv -e .env.local -- npx tinybird dev\"",
-    "tinybird:build": "dotenv -e .env.local -- npx tinybird build"
+    "dev": "concurrently -n next,tinybird \"next dev\" \"tinybird dev\"",
+    "tinybird:build": "tinybird build"
   },
   "devDependencies": {
-    "concurrently": "^9.0.0",
-    "dotenv-cli": "^11.0.0"
+    "concurrently": "^9.0.0"
   }
 }
 ```
+
+The CLI automatically loads `.env.local` and `.env` files, so no additional setup is needed.
 
 Add the path alias to `tsconfig.json`:
 
