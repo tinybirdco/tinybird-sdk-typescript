@@ -8,7 +8,7 @@ import {
   createBuildFailureResponse,
   createBuildMultipleErrorsResponse,
   createNoChangesResponse,
-} from "../test/msw-handlers.js";
+} from "../test/handlers.js";
 import type { GeneratedResources } from "../generator/index.js";
 
 const server = setupServer();

@@ -227,14 +227,19 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
         ];
 
         if (changedPipes.length > 0) {
-          const validation = await validatePipeSchemas({
-            project: result.build.project,
-            pipeNames: changedPipes,
-            baseUrl: config.baseUrl,
-            token: effectiveToken,
-          });
+          try {
+            const validation = await validatePipeSchemas({
+              project: result.build.project,
+              pipeNames: changedPipes,
+              baseUrl: config.baseUrl,
+              token: effectiveToken,
+            });
 
-          options.onSchemaValidation(validation);
+            options.onSchemaValidation(validation);
+          } catch (validationError) {
+            // Don't fail the build due to validation errors
+            options.onError?.(validationError as Error);
+          }
         }
       }
 

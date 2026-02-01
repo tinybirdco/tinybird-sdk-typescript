@@ -163,11 +163,21 @@ export function defineProject<
     return _client;
   };
 
-  // Build query methods for endpoint pipes
+  // Build query methods for pipes
   const queryMethods: Record<string, (params?: unknown) => Promise<unknown>> = {};
   for (const [name, pipe] of Object.entries(pipes)) {
     const endpointConfig = getEndpointConfig(pipe);
-    if (!endpointConfig) continue;
+
+    if (!endpointConfig) {
+      // Non-endpoint pipes get a stub that throws a clear error
+      queryMethods[name] = async () => {
+        throw new Error(
+          `Pipe "${name}" is not exposed as an endpoint. ` +
+            `Set "endpoint: true" in the pipe definition to enable querying.`
+        );
+      };
+      continue;
+    }
 
     // Use the Tinybird pipe name (snake_case)
     const tinybirdName = pipe._name;
