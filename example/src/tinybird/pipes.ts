@@ -1,5 +1,4 @@
-import { definePipe, defineMaterializedView, node, p, t } from "@tinybird/sdk";
-import { dailyPageStats } from "./datasources.js";
+import { definePipe, node, p, t } from "@tinybird/sdk";
 
 /**
  * Top pages pipe - get most visited pages
@@ -77,29 +76,6 @@ export const pageViewsOverTime = definePipe("page_views_over_time", {
     unique_sessions: t.uint64(),
   },
   endpoint: true,
-});
-
-/**
- * Materialized view that pre-aggregates daily page stats
- * Data flows: page_views -> daily_page_stats_mv -> daily_page_stats
- */
-export const dailyPageStatsMv = defineMaterializedView("daily_page_stats_mv", {
-  description: "Materialize daily page view aggregations",
-  target_datasource: dailyPageStats,
-  nodes: [
-    node({
-      name: "aggregate",
-      sql: `
-        SELECT
-          toDate(timestamp) AS date,
-          pathname,
-          count() AS views,
-          uniqState(session_id) AS unique_sessions
-        FROM page_views
-        GROUP BY date, pathname
-      `,
-    }),
-  ],
 });
 
 /**
