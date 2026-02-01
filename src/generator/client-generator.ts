@@ -26,6 +26,11 @@ export interface GeneratedClient {
   content: string;
   /** Absolute path to output file */
   absolutePath: string;
+  /** Package.json content for @tinybird/client (if generating to node_modules) */
+  packageJson?: {
+    content: string;
+    absolutePath: string;
+  };
 }
 
 /**
@@ -183,8 +188,31 @@ export function generateClientFile(options: GenerateClientOptions): GeneratedCli
 
   const content = sections.join("\n");
 
-  return {
+  // Check if we're generating to node_modules/@tinybird/client
+  const result: GeneratedClient = {
     content,
     absolutePath,
   };
+
+  if (outputPath.includes("node_modules/@tinybird/client")) {
+    const packageDir = path.dirname(absolutePath);
+    const packageJsonPath = path.join(packageDir, "package.json");
+    const packageJsonContent = JSON.stringify(
+      {
+        name: "@tinybird/client",
+        version: "0.0.0",
+        main: "./index.ts",
+        types: "./index.ts",
+      },
+      null,
+      2
+    );
+
+    result.packageJson = {
+      content: packageJsonContent,
+      absolutePath: packageJsonPath,
+    };
+  }
+
+  return result;
 }

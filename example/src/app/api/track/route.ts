@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { tinybird, type PageViewsRow, type EventsRow } from "@/tinybird";
+import { tinybird, type PageViewsRow, type EventsRow } from "@tinybird/client";
 
 interface TrackRequest {
   type: "pageview" | "event";

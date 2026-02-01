@@ -87,6 +87,14 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
   try {
     fs.mkdirSync(clientFileDir, { recursive: true });
     fs.writeFileSync(clientFilePath, buildResult.clientFile.content);
+
+    // Write package.json for @tinybird/client if generating to node_modules
+    if (buildResult.clientFile.packageJson) {
+      fs.writeFileSync(
+        buildResult.clientFile.packageJson.path,
+        buildResult.clientFile.packageJson.content
+      );
+    }
   } catch (error) {
     return {
       success: false,
