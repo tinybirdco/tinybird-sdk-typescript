@@ -5,6 +5,7 @@
 
 import type { AnyTypeValidator } from "./types.js";
 import type { EngineConfig } from "./engines.js";
+import type { KafkaConnectionDefinition } from "./connection.js";
 
 // Symbol for brand typing
 const DATASOURCE_BRAND = Symbol("tinybird.datasource");
@@ -36,6 +37,20 @@ export interface TokenConfig {
 }
 
 /**
+ * Kafka ingestion configuration for a datasource
+ */
+export interface KafkaConfig {
+  /** Kafka connection to use */
+  connection: KafkaConnectionDefinition;
+  /** Kafka topic to consume from */
+  topic: string;
+  /** Consumer group ID (optional) */
+  groupId?: string;
+  /** Where to start reading: 'earliest' or 'latest' (default: 'latest') */
+  autoOffsetReset?: "earliest" | "latest";
+}
+
+/**
  * Options for defining a datasource
  */
 export interface DatasourceOptions<TSchema extends SchemaDefinition> {
@@ -55,6 +70,8 @@ export interface DatasourceOptions<TSchema extends SchemaDefinition> {
    * Defaults to true.
    */
   jsonPaths?: boolean;
+  /** Kafka ingestion configuration */
+  kafka?: KafkaConfig;
 }
 
 /**

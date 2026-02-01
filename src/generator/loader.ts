@@ -7,9 +7,10 @@ import * as esbuild from "esbuild";
 import * as path from "path";
 import * as fs from "fs";
 import { watch as chokidarWatch, type FSWatcher } from "chokidar";
-import { isProjectDefinition, type ProjectDefinition, type DatasourcesDefinition, type PipesDefinition } from "../schema/project.js";
+import { isProjectDefinition, type ProjectDefinition, type DatasourcesDefinition, type PipesDefinition, type ConnectionsDefinition } from "../schema/project.js";
 import { isDatasourceDefinition, type DatasourceDefinition } from "../schema/datasource.js";
 import { isPipeDefinition, type PipeDefinition } from "../schema/pipe.js";
+import { isConnectionDefinition, type ConnectionDefinition } from "../schema/connection.js";
 
 /**
  * Result of loading a schema file
@@ -157,6 +158,8 @@ export interface LoadedEntities {
   datasources: Record<string, { definition: DatasourceDefinition; info: EntityInfo }>;
   /** Discovered pipes with their metadata */
   pipes: Record<string, { definition: PipeDefinition; info: EntityInfo }>;
+  /** Discovered connections with their metadata */
+  connections: Record<string, { definition: ConnectionDefinition; info: EntityInfo }>;
   /** All source files that were scanned */
   sourceFiles: string[];
 }
@@ -195,6 +198,7 @@ export async function loadEntities(options: LoadEntitiesOptions): Promise<Loaded
   const result: LoadedEntities = {
     datasources: {},
     pipes: {},
+    connections: {},
     sourceFiles: [],
   };
 
@@ -237,7 +241,7 @@ export async function loadEntities(options: LoadEntitiesOptions): Promise<Loaded
       const moduleUrl = `file://${outfile}`;
       const module = await import(moduleUrl);
 
-      // Scan all exports for datasources and pipes
+      // Scan all exports for datasources, pipes, and connections
       for (const [exportName, value] of Object.entries(module)) {
         if (isDatasourceDefinition(value)) {
           result.datasources[exportName] = {
@@ -249,6 +253,14 @@ export async function loadEntities(options: LoadEntitiesOptions): Promise<Loaded
           };
         } else if (isPipeDefinition(value)) {
           result.pipes[exportName] = {
+            definition: value,
+            info: {
+              exportName,
+              sourceFile: includePath,
+            },
+          };
+        } else if (isConnectionDefinition(value)) {
+          result.connections[exportName] = {
             definition: value,
             info: {
               exportName,
@@ -282,9 +294,11 @@ export async function loadEntities(options: LoadEntitiesOptions): Promise<Loaded
 export function entitiesToProject(entities: LoadedEntities): {
   datasources: DatasourcesDefinition;
   pipes: PipesDefinition;
+  connections: ConnectionsDefinition;
 } {
   const datasources: DatasourcesDefinition = {};
   const pipes: PipesDefinition = {};
+  const connections: ConnectionsDefinition = {};
 
   for (const [name, { definition }] of Object.entries(entities.datasources)) {
     datasources[name] = definition;
@@ -294,7 +308,11 @@ export function entitiesToProject(entities: LoadedEntities): {
     pipes[name] = definition;
   }
 
-  return { datasources, pipes };
+  for (const [name, { definition }] of Object.entries(entities.connections)) {
+    connections[name] = definition;
+  }
+
+  return { datasources, pipes, connections };
 }
 
 /**
