@@ -1,5 +1,7 @@
 # @tinybird/sdk
 
+> **Note:** This package is experimental. APIs may change between versions.
+
 A TypeScript SDK for defining Tinybird resources with full type inference. Define your datasources, pipes, and queries in TypeScript and sync them directly to Tinybird.
 
 ## Installation
