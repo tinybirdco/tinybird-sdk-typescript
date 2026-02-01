@@ -6,8 +6,8 @@ import * as fs from "fs";
 import * as path from "path";
 import {
   hasValidToken,
-  getTinybirdSchemaPath,
-  getRelativeSchemaPath,
+  getTinybirdDir,
+  getRelativeTinybirdDir,
   getConfigPath,
   updateConfig,
 } from "../config.js";
@@ -15,14 +15,12 @@ import { browserLogin } from "../auth.js";
 import { saveTinybirdToken } from "../env.js";
 
 /**
- * Default starter content for the tinybird file
- * Contains example datasource and pipe definitions
+ * Default starter content for datasources.ts
  */
-const DEFAULT_STARTER_CONTENT = `import { defineDatasource, definePipe, node, t, p, engine } from "@tinybird/sdk";
+const DATASOURCES_CONTENT = `import { defineDatasource, t, engine, type InferRow } from "@tinybird/sdk";
 
 /**
- * Example datasource - page views tracking
- * Define your table schema with full type safety
+ * Page views datasource - tracks page view events
  */
 export const pageViews = defineDatasource("page_views", {
   description: "Page view tracking data",
@@ -37,11 +35,19 @@ export const pageViews = defineDatasource("page_views", {
   }),
 });
 
+// Row type - use this for ingesting data
+export type PageViewsRow = InferRow<typeof pageViews>;
+`;
+
 /**
- * Example pipe - top pages query
- * Define SQL transformations with typed parameters and output
+ * Default starter content for pipes.ts
  */
-export const topPages = definePipe("top_pages", {
+const PIPES_CONTENT = `import { defineEndpoint, node, t, p, type InferParams, type InferOutputRow } from "@tinybird/sdk";
+
+/**
+ * Top pages endpoint - get the most visited pages
+ */
+export const topPages = defineEndpoint("top_pages", {
   description: "Get the most visited pages",
   params: {
     start_date: p.dateTime().describe("Start of date range"),
@@ -68,16 +74,53 @@ export const topPages = definePipe("top_pages", {
     pathname: t.string(),
     views: t.uint64(),
   },
-  endpoint: true,
 });
+
+// Endpoint types - use these for calling the API
+export type TopPagesParams = InferParams<typeof topPages>;
+export type TopPagesOutput = InferOutputRow<typeof topPages>;
+`;
+
+/**
+ * Default starter content for client.ts
+ */
+const CLIENT_CONTENT = `/**
+ * Tinybird Client
+ *
+ * This file defines the typed Tinybird client for your project.
+ * Add your datasources and pipes here as you create them.
+ */
+
+import { createTinybirdClient } from "@tinybird/sdk";
+
+// Import datasources and their row types
+import { pageViews, type PageViewsRow } from "./datasources";
+
+// Import endpoints and their types
+import { topPages, type TopPagesParams, type TopPagesOutput } from "./pipes";
+
+// Create the typed Tinybird client
+export const tinybird = createTinybirdClient({
+  datasources: { pageViews },
+  pipes: { topPages },
+});
+
+// Re-export types for convenience
+export type { PageViewsRow, TopPagesParams, TopPagesOutput };
+
+// Re-export entities
+export { pageViews, topPages };
 `;
 
 /**
  * Default config content generator
  */
-function createDefaultConfig(includePath: string) {
+function createDefaultConfig(tinybirdDir: string) {
   return {
-    include: [includePath],
+    include: [
+      `${tinybirdDir}/datasources.ts`,
+      `${tinybirdDir}/pipes.ts`,
+    ],
     token: "${TINYBIRD_TOKEN}",
     baseUrl: "https://api.tinybird.co",
   };
@@ -120,7 +163,7 @@ export interface InitResult {
  *
  * Creates:
  * - tinybird.json in the project root
- * - lib/tinybird.ts (or src/lib/tinybird.ts if project has src folder)
+ * - src/tinybird/ folder with datasources.ts, pipes.ts, and client.ts
  *
  * @param options - Init options
  * @returns Init result
@@ -133,10 +176,14 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   const created: string[] = [];
   const skipped: string[] = [];
 
-  // Determine schema path based on project structure
-  const schemaPath = getTinybirdSchemaPath(cwd);
-  const schemaDir = path.dirname(schemaPath);
-  const relativeSchemaPath = getRelativeSchemaPath(cwd);
+  // Determine tinybird folder path based on project structure
+  const tinybirdDir = getTinybirdDir(cwd);
+  const relativeTinybirdDir = getRelativeTinybirdDir(cwd);
+
+  // File paths
+  const datasourcesPath = path.join(tinybirdDir, "datasources.ts");
+  const pipesPath = path.join(tinybirdDir, "pipes.ts");
+  const clientPath = path.join(tinybirdDir, "client.ts");
 
   // Create config file (tinybird.json)
   const configPath = getConfigPath(cwd);
@@ -144,7 +191,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     skipped.push("tinybird.json");
   } else {
     try {
-      const config = createDefaultConfig(relativeSchemaPath);
+      const config = createDefaultConfig(relativeTinybirdDir);
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
       created.push("tinybird.json");
     } catch (error) {
@@ -157,21 +204,65 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     }
   }
 
-  // Create starter file with example definitions
-  if (fs.existsSync(schemaPath) && !force) {
-    skipped.push(relativeSchemaPath);
+  // Create tinybird directory
+  try {
+    fs.mkdirSync(tinybirdDir, { recursive: true });
+  } catch (error) {
+    return {
+      success: false,
+      created,
+      skipped,
+      error: `Failed to create ${relativeTinybirdDir} folder: ${(error as Error).message}`,
+    };
+  }
+
+  // Create datasources.ts
+  if (fs.existsSync(datasourcesPath) && !force) {
+    skipped.push(`${relativeTinybirdDir}/datasources.ts`);
   } else {
     try {
-      // Create directory if needed
-      fs.mkdirSync(schemaDir, { recursive: true });
-      fs.writeFileSync(schemaPath, DEFAULT_STARTER_CONTENT);
-      created.push(relativeSchemaPath);
+      fs.writeFileSync(datasourcesPath, DATASOURCES_CONTENT);
+      created.push(`${relativeTinybirdDir}/datasources.ts`);
     } catch (error) {
       return {
         success: false,
         created,
         skipped,
-        error: `Failed to create starter file: ${(error as Error).message}`,
+        error: `Failed to create datasources.ts: ${(error as Error).message}`,
+      };
+    }
+  }
+
+  // Create pipes.ts
+  if (fs.existsSync(pipesPath) && !force) {
+    skipped.push(`${relativeTinybirdDir}/pipes.ts`);
+  } else {
+    try {
+      fs.writeFileSync(pipesPath, PIPES_CONTENT);
+      created.push(`${relativeTinybirdDir}/pipes.ts`);
+    } catch (error) {
+      return {
+        success: false,
+        created,
+        skipped,
+        error: `Failed to create pipes.ts: ${(error as Error).message}`,
+      };
+    }
+  }
+
+  // Create client.ts
+  if (fs.existsSync(clientPath) && !force) {
+    skipped.push(`${relativeTinybirdDir}/client.ts`);
+  } else {
+    try {
+      fs.writeFileSync(clientPath, CLIENT_CONTENT);
+      created.push(`${relativeTinybirdDir}/client.ts`);
+    } catch (error) {
+      return {
+        success: false,
+        created,
+        skipped,
+        error: `Failed to create client.ts: ${(error as Error).message}`,
       };
     }
   }

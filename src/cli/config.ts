@@ -57,9 +57,9 @@ const DEFAULT_BASE_URL = "https://api.tinybird.co";
 const CONFIG_FILE = "tinybird.json";
 
 /**
- * Tinybird schema file name
+ * Tinybird folder name
  */
-const TINYBIRD_SCHEMA_FILE = "tinybird.ts";
+const TINYBIRD_FOLDER = "tinybird";
 
 /**
  * Detect if project has a src folder
@@ -70,44 +70,64 @@ export function hasSrcFolder(cwd: string): boolean {
 }
 
 /**
- * Get the lib directory path based on project structure
- * Returns 'src/lib' if project has src folder, otherwise 'lib'
+ * Get the tinybird directory path based on project structure
+ * Returns 'src/tinybird' if project has src folder, otherwise 'tinybird'
  */
+export function getTinybirdDir(cwd: string): string {
+  return hasSrcFolder(cwd) ? path.join(cwd, "src", TINYBIRD_FOLDER) : path.join(cwd, TINYBIRD_FOLDER);
+}
+
+/**
+ * Get the relative tinybird directory path based on project structure
+ */
+export function getRelativeTinybirdDir(cwd: string): string {
+  return hasSrcFolder(cwd) ? `src/${TINYBIRD_FOLDER}` : TINYBIRD_FOLDER;
+}
+
+/**
+ * Get the datasources.ts path based on project structure
+ */
+export function getDatasourcesPath(cwd: string): string {
+  return path.join(getTinybirdDir(cwd), "datasources.ts");
+}
+
+/**
+ * Get the pipes.ts path based on project structure
+ */
+export function getPipesPath(cwd: string): string {
+  return path.join(getTinybirdDir(cwd), "pipes.ts");
+}
+
+/**
+ * Get the client.ts path based on project structure
+ */
+export function getClientPath(cwd: string): string {
+  return path.join(getTinybirdDir(cwd), "client.ts");
+}
+
+// Legacy exports for backwards compatibility
 export function getLibDir(cwd: string): string {
-  return hasSrcFolder(cwd) ? path.join(cwd, "src", "lib") : path.join(cwd, "lib");
+  return getTinybirdDir(cwd);
 }
 
-/**
- * Get the relative lib directory path based on project structure
- */
 export function getRelativeLibDir(cwd: string): string {
-  return hasSrcFolder(cwd) ? "src/lib" : "lib";
+  return getRelativeTinybirdDir(cwd);
 }
 
-/**
- * Get the tinybird.ts schema path based on project structure
- */
 export function getTinybirdSchemaPath(cwd: string): string {
-  return path.join(getLibDir(cwd), TINYBIRD_SCHEMA_FILE);
+  return getDatasourcesPath(cwd);
 }
 
-/**
- * Get the relative schema path based on project structure
- */
 export function getRelativeSchemaPath(cwd: string): string {
-  return `${getRelativeLibDir(cwd)}/${TINYBIRD_SCHEMA_FILE}`;
+  return `${getRelativeTinybirdDir(cwd)}/datasources.ts`;
 }
 
 /**
  * Get the default output path for generated client file
- * Generates to src/tinybird.ts if src exists, otherwise tinybird.ts
+ * Generates to src/tinybird.ts (works with tsconfig path alias)
  */
 export function getDefaultOutputPath(cwd: string): string {
-  const srcDir = path.join(cwd, "src");
-  if (fs.existsSync(srcDir) && fs.statSync(srcDir).isDirectory()) {
-    return "src/tinybird.ts";
-  }
-  return "tinybird.ts";
+  return hasSrcFolder(cwd) ? "src/tinybird.ts" : "tinybird.ts";
 }
 
 /**

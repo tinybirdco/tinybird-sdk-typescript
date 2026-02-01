@@ -136,11 +136,6 @@ export interface BuildFromIncludeResult {
   clientFile: {
     content: string;
     path: string;
-    /** Package.json for @tinybird/client (if generating to node_modules) */
-    packageJson?: {
-      content: string;
-      path: string;
-    };
   };
   /** Statistics about the build */
   stats: {
@@ -215,12 +210,6 @@ export async function buildFromInclude(
     clientFile: {
       content: clientFile.content,
       path: clientFile.absolutePath,
-      packageJson: clientFile.packageJson
-        ? {
-            content: clientFile.packageJson.content,
-            path: clientFile.packageJson.absolutePath,
-          }
-        : undefined,
     },
     stats: {
       datasourceCount: resources.datasources.length,

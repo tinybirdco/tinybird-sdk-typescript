@@ -1,22 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type {
   TopPagesOutput,
   TopEventsOutput,
   PageViewsRow,
   EventsRow,
-} from "@/tinybird";
+} from "@tinybird/client";
 
 export default function Home() {
   const [topPages, setTopPages] = useState<TopPagesOutput[]>([]);
   const [topEvents, setTopEvents] = useState<TopEventsOutput[]>([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const fetchAnalytics = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchAnalytics = useCallback(async () => {
     try {
       const res = await fetch("/api/analytics");
       const data = await res.json();
@@ -25,15 +23,22 @@ export default function Home() {
       } else {
         setTopPages(data.topPages);
         setTopEvents(data.topEvents);
+        setError(null);
+        setLastUpdated(new Date());
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     }
-    setLoading(false);
-  };
+  }, []);
+
+  // Poll every second
+  useEffect(() => {
+    fetchAnalytics();
+    const interval = setInterval(fetchAnalytics, 1000);
+    return () => clearInterval(interval);
+  }, [fetchAnalytics]);
 
   const trackPageView = async () => {
-    // This demonstrates the type-safe event structure
     const pageView: PageViewsRow = {
       timestamp: new Date(),
       session_id: crypto.randomUUID(),
@@ -51,16 +56,12 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "pageview", data: pageView }),
       });
-      alert("Page view tracked!");
     } catch (e) {
-      alert(
-        "Failed to track: " + (e instanceof Error ? e.message : "Unknown error")
-      );
+      console.error("Failed to track:", e);
     }
   };
 
   const trackEvent = async () => {
-    // This demonstrates the type-safe event structure
     const event: EventsRow = {
       timestamp: new Date(),
       session_id: crypto.randomUUID(),
@@ -78,11 +79,8 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "event", data: event }),
       });
-      alert("Event tracked!");
     } catch (e) {
-      alert(
-        "Failed to track: " + (e instanceof Error ? e.message : "Unknown error")
-      );
+      console.error("Failed to track:", e);
     }
   };
 
@@ -92,20 +90,17 @@ export default function Home() {
         <h1 className="text-3xl font-bold text-zinc-900 dark:text-white mb-2">
           @tinybird/sdk Demo
         </h1>
-        <p className="text-zinc-600 dark:text-zinc-400 mb-8">
-          This example demonstrates the developer experience of using the
-          Tinybird TypeScript SDK.
+        <p className="text-zinc-600 dark:text-zinc-400 mb-2">
+          Real-time analytics powered by the Tinybird TypeScript SDK.
         </p>
+        {lastUpdated && (
+          <p className="text-zinc-400 text-sm mb-8">
+            Last updated: {lastUpdated.toLocaleTimeString()}
+          </p>
+        )}
 
         {/* Actions */}
         <div className="flex flex-wrap gap-4 mb-8">
-          <button
-            onClick={fetchAnalytics}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? "Loading..." : "Fetch Analytics"}
-          </button>
           <button
             onClick={trackPageView}
             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
@@ -135,7 +130,7 @@ export default function Home() {
             </h2>
             {topPages.length === 0 ? (
               <p className="text-zinc-500">
-                No data yet. Click &quot;Fetch Analytics&quot; to load.
+                No data yet. Click &quot;Track Page View&quot; to add some.
               </p>
             ) : (
               <table className="w-full">
@@ -175,7 +170,7 @@ export default function Home() {
             </h2>
             {topEvents.length === 0 ? (
               <p className="text-zinc-500">
-                No data yet. Click &quot;Fetch Analytics&quot; to load.
+                No data yet. Click &quot;Track Event&quot; to add some.
               </p>
             ) : (
               <table className="w-full">
