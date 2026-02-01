@@ -273,11 +273,6 @@ function createCli(): Command {
                 }
               }
             }
-            if (validation.pipesSkipped.length > 0) {
-              console.log(
-                `[${formatTime()}] Skipped validation (require params): ${validation.pipesSkipped.join(", ")}`
-              );
-            }
           },
           onError: (error) => {
             console.error(`[${formatTime()}] Error: ${error.message}`);
