@@ -1,0 +1,11 @@
+{
+  "include": [
+    "src/tinybird/datasources.ts",
+    "src/tinybird/pipes.ts",
+    "src/tinybird/endpoints.ts",
+    "src/tinybird/mvs.ts",
+    "src/tinybird/copies.ts"
+  ],
+  "token": "${TINYBIRD_TOKEN}",
+  "baseUrl": "https://api.tinybird.co"
+}

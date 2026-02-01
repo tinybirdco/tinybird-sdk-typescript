@@ -1,6 +1,0 @@
-{
-  "include": ["src/tinybird/datasources.ts", "src/tinybird/pipes.ts"],
-  "output": "src/tinybird.ts",
-  "token": "${TINYBIRD_TOKEN}",
-  "baseUrl": "https://api.tinybird.co"
-}

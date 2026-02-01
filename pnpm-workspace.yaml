@@ -1,6 +1,6 @@
 packages:
   - "."
-  - "example-nextjs"
+  - "example"
 
 onlyBuiltDependencies:
   - esbuild

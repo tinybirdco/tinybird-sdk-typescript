@@ -6,7 +6,6 @@
 import { loadSchema, loadEntities, entitiesToProject, type LoadedEntities } from "./loader.js";
 import { generateAllDatasources, type GeneratedDatasource } from "./datasource.js";
 import { generateAllPipes, type GeneratedPipe } from "./pipe.js";
-import { generateClientFile } from "./client-generator.js";
 import type { ProjectDefinition, DatasourcesDefinition, PipesDefinition } from "../schema/project.js";
 
 /**
@@ -118,8 +117,6 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
 export interface BuildFromIncludeOptions {
   /** Array of file paths to scan for datasources and pipes */
   includePaths: string[];
-  /** Path for generated client file */
-  outputPath: string;
   /** Working directory (defaults to cwd) */
   cwd?: string;
 }
@@ -132,11 +129,6 @@ export interface BuildFromIncludeResult {
   resources: GeneratedResources;
   /** Loaded entities from source files */
   entities: LoadedEntities;
-  /** Generated client file content */
-  clientFile: {
-    content: string;
-    path: string;
-  };
   /** Statistics about the build */
   stats: {
     datasourceCount: number;
@@ -160,21 +152,18 @@ export function generateResourcesFromEntities(
 /**
  * Build all resources from include paths
  *
- * This is the new entry point for the generator that works with
- * auto-discovered entities instead of defineProject().
+ * This is the main entry point for the generator that works with
+ * auto-discovered entities. It loads datasources and pipes from the
+ * include paths and generates Tinybird resources ready to deploy.
  *
  * @param options - Build options with include paths
- * @returns Build result with generated resources and client file
+ * @returns Build result with generated resources
  *
  * @example
  * ```ts
  * const result = await buildFromInclude({
- *   includePaths: ['src/datasources.ts', 'src/pipes.ts'],
- *   outputPath: 'src/tinybird.ts',
+ *   includePaths: ['src/tinybird/datasources.ts', 'src/tinybird/pipes.ts'],
  * });
- *
- * // Write the generated client file
- * fs.writeFileSync(result.clientFile.path, result.clientFile.content);
  *
  * // Push resources to Tinybird
  * await deploy(result.resources);
@@ -197,20 +186,9 @@ export async function buildFromInclude(
   // Generate resources
   const resources = generateResourcesFromEntities(datasources, pipes);
 
-  // Generate client file
-  const clientFile = generateClientFile({
-    entities,
-    outputPath: options.outputPath,
-    cwd,
-  });
-
   return {
     resources,
     entities,
-    clientFile: {
-      content: clientFile.content,
-      path: clientFile.absolutePath,
-    },
     stats: {
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
@@ -222,4 +200,4 @@ export async function buildFromInclude(
 export { loadSchema, loadEntities, entitiesToProject, type LoaderOptions, type LoadedSchema, type LoadedEntities, type LoadEntitiesOptions } from "./loader.js";
 export { generateDatasource, generateAllDatasources, type GeneratedDatasource } from "./datasource.js";
 export { generatePipe, generateAllPipes, type GeneratedPipe } from "./pipe.js";
-export { generateClientFile, type GenerateClientOptions, type GeneratedClient } from "./client-generator.js";
+export { generateClientFile, type GenerateClientOptions, type GeneratedClient } from "./client.js";

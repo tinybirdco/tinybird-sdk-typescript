@@ -7,8 +7,10 @@ import type {
   PipeDefinition,
   NodeDefinition,
   EndpointConfig,
+  MaterializedConfig,
+  CopyConfig,
 } from "../schema/pipe.js";
-import { getEndpointConfig } from "../schema/pipe.js";
+import { getEndpointConfig, getMaterializedConfig, getCopyConfig } from "../schema/pipe.js";
 
 /**
  * Generated pipe content
@@ -68,6 +70,44 @@ function generateEndpoint(endpoint: EndpointConfig): string {
     } else {
       parts.push("CACHE 60"); // Default cache TTL
     }
+  }
+
+  return parts.join("\n");
+}
+
+/**
+ * Generate the TYPE MATERIALIZED section
+ */
+function generateMaterialized(config: MaterializedConfig): string {
+  const parts: string[] = ["TYPE MATERIALIZED"];
+
+  // The config is normalized by definePipe to always have `datasource` set.
+  // Use non-null assertion since we know it's always present after normalization.
+  const datasourceName = config.datasource!._name;
+  parts.push(`DATASOURCE ${datasourceName}`);
+
+  if (config.deploymentMethod === "alter") {
+    parts.push("DEPLOYMENT_METHOD alter");
+  }
+
+  return parts.join("\n");
+}
+
+/**
+ * Generate the TYPE COPY section
+ */
+function generateCopy(config: CopyConfig): string {
+  const parts: string[] = ["TYPE COPY"];
+
+  const datasourceName = config.datasource._name;
+  parts.push(`TARGET_DATASOURCE ${datasourceName}`);
+
+  if (config.copy_schedule) {
+    parts.push(`COPY_SCHEDULE ${config.copy_schedule}`);
+  }
+
+  if (config.copy_mode) {
+    parts.push(`COPY_MODE ${config.copy_mode}`);
   }
 
   return parts.join("\n");
@@ -145,6 +185,20 @@ export function generatePipe(pipe: PipeDefinition): GeneratedPipe {
   if (endpointConfig) {
     parts.push("");
     parts.push(generateEndpoint(endpointConfig));
+  }
+
+  // Add materialized view configuration if this is a materialized view
+  const materializedConfig = getMaterializedConfig(pipe);
+  if (materializedConfig) {
+    parts.push("");
+    parts.push(generateMaterialized(materializedConfig));
+  }
+
+  // Add copy pipe configuration if this is a copy pipe
+  const copyConfig = getCopyConfig(pipe);
+  if (copyConfig) {
+    parts.push("");
+    parts.push(generateCopy(copyConfig));
   }
 
   return {

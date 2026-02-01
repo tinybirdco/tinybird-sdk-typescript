@@ -18,8 +18,6 @@ export interface TinybirdConfig {
   token: string;
   /** Tinybird API base URL (optional, defaults to EU region) */
   baseUrl?: string;
-  /** Path to generated client file (defaults to src/tinybird.ts or tinybird.ts) */
-  output?: string;
 }
 
 /**
@@ -28,8 +26,6 @@ export interface TinybirdConfig {
 export interface ResolvedConfig {
   /** Array of TypeScript files to scan for datasources and pipes */
   include: string[];
-  /** Path to generated client file */
-  output: string;
   /** Resolved API token (workspace main token) */
   token: string;
   /** Tinybird API base URL */
@@ -57,9 +53,9 @@ const DEFAULT_BASE_URL = "https://api.tinybird.co";
 const CONFIG_FILE = "tinybird.json";
 
 /**
- * Tinybird schema file name
+ * Tinybird folder name
  */
-const TINYBIRD_SCHEMA_FILE = "tinybird.ts";
+const TINYBIRD_FOLDER = "tinybird";
 
 /**
  * Detect if project has a src folder
@@ -70,48 +66,56 @@ export function hasSrcFolder(cwd: string): boolean {
 }
 
 /**
- * Get the lib directory path based on project structure
- * Returns 'src/lib' if project has src folder, otherwise 'lib'
+ * Get the tinybird directory path based on project structure
+ * Returns 'src/tinybird' if project has src folder, otherwise 'tinybird'
  */
+export function getTinybirdDir(cwd: string): string {
+  return hasSrcFolder(cwd) ? path.join(cwd, "src", TINYBIRD_FOLDER) : path.join(cwd, TINYBIRD_FOLDER);
+}
+
+/**
+ * Get the relative tinybird directory path based on project structure
+ */
+export function getRelativeTinybirdDir(cwd: string): string {
+  return hasSrcFolder(cwd) ? `src/${TINYBIRD_FOLDER}` : TINYBIRD_FOLDER;
+}
+
+/**
+ * Get the datasources.ts path based on project structure
+ */
+export function getDatasourcesPath(cwd: string): string {
+  return path.join(getTinybirdDir(cwd), "datasources.ts");
+}
+
+/**
+ * Get the pipes.ts path based on project structure
+ */
+export function getPipesPath(cwd: string): string {
+  return path.join(getTinybirdDir(cwd), "pipes.ts");
+}
+
+/**
+ * Get the client.ts path based on project structure
+ */
+export function getClientPath(cwd: string): string {
+  return path.join(getTinybirdDir(cwd), "client.ts");
+}
+
+// Legacy exports for backwards compatibility
 export function getLibDir(cwd: string): string {
-  return hasSrcFolder(cwd) ? path.join(cwd, "src", "lib") : path.join(cwd, "lib");
+  return getTinybirdDir(cwd);
 }
 
-/**
- * Get the relative lib directory path based on project structure
- */
 export function getRelativeLibDir(cwd: string): string {
-  return hasSrcFolder(cwd) ? "src/lib" : "lib";
+  return getRelativeTinybirdDir(cwd);
 }
 
-/**
- * Get the tinybird.ts schema path based on project structure
- */
 export function getTinybirdSchemaPath(cwd: string): string {
-  return path.join(getLibDir(cwd), TINYBIRD_SCHEMA_FILE);
+  return getDatasourcesPath(cwd);
 }
 
-/**
- * Get the relative schema path based on project structure
- */
 export function getRelativeSchemaPath(cwd: string): string {
-  return `${getRelativeLibDir(cwd)}/${TINYBIRD_SCHEMA_FILE}`;
-}
-
-/**
- * Get the default output path for generated client file
- * Returns 'src/tinybird.ts' if project has src folder, otherwise 'tinybird.ts'
- */
-export function getDefaultOutputPath(cwd: string): string {
-  return hasSrcFolder(cwd) ? "src/tinybird.ts" : "tinybird.ts";
-}
-
-/**
- * Get the absolute output path for generated client file
- */
-export function getOutputPath(cwd: string, configOutput?: string): string {
-  const relativePath = configOutput ?? getDefaultOutputPath(cwd);
-  return path.join(cwd, relativePath);
+  return `${getRelativeTinybirdDir(cwd)}/datasources.ts`;
 }
 
 /**
@@ -210,11 +214,8 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
     include = [];
   }
 
-  // Get the directory containing the config file for resolving output path
+  // Get the directory containing the config file
   const configDir = path.dirname(configPath);
-
-  // Resolve output path
-  const output = config.output ?? getDefaultOutputPath(configDir);
 
   // Resolve token (may contain env vars)
   let resolvedToken: string;
@@ -244,7 +245,6 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
 
   return {
     include,
-    output,
     token: resolvedToken,
     baseUrl: resolvedBaseUrl,
     configPath,

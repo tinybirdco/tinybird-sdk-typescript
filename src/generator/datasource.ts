@@ -81,7 +81,8 @@ function formatDefaultValue(value: unknown, tinybirdType: string): string {
  */
 function generateColumnLine(
   columnName: string,
-  column: AnyTypeValidator | ColumnDefinition
+  column: AnyTypeValidator | ColumnDefinition,
+  includeJsonPaths: boolean
 ): string {
   const validator = getColumnType(column);
   const jsonPath = getColumnJsonPath(column);
@@ -90,10 +91,12 @@ function generateColumnLine(
 
   const parts: string[] = [`    ${columnName} ${tinybirdType}`];
 
-  // Always add JSON path for Events API ingestion support
+  // Add JSON path for Events API ingestion support if enabled
   // Use explicit jsonPath if defined, otherwise default to $.columnName
-  const effectiveJsonPath = jsonPath ?? `$.${columnName}`;
-  parts.push(`\`json:${effectiveJsonPath}\``);
+  if (includeJsonPaths) {
+    const effectiveJsonPath = jsonPath ?? `$.${columnName}`;
+    parts.push(`\`json:${effectiveJsonPath}\``);
+  }
 
   // Add default value if defined
   if (modifiers.hasDefault && modifiers.defaultValue !== undefined) {
@@ -112,13 +115,13 @@ function generateColumnLine(
 /**
  * Generate the SCHEMA section
  */
-function generateSchema(schema: SchemaDefinition): string {
+function generateSchema(schema: SchemaDefinition, includeJsonPaths: boolean): string {
   const lines = ["SCHEMA >"];
 
   const columnNames = Object.keys(schema);
   columnNames.forEach((name, index) => {
     const column = schema[name];
-    const line = generateColumnLine(name, column);
+    const line = generateColumnLine(name, column, includeJsonPaths);
     // Add comma if not the last column
     const suffix = index < columnNames.length - 1 ? "," : "";
     lines.push(line + suffix);
@@ -185,8 +188,11 @@ export function generateDatasource(
     parts.push("");
   }
 
+  // Check if JSON paths should be included (defaults to true)
+  const includeJsonPaths = datasource.options.jsonPaths !== false;
+
   // Add schema
-  parts.push(generateSchema(datasource._schema));
+  parts.push(generateSchema(datasource._schema, includeJsonPaths));
   parts.push("");
 
   // Add engine configuration

@@ -5,7 +5,9 @@
 
 import type { AnyTypeValidator } from "./types.js";
 import type { AnyParamValidator } from "./params.js";
-import type { DatasourceDefinition } from "./datasource.js";
+import type { DatasourceDefinition, SchemaDefinition, ColumnDefinition } from "./datasource.js";
+import { getColumnType } from "./datasource.js";
+import { getTinybirdType } from "./types.js";
 
 /** Symbol for brand typing pipes */
 export const PIPE_BRAND: unique symbol = Symbol("tinybird.pipe");
@@ -114,6 +116,45 @@ export interface EndpointConfig {
 }
 
 /**
+ * Materialized view configuration for a pipe
+ */
+export interface MaterializedConfig<
+  TDatasource extends DatasourceDefinition<SchemaDefinition> = DatasourceDefinition<SchemaDefinition>
+> {
+  /** Target datasource where materialized data is written */
+  datasource: TDatasource;
+  /**
+   * Deployment method for materialized views.
+   * Use 'alter' to update existing materialized views using ALTER TABLE ... MODIFY QUERY
+   * instead of recreating the table. This preserves existing data and reduces deployment time.
+   */
+  deploymentMethod?: "alter";
+}
+
+/**
+ * Copy pipe configuration
+ */
+export interface CopyConfig<
+  TDatasource extends DatasourceDefinition<SchemaDefinition> = DatasourceDefinition<SchemaDefinition>
+> {
+  /** Target datasource where copied data is written */
+  datasource: TDatasource;
+  /**
+   * Copy mode: how data is ingested
+   * - 'append': Appends the result to the target data source (default)
+   * - 'replace': Every run completely replaces the destination Data Source content
+   */
+  copy_mode?: "append" | "replace";
+  /**
+   * Copy schedule: when the copy job runs
+   * - A cron expression (e.g., "0 * * * *" for hourly)
+   * - "@on-demand" for manual execution only
+   * Defaults to "@on-demand" if not specified
+   */
+  copy_schedule?: string;
+}
+
+/**
  * Token configuration for pipe access
  */
 export interface PipeTokenConfig {
@@ -122,7 +163,7 @@ export interface PipeTokenConfig {
 }
 
 /**
- * Options for defining a pipe
+ * Options for defining a pipe (reusable SQL logic, no endpoint)
  */
 export interface PipeOptions<
   TParams extends ParamsDefinition,
@@ -134,11 +175,71 @@ export interface PipeOptions<
   params?: TParams;
   /** Nodes in the transformation pipeline */
   nodes: readonly NodeDefinition[];
+  /** Output schema (optional for reusable pipes, required for endpoints) */
+  output?: TOutput;
+  /** Whether this pipe is an API endpoint (shorthand for { enabled: true }). Mutually exclusive with materialized and copy. */
+  endpoint?: boolean | EndpointConfig;
+  /** Materialized view configuration. Mutually exclusive with endpoint and copy. */
+  materialized?: MaterializedConfig;
+  /** Copy pipe configuration. Mutually exclusive with endpoint and materialized. */
+  copy?: CopyConfig;
+  /** Access tokens for this pipe */
+  tokens?: readonly PipeTokenConfig[];
+}
+
+/**
+ * Options for defining an endpoint (API-exposed pipe)
+ */
+export interface EndpointOptions<
+  TParams extends ParamsDefinition,
+  TOutput extends OutputDefinition
+> {
+  /** Human-readable description of the endpoint */
+  description?: string;
+  /** Parameter definitions for query inputs */
+  params?: TParams;
+  /** Nodes in the transformation pipeline */
+  nodes: readonly NodeDefinition[];
   /** Output schema (required for type safety) */
   output: TOutput;
-  /** Whether this pipe is an API endpoint (shorthand for { enabled: true }) */
-  endpoint?: boolean | EndpointConfig;
-  /** Access tokens for this pipe */
+  /** Cache configuration */
+  cache?: {
+    /** Whether caching is enabled */
+    enabled: boolean;
+    /** Cache TTL in seconds */
+    ttl?: number;
+  };
+  /** Access tokens for this endpoint */
+  tokens?: readonly PipeTokenConfig[];
+}
+
+/**
+ * Options for defining a copy pipe
+ */
+export interface CopyPipeOptions<
+  TSchema extends SchemaDefinition,
+  TDatasource extends DatasourceDefinition<TSchema>
+> {
+  /** Human-readable description of the copy pipe */
+  description?: string;
+  /** Nodes in the transformation pipeline */
+  nodes: readonly NodeDefinition[];
+  /** Target datasource where copied data is written */
+  datasource: TDatasource;
+  /**
+   * Copy mode: how data is ingested
+   * - 'append': Appends the result to the target data source (default)
+   * - 'replace': Every run completely replaces the destination Data Source content
+   */
+  copy_mode?: "append" | "replace";
+  /**
+   * Copy schedule: when the copy job runs
+   * - A cron expression (e.g., "0 * * * *" for hourly)
+   * - "@on-demand" for manual execution only
+   * Defaults to "@on-demand" if not specified
+   */
+  copy_schedule?: string;
+  /** Access tokens for this copy pipe */
   tokens?: readonly PipeTokenConfig[];
 }
 
@@ -156,8 +257,8 @@ export interface PipeDefinition<
   readonly _type: "pipe";
   /** Parameter definitions */
   readonly _params: TParams;
-  /** Output schema */
-  readonly _output: TOutput;
+  /** Output schema (optional for reusable pipes) */
+  readonly _output?: TOutput;
   /** Full options */
   readonly options: PipeOptions<TParams, TOutput>;
 }
@@ -212,6 +313,104 @@ export interface PipeDefinition<
  * });
  * ```
  */
+/**
+ * Normalize a Tinybird type for comparison by removing wrappers that don't affect compatibility
+ */
+function normalizeTypeForComparison(type: string): string {
+  // Remove Nullable wrapper for comparison
+  let normalized = type.replace(/^Nullable\((.+)\)$/, "$1");
+  // Remove LowCardinality wrapper
+  normalized = normalized.replace(/^LowCardinality\((.+)\)$/, "$1");
+  // Handle LowCardinality(Nullable(...))
+  normalized = normalized.replace(/^LowCardinality\(Nullable\((.+)\)\)$/, "$1");
+  // Remove timezone from DateTime types
+  normalized = normalized.replace(/^DateTime\('[^']+'\)$/, "DateTime");
+  normalized = normalized.replace(/^DateTime64\((\d+),\s*'[^']+'\)$/, "DateTime64($1)");
+  return normalized;
+}
+
+/**
+ * Check if two Tinybird types are compatible
+ */
+function typesAreCompatible(outputType: string, datasourceType: string): boolean {
+  const normalizedOutput = normalizeTypeForComparison(outputType);
+  const normalizedDatasource = normalizeTypeForComparison(datasourceType);
+
+  // Direct match
+  if (normalizedOutput === normalizedDatasource) {
+    return true;
+  }
+
+  // SimpleAggregateFunction compatibility: output can be the base type
+  // e.g., output UInt64 -> datasource SimpleAggregateFunction(sum, UInt64)
+  const simpleAggMatch = normalizedDatasource.match(
+    /^SimpleAggregateFunction\([^,]+,\s*(.+)\)$/
+  );
+  if (simpleAggMatch && normalizedOutput === simpleAggMatch[1]) {
+    return true;
+  }
+
+  // AggregateFunction compatibility
+  const aggMatch = normalizedDatasource.match(
+    /^AggregateFunction\([^,]+,\s*(.+)\)$/
+  );
+  if (aggMatch && normalizedOutput === aggMatch[1]) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Validate that the pipe output schema matches the target datasource schema
+ */
+function validateMaterializedSchema(
+  pipeName: string,
+  output: OutputDefinition,
+  datasource: DatasourceDefinition
+): void {
+  const outputColumns = Object.keys(output);
+  const datasourceSchema = datasource._schema;
+  const datasourceColumns = Object.keys(datasourceSchema);
+
+  // Check for missing columns in output
+  const missingInOutput = datasourceColumns.filter(
+    (col) => !outputColumns.includes(col)
+  );
+  if (missingInOutput.length > 0) {
+    throw new Error(
+      `Materialized view "${pipeName}" output schema is missing columns from target datasource "${datasource._name}": ${missingInOutput.join(", ")}`
+    );
+  }
+
+  // Check for extra columns in output
+  const extraInOutput = outputColumns.filter(
+    (col) => !datasourceColumns.includes(col)
+  );
+  if (extraInOutput.length > 0) {
+    throw new Error(
+      `Materialized view "${pipeName}" output schema has columns not in target datasource "${datasource._name}": ${extraInOutput.join(", ")}`
+    );
+  }
+
+  // Check type compatibility for each column
+  for (const columnName of outputColumns) {
+    const outputValidator = output[columnName];
+    const datasourceColumn = datasourceSchema[columnName];
+
+    const outputType = getTinybirdType(outputValidator);
+    const datasourceValidator = getColumnType(datasourceColumn);
+    const datasourceType = getTinybirdType(datasourceValidator);
+
+    if (!typesAreCompatible(outputType, datasourceType)) {
+      throw new Error(
+        `Materialized view "${pipeName}" column "${columnName}" type mismatch: ` +
+          `output has "${outputType}" but target datasource "${datasource._name}" expects "${datasourceType}"`
+      );
+    }
+  }
+}
+
 export function definePipe<
   TParams extends ParamsDefinition,
   TOutput extends OutputDefinition
@@ -231,11 +430,26 @@ export function definePipe<
     throw new Error(`Pipe "${name}" must have at least one node.`);
   }
 
-  // Validate output is provided (required for type safety)
-  if (!options.output || Object.keys(options.output).length === 0) {
+  // Validate output is provided for endpoints and materialized views
+  if ((options.endpoint || options.materialized) && (!options.output || Object.keys(options.output).length === 0)) {
     throw new Error(
-      `Pipe "${name}" must have an output schema defined for type safety.`
+      `Pipe "${name}" must have an output schema defined when used as an endpoint or materialized view.`
     );
+  }
+
+  // Count how many types are configured
+  const typeCount = [options.endpoint, options.materialized, options.copy].filter(Boolean).length;
+  if (typeCount > 1) {
+    throw new Error(
+      `Pipe "${name}" can only have one of: endpoint, materialized, or copy configuration. ` +
+        `A pipe must be at most one type.`
+    );
+  }
+
+  // Validate materialized view schema compatibility
+  if (options.materialized) {
+    // output is guaranteed to be defined here because of the earlier validation
+    validateMaterializedSchema(name, options.output!, options.materialized.datasource);
   }
 
   const params = (options.params ?? {}) as TParams;
@@ -251,6 +465,255 @@ export function definePipe<
       params,
     },
   };
+}
+
+/**
+ * Options for defining a materialized view
+ */
+export interface MaterializedViewOptions<
+  TDatasource extends DatasourceDefinition<SchemaDefinition>
+> {
+  /** Human-readable description of the materialized view */
+  description?: string;
+  /** Nodes in the transformation pipeline */
+  nodes: readonly NodeDefinition[];
+  /** Target datasource where materialized data is written */
+  datasource: TDatasource;
+  /**
+   * Deployment method for materialized views.
+   * Use 'alter' to update existing materialized views using ALTER TABLE ... MODIFY QUERY
+   * instead of recreating the table. This preserves existing data and reduces deployment time.
+   */
+  deploymentMethod?: "alter";
+  /** Access tokens for this pipe */
+  tokens?: readonly PipeTokenConfig[];
+}
+
+/**
+ * Helper type to extract the output definition from a datasource schema
+ */
+type DatasourceSchemaToOutput<TSchema extends SchemaDefinition> = {
+  [K in keyof TSchema]: TSchema[K] extends ColumnDefinition<infer V>
+    ? V
+    : TSchema[K] extends AnyTypeValidator
+      ? TSchema[K]
+      : never;
+};
+
+/**
+ * Define a Tinybird materialized view
+ *
+ * This is a convenience function that simplifies creating materialized views.
+ * The output schema is automatically derived from the target datasource, ensuring
+ * type safety between the pipe output and the target.
+ *
+ * @param name - The pipe name (must be valid identifier)
+ * @param options - Materialized view configuration
+ * @returns A pipe definition configured as a materialized view
+ *
+ * @example
+ * ```ts
+ * import { defineDatasource, defineMaterializedView, node, t, engine } from '@tinybird/sdk';
+ *
+ * // Target datasource for aggregated data
+ * const salesByHour = defineDatasource('sales_by_hour', {
+ *   schema: {
+ *     day: t.date(),
+ *     country: t.string().lowCardinality(),
+ *     total_sales: t.simpleAggregateFunction('sum', t.uint64()),
+ *   },
+ *   engine: engine.aggregatingMergeTree({
+ *     sortingKey: ['day', 'country'],
+ *   }),
+ * });
+ *
+ * // Materialized view - output schema is inferred from datasource
+ * export const salesByHourMv = defineMaterializedView('sales_by_hour_mv', {
+ *   description: 'Aggregate sales per hour',
+ *   datasource: salesByHour,
+ *   nodes: [
+ *     node({
+ *       name: 'daily_sales',
+ *       sql: `
+ *         SELECT
+ *           toStartOfDay(starting_date) as day,
+ *           country,
+ *           sum(sales) as total_sales
+ *         FROM teams
+ *         GROUP BY day, country
+ *       `,
+ *     }),
+ *   ],
+ *   deploymentMethod: 'alter', // optional
+ * });
+ * ```
+ */
+export function defineMaterializedView<
+  TSchema extends SchemaDefinition,
+  TDatasource extends DatasourceDefinition<TSchema>
+>(
+  name: string,
+  options: MaterializedViewOptions<TDatasource>
+): PipeDefinition<Record<string, never>, DatasourceSchemaToOutput<TSchema>> {
+  // Extract the schema from the datasource to build the output
+  const datasourceSchema = options.datasource._schema as TSchema;
+  const output: Record<string, AnyTypeValidator> = {};
+
+  for (const [columnName, column] of Object.entries(datasourceSchema)) {
+    output[columnName] = getColumnType(column);
+  }
+
+  return definePipe(name, {
+    description: options.description,
+    nodes: options.nodes,
+    output: output as DatasourceSchemaToOutput<TSchema>,
+    materialized: {
+      datasource: options.datasource,
+      deploymentMethod: options.deploymentMethod,
+    },
+    tokens: options.tokens,
+  });
+}
+
+/**
+ * Define a Tinybird endpoint
+ *
+ * This is a convenience function for creating API endpoints.
+ * Endpoints are pipes that are exposed as HTTP API endpoints.
+ *
+ * @param name - The endpoint name (must be valid identifier)
+ * @param options - Endpoint configuration including params, nodes, and output schema
+ * @returns A pipe definition configured as an endpoint
+ *
+ * @example
+ * ```ts
+ * import { defineEndpoint, node, p, t } from '@tinybird/sdk';
+ *
+ * export const topEvents = defineEndpoint('top_events', {
+ *   description: 'Get top events by count',
+ *   params: {
+ *     start_date: p.dateTime(),
+ *     end_date: p.dateTime(),
+ *     limit: p.int32().optional(10),
+ *   },
+ *   nodes: [
+ *     node({
+ *       name: 'aggregated',
+ *       sql: `
+ *         SELECT
+ *           event_type,
+ *           count() as event_count
+ *         FROM events
+ *         WHERE timestamp BETWEEN {{DateTime(start_date)}} AND {{DateTime(end_date)}}
+ *         GROUP BY event_type
+ *         ORDER BY event_count DESC
+ *         LIMIT {{Int32(limit, 10)}}
+ *       `,
+ *     }),
+ *   ],
+ *   output: {
+ *     event_type: t.string(),
+ *     event_count: t.uint64(),
+ *   },
+ * });
+ * ```
+ */
+export function defineEndpoint<
+  TParams extends ParamsDefinition,
+  TOutput extends OutputDefinition
+>(
+  name: string,
+  options: EndpointOptions<TParams, TOutput>
+): PipeDefinition<TParams, TOutput> {
+  return definePipe(name, {
+    description: options.description,
+    params: options.params,
+    nodes: options.nodes,
+    output: options.output,
+    endpoint: options.cache ? { enabled: true, cache: options.cache } : true,
+    tokens: options.tokens,
+  });
+}
+
+/**
+ * Define a Tinybird copy pipe
+ *
+ * Copy pipes capture the result of a pipe at a moment in time and write
+ * the result into a target data source. They can be run on a schedule,
+ * or executed on demand.
+ *
+ * Unlike materialized views which continuously update as new events are inserted,
+ * copy pipes generate a single snapshot at a specific point in time.
+ *
+ * @param name - The copy pipe name (must be valid identifier)
+ * @param options - Copy pipe configuration
+ * @returns A pipe definition configured as a copy pipe
+ *
+ * @example
+ * ```ts
+ * import { defineCopyPipe, defineDatasource, node, t, engine } from '@tinybird/sdk';
+ *
+ * // Target datasource for daily snapshots
+ * const dailySalesSnapshot = defineDatasource('daily_sales_snapshot', {
+ *   schema: {
+ *     snapshot_date: t.date(),
+ *     country: t.string(),
+ *     total_sales: t.uint64(),
+ *   },
+ *   engine: engine.mergeTree({
+ *     sortingKey: ['snapshot_date', 'country'],
+ *   }),
+ * });
+ *
+ * // Copy pipe that runs daily at midnight
+ * export const dailySalesCopy = defineCopyPipe('daily_sales_copy', {
+ *   description: 'Daily snapshot of sales by country',
+ *   datasource: dailySalesSnapshot,
+ *   copy_schedule: '0 0 * * *', // Daily at midnight UTC
+ *   copy_mode: 'append',
+ *   nodes: [
+ *     node({
+ *       name: 'snapshot',
+ *       sql: `
+ *         SELECT
+ *           today() AS snapshot_date,
+ *           country,
+ *           sum(sales) AS total_sales
+ *         FROM sales
+ *         WHERE date = today() - 1
+ *         GROUP BY country
+ *       `,
+ *     }),
+ *   ],
+ * });
+ * ```
+ */
+export function defineCopyPipe<
+  TSchema extends SchemaDefinition,
+  TDatasource extends DatasourceDefinition<TSchema>
+>(
+  name: string,
+  options: CopyPipeOptions<TSchema, TDatasource>
+): PipeDefinition<Record<string, never>, DatasourceSchemaToOutput<TSchema>> {
+  // Extract the schema from the datasource to build the output
+  const datasourceSchema = options.datasource._schema as TSchema;
+  const output: Record<string, AnyTypeValidator> = {};
+
+  for (const [columnName, column] of Object.entries(datasourceSchema)) {
+    output[columnName] = getColumnType(column);
+  }
+
+  return definePipe(name, {
+    description: options.description,
+    nodes: options.nodes,
+    output: output as DatasourceSchemaToOutput<TSchema>,
+    copy: {
+      datasource: options.datasource,
+      copy_mode: options.copy_mode,
+      copy_schedule: options.copy_schedule,
+    },
+    tokens: options.tokens,
+  });
 }
 
 /**
@@ -280,6 +743,34 @@ export function getEndpointConfig(pipe: PipeDefinition): EndpointConfig | null {
   }
 
   return endpoint.enabled ? endpoint : null;
+}
+
+/**
+ * Get the materialized view configuration from a pipe
+ */
+export function getMaterializedConfig(pipe: PipeDefinition): MaterializedConfig | null {
+  return pipe.options.materialized ?? null;
+}
+
+/**
+ * Check if a pipe is a materialized view
+ */
+export function isMaterializedView(pipe: PipeDefinition): boolean {
+  return pipe.options.materialized !== undefined;
+}
+
+/**
+ * Get the copy pipe configuration from a pipe
+ */
+export function getCopyConfig(pipe: PipeDefinition): CopyConfig | null {
+  return pipe.options.copy ?? null;
+}
+
+/**
+ * Check if a pipe is a copy pipe
+ */
+export function isCopyPipe(pipe: PipeDefinition): boolean {
+  return pipe.options.copy !== undefined;
 }
 
 /**

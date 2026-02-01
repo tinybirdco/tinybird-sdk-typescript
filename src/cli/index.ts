@@ -130,7 +130,11 @@ function createCli(): Command {
     .command("build")
     .description("Build and push resources to Tinybird")
     .option("--dry-run", "Generate without pushing to API")
+    .option("--debug", "Show debug output including API requests/responses")
     .action(async (options) => {
+      if (options.debug) {
+        process.env.TINYBIRD_DEBUG = "1";
+      }
       console.log(`[${formatTime()}] Building...\n`);
 
       const result = await runBuild({
@@ -228,7 +232,7 @@ function createCli(): Command {
               if (deploy.result === "no_changes") {
                 console.log(`[${formatTime()}] No changes detected`);
               } else {
-                console.log(`[${formatTime()}] Deployed in ${result.durationMs}ms`);
+                console.log(`[${formatTime()}] Built in ${result.durationMs}ms`);
 
                 // Show datasource changes
                 if (deploy.datasources) {
@@ -268,11 +272,6 @@ function createCli(): Command {
                   console.warn(`  WARN [${issue.pipeName}]: ${issue.message}`);
                 }
               }
-            }
-            if (validation.pipesSkipped.length > 0) {
-              console.log(
-                `[${formatTime()}] Skipped validation (require params): ${validation.pipesSkipped.join(", ")}`
-              );
             }
           },
           onError: (error) => {

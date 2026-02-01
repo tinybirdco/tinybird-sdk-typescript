@@ -193,9 +193,6 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
     watchDirs.add(path.dirname(absolutePath));
   }
 
-  // Get the output file path to ignore
-  const outputPath = path.resolve(config.cwd, config.output);
-
   // Debounce state
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let isBuilding = false;
@@ -290,7 +287,6 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
       /node_modules/,
       /\.tinybird-schema-.*\.mjs$/, // Ignore temporary bundle files
       /\.tinybird-entities-.*\.mjs$/, // Ignore temporary entity files
-      outputPath, // Ignore the generated client file
     ],
     persistent: true,
     ignoreInitial: true,

@@ -1,9 +1,9 @@
-import { definePipe, node, p, t } from "@tinybird/sdk";
+import { defineEndpoint, node, p, t } from "@tinybird/sdk";
 
 /**
- * Top pages pipe - get most visited pages
+ * Top pages endpoint - get most visited pages
  */
-export const topPages = definePipe("top_pages", {
+export const topPages = defineEndpoint("top_pages", {
   description: "Get the most visited pages",
   params: {
     start_date: p.dateTime().describe("Start of date range"),
@@ -32,13 +32,12 @@ export const topPages = definePipe("top_pages", {
     views: t.uint64(),
     unique_sessions: t.uint64(),
   },
-  endpoint: true,
 });
 
 /**
- * Page views over time - get page views aggregated by time period
+ * Page views over time endpoint - get page views aggregated by time period
  */
-export const pageViewsOverTime = definePipe("page_views_over_time", {
+export const pageViewsOverTime = defineEndpoint("page_views_over_time", {
   description: "Get page views over time",
   params: {
     start_date: p.dateTime().describe("Start of date range"),
@@ -75,13 +74,50 @@ export const pageViewsOverTime = definePipe("page_views_over_time", {
     views: t.uint64(),
     unique_sessions: t.uint64(),
   },
-  endpoint: true,
 });
 
 /**
- * Top events pipe - get most frequent events
+ * Daily stats endpoint - query the pre-aggregated daily stats (fast!)
  */
-export const topEvents = definePipe("top_events", {
+export const dailyStats = defineEndpoint("daily_stats", {
+  description: "Get daily page stats from materialized view",
+  params: {
+    start_date: p.date().describe("Start date"),
+    end_date: p.date().describe("End date"),
+    pathname: p.string().optional().describe("Filter by pathname"),
+  },
+  nodes: [
+    node({
+      name: "query",
+      sql: `
+        SELECT
+          date,
+          pathname,
+          sum(views) AS views,
+          uniqMerge(unique_sessions) AS unique_sessions
+        FROM daily_page_stats
+        WHERE date >= {{Date(start_date)}}
+          AND date <= {{Date(end_date)}}
+          {% if defined(pathname) %}
+          AND pathname = {{String(pathname)}}
+          {% end %}
+        GROUP BY date, pathname
+        ORDER BY date DESC, views DESC
+      `,
+    }),
+  ],
+  output: {
+    date: t.date(),
+    pathname: t.string(),
+    views: t.uint64(),
+    unique_sessions: t.uint64(),
+  },
+});
+
+/**
+ * Top events endpoint - get most frequent events
+ */
+export const topEvents = defineEndpoint("top_events", {
   description: "Get the most frequent events",
   params: {
     start_date: p.dateTime().describe("Start of date range"),
@@ -110,5 +146,4 @@ export const topEvents = definePipe("top_events", {
     event_count: t.uint64(),
     unique_sessions: t.uint64(),
   },
-  endpoint: true,
 });
