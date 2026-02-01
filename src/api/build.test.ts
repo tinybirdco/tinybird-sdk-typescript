@@ -189,8 +189,10 @@ describe("Build API", () => {
       await buildToTinybird(config, resources);
 
       expect(capturedFormData).not.toBeNull();
-      const entries = Array.from(capturedFormData!.entries());
-      expect(entries.length).toBe(3); // 2 datasources + 1 pipe
+      // FormData has 3 entries: 2 datasources + 1 pipe
+      // Use getAll since FormData.entries() is not available in Node.js types
+      const allValues = capturedFormData!.getAll("data_project://");
+      expect(allValues.length).toBe(3);
     });
   });
 
