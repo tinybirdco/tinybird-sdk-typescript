@@ -16,6 +16,8 @@ export const dailyPageStats = defineDatasource("daily_page_stats", {
     sortingKey: ["date", "pathname"],
     partitionKey: "toYYYYMM(date)",
   }),
+  // Disable JSON paths since this datasource is populated by a materialized view
+  jsonPaths: false,
 });
 
 /**

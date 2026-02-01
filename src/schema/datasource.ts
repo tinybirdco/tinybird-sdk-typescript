@@ -49,6 +49,12 @@ export interface DatasourceOptions<TSchema extends SchemaDefinition> {
   tokens?: readonly TokenConfig[];
   /** Workspaces to share this datasource with */
   sharedWith?: readonly string[];
+  /**
+   * Whether to generate JSON path expressions for columns.
+   * Set to false for datasources that are targets of materialized views.
+   * Defaults to true.
+   */
+  jsonPaths?: boolean;
 }
 
 /**
