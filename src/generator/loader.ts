@@ -7,7 +7,9 @@ import * as esbuild from "esbuild";
 import * as path from "path";
 import * as fs from "fs";
 import { watch as chokidarWatch, type FSWatcher } from "chokidar";
-import { isProjectDefinition, type ProjectDefinition } from "../schema/project.js";
+import { isProjectDefinition, type ProjectDefinition, type DatasourcesDefinition, type PipesDefinition } from "../schema/project.js";
+import { isDatasourceDefinition, type DatasourceDefinition } from "../schema/datasource.js";
+import { isPipeDefinition, type PipeDefinition } from "../schema/pipe.js";
 
 /**
  * Result of loading a schema file
@@ -135,6 +137,164 @@ export async function loadSchema(options: LoaderOptions): Promise<LoadedSchema> 
       // Ignore cleanup errors
     }
   }
+}
+
+/**
+ * Information about an entity discovered from a source file
+ */
+export interface EntityInfo {
+  /** The export name used in the source file */
+  exportName: string;
+  /** The source file path (relative to cwd) */
+  sourceFile: string;
+}
+
+/**
+ * Result of loading entities from multiple files
+ */
+export interface LoadedEntities {
+  /** Discovered datasources with their metadata */
+  datasources: Record<string, { definition: DatasourceDefinition; info: EntityInfo }>;
+  /** Discovered pipes with their metadata */
+  pipes: Record<string, { definition: PipeDefinition; info: EntityInfo }>;
+  /** All source files that were scanned */
+  sourceFiles: string[];
+}
+
+/**
+ * Options for loading entities
+ */
+export interface LoadEntitiesOptions {
+  /** Array of file paths to scan (can be relative or absolute) */
+  includePaths: string[];
+  /** The working directory for resolution (defaults to cwd) */
+  cwd?: string;
+}
+
+/**
+ * Load datasources and pipes from multiple TypeScript files
+ *
+ * Uses esbuild to bundle each file and scans exports for datasource
+ * and pipe definitions.
+ *
+ * @param options - Loader options
+ * @returns Discovered entities with metadata
+ *
+ * @example
+ * ```ts
+ * const entities = await loadEntities({
+ *   includePaths: ['src/datasources.ts', 'src/pipes.ts'],
+ * });
+ *
+ * console.log(Object.keys(entities.datasources)); // ['pageViews', 'events']
+ * console.log(Object.keys(entities.pipes)); // ['topPages', 'topEvents']
+ * ```
+ */
+export async function loadEntities(options: LoadEntitiesOptions): Promise<LoadedEntities> {
+  const cwd = options.cwd ?? process.cwd();
+  const result: LoadedEntities = {
+    datasources: {},
+    pipes: {},
+    sourceFiles: [],
+  };
+
+  for (const includePath of options.includePaths) {
+    const absolutePath = path.isAbsolute(includePath)
+      ? includePath
+      : path.resolve(cwd, includePath);
+
+    // Verify the file exists
+    if (!fs.existsSync(absolutePath)) {
+      throw new Error(`Include file not found: ${absolutePath}`);
+    }
+
+    result.sourceFiles.push(includePath);
+    const fileDir = path.dirname(absolutePath);
+
+    // Create a temporary output file for the bundle
+    const outfile = path.join(
+      fileDir,
+      `.tinybird-entities-${Date.now()}.mjs`
+    );
+
+    try {
+      // Bundle the file with esbuild
+      await esbuild.build({
+        entryPoints: [absolutePath],
+        outfile,
+        bundle: true,
+        platform: "node",
+        format: "esm",
+        target: "node18",
+        // Mark @tinybird/sdk as external - it should already be installed
+        external: ["@tinybird/sdk"],
+        // Enable source maps for better error messages
+        sourcemap: "inline",
+        minify: false,
+      });
+
+      // Import the bundled module
+      const moduleUrl = `file://${outfile}`;
+      const module = await import(moduleUrl);
+
+      // Scan all exports for datasources and pipes
+      for (const [exportName, value] of Object.entries(module)) {
+        if (isDatasourceDefinition(value)) {
+          result.datasources[exportName] = {
+            definition: value,
+            info: {
+              exportName,
+              sourceFile: includePath,
+            },
+          };
+        } else if (isPipeDefinition(value)) {
+          result.pipes[exportName] = {
+            definition: value,
+            info: {
+              exportName,
+              sourceFile: includePath,
+            },
+          };
+        }
+      }
+    } finally {
+      // Clean up the temporary bundle file
+      try {
+        if (fs.existsSync(outfile)) {
+          fs.unlinkSync(outfile);
+        }
+        const sourcemapFile = outfile + ".map";
+        if (fs.existsSync(sourcemapFile)) {
+          fs.unlinkSync(sourcemapFile);
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Convert loaded entities to a format compatible with generators
+ */
+export function entitiesToProject(entities: LoadedEntities): {
+  datasources: DatasourcesDefinition;
+  pipes: PipesDefinition;
+} {
+  const datasources: DatasourcesDefinition = {};
+  const pipes: PipesDefinition = {};
+
+  for (const [name, { definition }] of Object.entries(entities.datasources)) {
+    datasources[name] = definition;
+  }
+
+  for (const [name, { definition }] of Object.entries(entities.pipes)) {
+    pipes[name] = definition;
+  }
+
+  return { datasources, pipes };
 }
 
 /**

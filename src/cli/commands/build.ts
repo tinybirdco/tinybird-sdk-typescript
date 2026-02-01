@@ -2,8 +2,10 @@
  * Build command - generates and pushes resources to Tinybird
  */
 
+import * as fs from "fs";
+import * as path from "path";
 import { loadConfig, type ResolvedConfig } from "../config.js";
-import { build, type BuildResult } from "../../generator/index.js";
+import { buildFromInclude, type BuildFromIncludeResult } from "../../generator/index.js";
 import { buildToTinybird, type BuildApiResult } from "../../api/build.js";
 import { deployToMain } from "../../api/deploy.js";
 
@@ -28,9 +30,11 @@ export interface BuildCommandResult {
   /** Whether the build was successful */
   success: boolean;
   /** Build result with generated resources */
-  build?: BuildResult;
+  build?: BuildFromIncludeResult;
   /** Build API result (if not dry run) */
   deploy?: BuildApiResult;
+  /** Path to generated client file */
+  clientFilePath?: string;
   /** Error message if failed */
   error?: string;
   /** Duration in milliseconds */
@@ -61,11 +65,12 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
     };
   }
 
-  // Build resources
-  let buildResult: BuildResult;
+  // Build resources from include paths
+  let buildResult: BuildFromIncludeResult;
   try {
-    buildResult = await build({
-      schemaPath: config.schema,
+    buildResult = await buildFromInclude({
+      includePaths: config.include,
+      outputPath: config.output,
       cwd: config.cwd,
     });
   } catch (error) {
@@ -76,11 +81,27 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
     };
   }
 
+  // Write the generated client file
+  const clientFilePath = path.join(config.cwd, config.output);
+  const clientFileDir = path.dirname(clientFilePath);
+  try {
+    fs.mkdirSync(clientFileDir, { recursive: true });
+    fs.writeFileSync(clientFilePath, buildResult.clientFile.content);
+  } catch (error) {
+    return {
+      success: false,
+      build: buildResult,
+      error: `Failed to write client file: ${(error as Error).message}`,
+      durationMs: Date.now() - startTime,
+    };
+  }
+
   // If dry run, return without pushing
   if (options.dryRun) {
     return {
       success: true,
       build: buildResult,
+      clientFilePath,
       durationMs: Date.now() - startTime,
     };
   }
@@ -132,6 +153,7 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
     success: true,
     build: buildResult,
     deploy: deployResult,
+    clientFilePath,
     durationMs: Date.now() - startTime,
   };
 }

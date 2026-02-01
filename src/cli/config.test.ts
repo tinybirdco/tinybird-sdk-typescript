@@ -156,9 +156,9 @@ describe("Config", () => {
       expect(() => loadConfig(tempDir)).toThrow("Could not find tinybird.json");
     });
 
-    it("loads config with schema pointing to lib/tinybird.ts", () => {
+    it("loads config with include array", () => {
       const config = {
-        schema: "lib/tinybird.ts",
+        include: ["lib/datasources.ts", "lib/pipes.ts"],
         token: "test-token",
       };
       fs.writeFileSync(
@@ -168,12 +168,12 @@ describe("Config", () => {
 
       const result = loadConfig(tempDir);
 
-      expect(result.schema).toBe("lib/tinybird.ts");
+      expect(result.include).toEqual(["lib/datasources.ts", "lib/pipes.ts"]);
       expect(result.token).toBe("test-token");
       expect(result.baseUrl).toBe("https://api.tinybird.co");
     });
 
-    it("loads config with schema pointing to src/lib/tinybird.ts", () => {
+    it("loads legacy config with schema (backward compat)", () => {
       const config = {
         schema: "src/lib/tinybird.ts",
         token: "test-token",
@@ -185,7 +185,8 @@ describe("Config", () => {
 
       const result = loadConfig(tempDir);
 
-      expect(result.schema).toBe("src/lib/tinybird.ts");
+      // Legacy schema is converted to include array
+      expect(result.include).toEqual(["src/lib/tinybird.ts"]);
     });
 
     it("loads config with custom baseUrl", () => {
@@ -237,7 +238,7 @@ describe("Config", () => {
       );
     });
 
-    it("throws error when schema field is missing", () => {
+    it("throws error when include field is missing", () => {
       const config = {
         token: "test-token",
       };
@@ -246,7 +247,7 @@ describe("Config", () => {
         JSON.stringify(config)
       );
 
-      expect(() => loadConfig(tempDir)).toThrow("Missing 'schema' field");
+      expect(() => loadConfig(tempDir)).toThrow("Missing 'include' field");
     });
 
     it("throws error when token field is missing", () => {

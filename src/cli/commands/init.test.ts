@@ -46,7 +46,7 @@ describe("Init Command", () => {
       ).toBe(true);
     });
 
-    it("creates tinybird.json with correct schema path for lib", async () => {
+    it("creates tinybird.json with correct include path for lib", async () => {
       const result = await runInit({ cwd: tempDir, skipLogin: true });
 
       expect(result.success).toBe(true);
@@ -55,10 +55,10 @@ describe("Init Command", () => {
       const config = JSON.parse(
         fs.readFileSync(path.join(tempDir, "tinybird.json"), "utf-8")
       );
-      expect(config.schema).toBe("lib/tinybird.ts");
+      expect(config.include).toEqual(["lib/tinybird.ts"]);
     });
 
-    it("creates tinybird.json with correct schema path for src/lib", async () => {
+    it("creates tinybird.json with correct include path for src/lib", async () => {
       fs.mkdirSync(path.join(tempDir, "src"));
 
       const result = await runInit({ cwd: tempDir, skipLogin: true });
@@ -68,7 +68,7 @@ describe("Init Command", () => {
       const config = JSON.parse(
         fs.readFileSync(path.join(tempDir, "tinybird.json"), "utf-8")
       );
-      expect(config.schema).toBe("src/lib/tinybird.ts");
+      expect(config.include).toEqual(["src/lib/tinybird.ts"]);
     });
   });
 
@@ -104,7 +104,7 @@ describe("Init Command", () => {
     });
 
     it("overwrites tinybird.json with force option", async () => {
-      const existingConfig = { schema: "custom.ts", token: "existing" };
+      const existingConfig = { include: ["custom.ts"], token: "existing" };
       fs.writeFileSync(
         path.join(tempDir, "tinybird.json"),
         JSON.stringify(existingConfig)
@@ -118,23 +118,24 @@ describe("Init Command", () => {
       const config = JSON.parse(
         fs.readFileSync(path.join(tempDir, "tinybird.json"), "utf-8")
       );
-      expect(config.schema).toBe("lib/tinybird.ts");
+      expect(config.include).toEqual(["lib/tinybird.ts"]);
     });
   });
 
   describe("schema file creation", () => {
-    it("creates schema file with empty project", async () => {
+    it("creates starter file with example datasource and pipe", async () => {
       await runInit({ cwd: tempDir, skipLogin: true });
 
-      const schemaContent = fs.readFileSync(
+      const starterContent = fs.readFileSync(
         path.join(tempDir, "lib", "tinybird.ts"),
         "utf-8"
       );
 
-      expect(schemaContent).toContain("import { defineProject }");
-      expect(schemaContent).toContain("export default defineProject");
-      expect(schemaContent).toContain("datasources: {}");
-      expect(schemaContent).toContain("pipes: {}");
+      // Check that it contains example definitions (not defineProject)
+      expect(starterContent).toContain("defineDatasource");
+      expect(starterContent).toContain("definePipe");
+      expect(starterContent).toContain("export const pageViews");
+      expect(starterContent).toContain("export const topPages");
     });
 
     it("skips schema file if it already exists", async () => {
@@ -157,7 +158,7 @@ describe("Init Command", () => {
       expect(content).toBe("// existing content");
     });
 
-    it("overwrites schema file with force option", async () => {
+    it("overwrites starter file with force option", async () => {
       fs.mkdirSync(path.join(tempDir, "lib"), { recursive: true });
       fs.writeFileSync(
         path.join(tempDir, "lib", "tinybird.ts"),
@@ -173,7 +174,8 @@ describe("Init Command", () => {
         path.join(tempDir, "lib", "tinybird.ts"),
         "utf-8"
       );
-      expect(content).toContain("defineProject");
+      expect(content).toContain("defineDatasource");
+      expect(content).toContain("definePipe");
     });
   });
 
