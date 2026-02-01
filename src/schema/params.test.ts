@@ -2,10 +2,27 @@ import { describe, it, expect } from 'vitest';
 import { p, isParamValidator, getParamTinybirdType, isParamRequired, getParamDefault, getParamDescription } from './params.js';
 
 describe('Parameter Validators (p.*)', () => {
-  describe('Basic types', () => {
+  describe('String types', () => {
     it('generates String parameter', () => {
       const param = p.string();
       expect(param._tinybirdType).toBe('String');
+    });
+
+    it('generates UUID parameter', () => {
+      const param = p.uuid();
+      expect(param._tinybirdType).toBe('UUID');
+    });
+  });
+
+  describe('Integer types', () => {
+    it('generates Int8 parameter', () => {
+      const param = p.int8();
+      expect(param._tinybirdType).toBe('Int8');
+    });
+
+    it('generates Int16 parameter', () => {
+      const param = p.int16();
+      expect(param._tinybirdType).toBe('Int16');
     });
 
     it('generates Int32 parameter', () => {
@@ -13,24 +30,72 @@ describe('Parameter Validators (p.*)', () => {
       expect(param._tinybirdType).toBe('Int32');
     });
 
-    it('generates DateTime parameter', () => {
-      const param = p.dateTime();
-      expect(param._tinybirdType).toBe('DateTime');
+    it('generates Int64 parameter', () => {
+      const param = p.int64();
+      expect(param._tinybirdType).toBe('Int64');
+    });
+
+    it('generates UInt8 parameter', () => {
+      const param = p.uint8();
+      expect(param._tinybirdType).toBe('UInt8');
+    });
+
+    it('generates UInt16 parameter', () => {
+      const param = p.uint16();
+      expect(param._tinybirdType).toBe('UInt16');
+    });
+
+    it('generates UInt32 parameter', () => {
+      const param = p.uint32();
+      expect(param._tinybirdType).toBe('UInt32');
+    });
+
+    it('generates UInt64 parameter', () => {
+      const param = p.uint64();
+      expect(param._tinybirdType).toBe('UInt64');
+    });
+  });
+
+  describe('Float types', () => {
+    it('generates Float32 parameter', () => {
+      const param = p.float32();
+      expect(param._tinybirdType).toBe('Float32');
     });
 
     it('generates Float64 parameter', () => {
       const param = p.float64();
       expect(param._tinybirdType).toBe('Float64');
     });
+  });
 
+  describe('Boolean type', () => {
     it('generates Boolean parameter', () => {
       const param = p.boolean();
       expect(param._tinybirdType).toBe('Boolean');
     });
+  });
 
-    it('generates UUID parameter', () => {
-      const param = p.uuid();
-      expect(param._tinybirdType).toBe('UUID');
+  describe('Date/Time types', () => {
+    it('generates Date parameter', () => {
+      const param = p.date();
+      expect(param._tinybirdType).toBe('Date');
+    });
+
+    it('generates DateTime parameter', () => {
+      const param = p.dateTime();
+      expect(param._tinybirdType).toBe('DateTime');
+    });
+
+    it('generates DateTime64 parameter', () => {
+      const param = p.dateTime64();
+      expect(param._tinybirdType).toBe('DateTime64');
+    });
+  });
+
+  describe('Special types', () => {
+    it('generates column parameter', () => {
+      const param = p.column();
+      expect(param._tinybirdType).toBe('column');
     });
   });
 

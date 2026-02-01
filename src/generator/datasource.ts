@@ -90,10 +90,10 @@ function generateColumnLine(
 
   const parts: string[] = [`    ${columnName} ${tinybirdType}`];
 
-  // Add JSON path if defined
-  if (jsonPath) {
-    parts.push(`\`json:${jsonPath}\``);
-  }
+  // Always add JSON path for Events API ingestion support
+  // Use explicit jsonPath if defined, otherwise default to $.columnName
+  const effectiveJsonPath = jsonPath ?? `$.${columnName}`;
+  parts.push(`\`json:${effectiveJsonPath}\``);
 
   // Add default value if defined
   if (modifiers.hasDefault && modifiers.defaultValue !== undefined) {

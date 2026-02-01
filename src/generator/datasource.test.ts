@@ -124,7 +124,100 @@ describe('Datasource Generator', () => {
       });
 
       const result = generateDatasource(ds);
-      expect(result.content).toContain("status String DEFAULT 'pending'");
+      expect(result.content).toContain("status String `json:$.status` DEFAULT 'pending'");
+    });
+
+    it('formats null default values', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          // Using nullable with explicit null default
+          status: t.string().nullable().default(null),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('DEFAULT NULL');
+    });
+
+    it('formats number default values', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          count: t.int32().default(42),
+          score: t.float64().default(3.14),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('count Int32 `json:$.count` DEFAULT 42');
+      expect(result.content).toContain('score Float64 `json:$.score` DEFAULT 3.14');
+    });
+
+    it('formats boolean default values', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          is_active: t.bool().default(true),
+          is_deleted: t.bool().default(false),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('is_active Bool `json:$.is_active` DEFAULT 1');
+      expect(result.content).toContain('is_deleted Bool `json:$.is_deleted` DEFAULT 0');
+    });
+
+    it('formats Date default values for DateTime type', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          created_at: t.dateTime().default(new Date('2024-01-15T10:30:00Z')),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain("created_at DateTime `json:$.created_at` DEFAULT '2024-01-15 10:30:00'");
+    });
+
+    it('formats Date default values for Date type', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          birth_date: t.date().default(new Date('2024-01-15T10:30:00Z')),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain("birth_date Date `json:$.birth_date` DEFAULT '2024-01-15'");
+    });
+
+    it('formats array default values', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          tags: t.array(t.string()).default(['a', 'b']),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('tags Array(String) `json:$.tags` DEFAULT ["a","b"]');
+    });
+
+    it('formats object default values for JSON type', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          metadata: t.json<{ key: string }>().default({ key: 'value' }),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('metadata JSON `json:$.metadata` DEFAULT {"key":"value"}');
+    });
+
+    it('escapes single quotes in string default values', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          message: t.string().default("it's working"),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain("message String `json:$.message` DEFAULT 'it\\'s working'");
     });
 
     it('includes codec', () => {
@@ -135,7 +228,7 @@ describe('Datasource Generator', () => {
       });
 
       const result = generateDatasource(ds);
-      expect(result.content).toContain('data String CODEC(LZ4)');
+      expect(result.content).toContain('data String `json:$.data` CODEC(LZ4)');
     });
 
     it('adds commas between columns except last', () => {

@@ -329,7 +329,7 @@ describe("Branch API client", () => {
       });
 
       const result = await getOrCreateBranch(config, "existing-feature");
-      expect(result).toEqual(mockBranch);
+      expect(result).toEqual({ ...mockBranch, wasCreated: false });
     });
 
     it("creates branch if not found", async () => {
@@ -370,7 +370,7 @@ describe("Branch API client", () => {
       });
 
       const result = await getOrCreateBranch(config, "new-feature");
-      expect(result).toEqual(newBranch);
+      expect(result).toEqual({ ...newBranch, wasCreated: true });
       expect(mockFetch).toHaveBeenCalledTimes(4);
     });
   });

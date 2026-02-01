@@ -47,7 +47,31 @@ export interface BuildResponse {
     id: string;
     datasources?: ResourceInfo[];
     pipes?: ResourceInfo[];
+    /** Names of pipes that were changed in this build */
+    changed_pipe_names?: string[];
+    /** Names of newly created pipes in this build */
+    new_pipe_names?: string[];
+    /** Names of pipes that were deleted in this build */
+    deleted_pipe_names?: string[];
+    /** Names of datasources that were changed in this build */
+    changed_datasource_names?: string[];
+    /** Names of newly created datasources in this build */
+    new_datasource_names?: string[];
+    /** Names of datasources that were deleted in this build */
+    deleted_datasource_names?: string[];
   };
+}
+
+/**
+ * Resource changes in a build
+ */
+export interface ResourceChanges {
+  /** Names of resources that were changed */
+  changed: string[];
+  /** Names of newly created resources */
+  created: string[];
+  /** Names of resources that were deleted */
+  deleted: string[];
 }
 
 /**
@@ -66,6 +90,14 @@ export interface BuildApiResult {
   pipeCount: number;
   /** Build ID if successful */
   buildId?: string;
+  /** Pipe changes in this build */
+  pipes?: ResourceChanges;
+  /** Datasource changes in this build */
+  datasources?: ResourceChanges;
+  /** @deprecated Use pipes.changed instead */
+  changedPipeNames?: string[];
+  /** @deprecated Use pipes.created instead */
+  newPipeNames?: string[];
 }
 
 /**
@@ -205,6 +237,19 @@ export async function buildToTinybird(
     datasourceCount: resources.datasources.length,
     pipeCount: resources.pipes.length,
     buildId: body.build?.id,
+    pipes: {
+      changed: body.build?.changed_pipe_names ?? [],
+      created: body.build?.new_pipe_names ?? [],
+      deleted: body.build?.deleted_pipe_names ?? [],
+    },
+    datasources: {
+      changed: body.build?.changed_datasource_names ?? [],
+      created: body.build?.new_datasource_names ?? [],
+      deleted: body.build?.deleted_datasource_names ?? [],
+    },
+    // Keep deprecated fields for backwards compatibility
+    changedPipeNames: body.build?.changed_pipe_names ?? [],
+    newPipeNames: body.build?.new_pipe_names ?? [],
   };
 }
 

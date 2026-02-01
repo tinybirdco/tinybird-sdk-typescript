@@ -222,16 +222,57 @@ function createCli(): Command {
               return;
             }
 
-            const { build, deploy } = result;
+            const { deploy } = result;
 
-            if (build && deploy) {
+            if (deploy) {
               if (deploy.result === "no_changes") {
                 console.log(`[${formatTime()}] No changes detected`);
               } else {
-                console.log(
-                  `[${formatTime()}] Deployed ${build.stats.datasourceCount} datasource(s), ${build.stats.pipeCount} pipe(s) in ${result.durationMs}ms`
-                );
+                console.log(`[${formatTime()}] Deployed in ${result.durationMs}ms`);
+
+                // Show datasource changes
+                if (deploy.datasources) {
+                  for (const name of deploy.datasources.created) {
+                    console.log(`  + datasource ${name} (created)`);
+                  }
+                  for (const name of deploy.datasources.changed) {
+                    console.log(`  ~ datasource ${name} (changed)`);
+                  }
+                  for (const name of deploy.datasources.deleted) {
+                    console.log(`  - datasource ${name} (deleted)`);
+                  }
+                }
+
+                // Show pipe changes
+                if (deploy.pipes) {
+                  for (const name of deploy.pipes.created) {
+                    console.log(`  + pipe ${name} (created)`);
+                  }
+                  for (const name of deploy.pipes.changed) {
+                    console.log(`  ~ pipe ${name} (changed)`);
+                  }
+                  for (const name of deploy.pipes.deleted) {
+                    console.log(`  - pipe ${name} (deleted)`);
+                  }
+                }
               }
+            }
+          },
+          onSchemaValidation: (validation) => {
+            if (validation.issues.length > 0) {
+              console.log(`[${formatTime()}] Schema validation:`);
+              for (const issue of validation.issues) {
+                if (issue.type === "error") {
+                  console.error(`  ERROR [${issue.pipeName}]: ${issue.message}`);
+                } else {
+                  console.warn(`  WARN [${issue.pipeName}]: ${issue.message}`);
+                }
+              }
+            }
+            if (validation.pipesSkipped.length > 0) {
+              console.log(
+                `[${formatTime()}] Skipped validation (require params): ${validation.pipesSkipped.join(", ")}`
+              );
             }
           },
           onError: (error) => {

@@ -18,6 +18,14 @@ export interface TinybirdBranch {
 }
 
 /**
+ * Result of getOrCreateBranch operation
+ */
+export interface GetOrCreateBranchResult extends TinybirdBranch {
+  /** Whether the branch was newly created (vs already existed) */
+  wasCreated: boolean;
+}
+
+/**
  * API configuration for branch operations
  */
 export interface BranchApiConfig {
@@ -310,14 +318,16 @@ export async function branchExists(
 export async function getOrCreateBranch(
   config: BranchApiConfig,
   name: string
-): Promise<TinybirdBranch> {
+): Promise<GetOrCreateBranchResult> {
   // First try to get the existing branch
   try {
-    return await getBranch(config, name);
+    const branch = await getBranch(config, name);
+    return { ...branch, wasCreated: false };
   } catch (error) {
     // If it's a 404, create the branch
     if (error instanceof BranchApiError && error.status === 404) {
-      return await createBranch(config, name);
+      const branch = await createBranch(config, name);
+      return { ...branch, wasCreated: true };
     }
     throw error;
   }

@@ -18,6 +18,15 @@ import { TinybirdError } from "./types.js";
 const DEFAULT_TIMEOUT = 30000;
 
 /**
+ * Resolved token info from dev mode
+ */
+interface ResolvedTokenInfo {
+  token: string;
+  isBranchToken: boolean;
+  branchName?: string;
+}
+
+/**
  * Tinybird API client
  *
  * Provides methods for querying pipe endpoints and ingesting events to datasources.
@@ -48,6 +57,8 @@ const DEFAULT_TIMEOUT = 30000;
 export class TinybirdClient {
   private readonly config: ClientConfig;
   private readonly fetchFn: typeof fetch;
+  private tokenPromise: Promise<ResolvedTokenInfo> | null = null;
+  private resolvedToken: string | null = null;
 
   constructor(config: ClientConfig) {
     // Validate required config
@@ -68,6 +79,72 @@ export class TinybirdClient {
   }
 
   /**
+   * Get the effective token, resolving branch token in dev mode if needed
+   */
+  private async getToken(): Promise<string> {
+    // If already resolved, return it
+    if (this.resolvedToken) {
+      return this.resolvedToken;
+    }
+
+    // If not in dev mode, use the configured token
+    if (!this.config.devMode) {
+      this.resolvedToken = this.config.token;
+      return this.resolvedToken;
+    }
+
+    // In dev mode, lazily resolve the branch token
+    if (!this.tokenPromise) {
+      this.tokenPromise = this.resolveBranchToken();
+    }
+
+    const resolved = await this.tokenPromise;
+    this.resolvedToken = resolved.token;
+    return this.resolvedToken;
+  }
+
+  /**
+   * Resolve the branch token in dev mode
+   */
+  private async resolveBranchToken(): Promise<ResolvedTokenInfo> {
+    try {
+      // Dynamic import to avoid circular dependencies and to keep CLI code
+      // out of the client bundle when not using dev mode
+      const { loadConfig } = await import("../cli/config.js");
+      const { getOrCreateBranch } = await import("../api/branches.js");
+
+      const config = loadConfig();
+
+      // If on main branch, use the workspace token
+      if (config.isMainBranch || !config.tinybirdBranch) {
+        return { token: this.config.token, isBranchToken: false };
+      }
+
+      const branchName = config.tinybirdBranch;
+
+      // Get or create branch (always fetch fresh to avoid stale cache issues)
+      const branch = await getOrCreateBranch(
+        { baseUrl: this.config.baseUrl, token: this.config.token },
+        branchName
+      );
+
+      if (!branch.token) {
+        // Fall back to workspace token if no branch token
+        return { token: this.config.token, isBranchToken: false };
+      }
+
+      return {
+        token: branch.token,
+        isBranchToken: true,
+        branchName,
+      };
+    } catch {
+      // If anything fails, fall back to the workspace token
+      return { token: this.config.token, isBranchToken: false };
+    }
+  }
+
+  /**
    * Query a pipe endpoint
    *
    * @param pipeName - Name of the pipe to query
@@ -80,6 +157,7 @@ export class TinybirdClient {
     params: Record<string, unknown> = {},
     options: QueryOptions = {}
   ): Promise<QueryResult<T>> {
+    const token = await this.getToken();
     const url = new URL(`/v0/pipes/${pipeName}.json`, this.config.baseUrl);
 
     // Add parameters to query string
@@ -102,7 +180,7 @@ export class TinybirdClient {
     const response = await this.fetch(url.toString(), {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${this.config.token}`,
+        Authorization: `Bearer ${token}`,
       },
       signal: this.createAbortSignal(options.timeout, options.signal),
     });
@@ -148,6 +226,7 @@ export class TinybirdClient {
       return { successful_rows: 0, quarantined_rows: 0 };
     }
 
+    const token = await this.getToken();
     const url = new URL("/v0/events", this.config.baseUrl);
     url.searchParams.set("name", datasourceName);
 
@@ -163,7 +242,7 @@ export class TinybirdClient {
     const response = await this.fetch(url.toString(), {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${this.config.token}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/x-ndjson",
       },
       body: ndjson,
@@ -189,12 +268,13 @@ export class TinybirdClient {
     sql: string,
     options: QueryOptions = {}
   ): Promise<QueryResult<T>> {
+    const token = await this.getToken();
     const url = new URL("/v0/sql", this.config.baseUrl);
 
     const response = await this.fetch(url.toString(), {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${this.config.token}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "text/plain",
       },
       body: sql,
@@ -283,11 +363,20 @@ export class TinybirdClient {
    */
   private async handleErrorResponse(response: Response): Promise<never> {
     let errorResponse: TinybirdErrorResponse | undefined;
+    let rawBody: string | undefined;
 
     try {
-      errorResponse = (await response.json()) as TinybirdErrorResponse;
+      rawBody = await response.text();
+      errorResponse = JSON.parse(rawBody) as TinybirdErrorResponse;
     } catch {
-      // Failed to parse error response
+      // Failed to parse error response - include raw body in message
+      if (rawBody) {
+        throw new TinybirdError(
+          `Request failed with status ${response.status}: ${rawBody}`,
+          response.status,
+          undefined
+        );
+      }
     }
 
     const message =

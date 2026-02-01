@@ -43,7 +43,10 @@ export const pageViewsOverTime = definePipe("page_views_over_time", {
   params: {
     start_date: p.dateTime().describe("Start of date range"),
     end_date: p.dateTime().describe("End of date range"),
-    granularity: p.string().optional("hour").describe("Time granularity (hour, day, week)"),
+    granularity: p
+      .string()
+      .optional("hour")
+      .describe("Time granularity (hour, day, week)"),
   },
   nodes: [
     node({
@@ -83,7 +86,7 @@ export const topEvents = definePipe("top_events", {
   params: {
     start_date: p.dateTime().describe("Start of date range"),
     end_date: p.dateTime().describe("End of date range"),
-    limit: p.int32().optional(10).describe("Number of results"),
+    limit: p.int32().optional(5).describe("Number of results"),
   },
   nodes: [
     node({
@@ -98,7 +101,7 @@ export const topEvents = definePipe("top_events", {
           AND timestamp <= {{DateTime(end_date)}}
         GROUP BY event_name
         ORDER BY event_count DESC
-        LIMIT {{Int32(limit, 10)}}
+        LIMIT {{Int32(limit, 5)}}
       `,
     }),
   ],

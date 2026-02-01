@@ -1,30 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { tinybird, type PageViewRow, type EventRow } from "@/tinybird/client";
+import { tinybird, type PageViewsRow, type EventsRow } from "@/tinybird/schema";
 
 interface TrackRequest {
   type: "pageview" | "event";
-  data: PageViewRow | EventRow;
+  data: PageViewsRow | EventsRow;
 }
 
 export async function POST(request: NextRequest) {
-  // Check if token is configured
-  if (!process.env.TINYBIRD_TOKEN) {
-    return NextResponse.json(
-      { error: "TINYBIRD_TOKEN not configured" },
-      { status: 500 }
-    );
-  }
-
   try {
     const body = (await request.json()) as TrackRequest;
 
     if (body.type === "pageview") {
-      // Type-safe ingestion
-      await tinybird.ingest.pageView(body.data as PageViewRow);
+      await tinybird.ingest.pageViews(body.data as PageViewsRow);
       return NextResponse.json({ success: true, type: "pageview" });
     } else if (body.type === "event") {
-      // Type-safe ingestion
-      await tinybird.ingest.event(body.data as EventRow);
+      await tinybird.ingest.events(body.data as EventsRow);
       return NextResponse.json({ success: true, type: "event" });
     } else {
       return NextResponse.json(

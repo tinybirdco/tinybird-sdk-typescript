@@ -24,6 +24,8 @@ export interface GeneratedResources {
 export interface BuildResult {
   /** The generated resources */
   resources: GeneratedResources;
+  /** The loaded project definition (for validation) */
+  project: ProjectDefinition;
   /** Path to the schema file */
   schemaPath: string;
   /** Directory containing the schema */
@@ -99,6 +101,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
 
   return {
     resources,
+    project: loaded.project,
     schemaPath: loaded.schemaPath,
     schemaDir: loaded.schemaDir,
     stats: {
