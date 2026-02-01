@@ -17,7 +17,7 @@ import { saveTinybirdToken } from "../env.js";
 /**
  * Default starter content for datasources.ts
  */
-const DATASOURCES_CONTENT = `import { defineDatasource, t, engine, type InferRow } from "@tinybird/sdk";
+const DATASOURCES_CONTENT = `import { defineDatasource, t, engine, type InferRow } from "@tinybirdco/sdk";
 
 /**
  * Page views datasource - tracks page view events
@@ -42,7 +42,7 @@ export type PageViewsRow = InferRow<typeof pageViews>;
 /**
  * Default starter content for pipes.ts
  */
-const PIPES_CONTENT = `import { defineEndpoint, node, t, p, type InferParams, type InferOutputRow } from "@tinybird/sdk";
+const PIPES_CONTENT = `import { defineEndpoint, node, t, p, type InferParams, type InferOutputRow } from "@tinybirdco/sdk";
 
 /**
  * Top pages endpoint - get the most visited pages
@@ -91,7 +91,7 @@ const CLIENT_CONTENT = `/**
  * Add your datasources and pipes here as you create them.
  */
 
-import { createTinybirdClient } from "@tinybird/sdk";
+import { createTinybirdClient } from "@tinybirdco/sdk";
 
 // Import datasources and their row types
 import { pageViews, type PageViewsRow } from "./datasources";

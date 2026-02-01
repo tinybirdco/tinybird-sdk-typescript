@@ -119,7 +119,7 @@ function createValidator<TType, TTinybirdType extends string>(
  *
  * @example
  * ```ts
- * import { t } from '@tinybird/sdk';
+ * import { t } from '@tinybirdco/sdk';
  *
  * const schema = {
  *   id: t.string(),

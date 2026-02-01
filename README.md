@@ -1,4 +1,4 @@
-# @tinybird/sdk
+# @tinybirdco/sdk
 
 > **Note:** This package is experimental. APIs may change between versions.
 
@@ -7,7 +7,7 @@ A TypeScript SDK for defining Tinybird resources with full type inference. Defin
 ## Installation
 
 ```bash
-npm install @tinybird/sdk
+npm install @tinybirdco/sdk
 ```
 
 ## Quick Start
@@ -36,7 +36,7 @@ TINYBIRD_TOKEN=p.your_token_here
 
 ```typescript
 // src/tinybird/datasources.ts
-import { defineDatasource, t, engine, type InferRow } from "@tinybird/sdk";
+import { defineDatasource, t, engine, type InferRow } from "@tinybirdco/sdk";
 
 export const pageViews = defineDatasource("page_views", {
   description: "Page view tracking data",
@@ -59,7 +59,7 @@ export type PageViewsRow = InferRow<typeof pageViews>;
 
 ```typescript
 // src/tinybird/pipes.ts
-import { defineEndpoint, node, t, p, type InferParams, type InferOutputRow } from "@tinybird/sdk";
+import { defineEndpoint, node, t, p, type InferParams, type InferOutputRow } from "@tinybirdco/sdk";
 
 export const topPages = defineEndpoint("top_pages", {
   description: "Get the most visited pages",
@@ -97,7 +97,7 @@ export type TopPagesOutput = InferOutputRow<typeof topPages>;
 
 ```typescript
 // src/tinybird/client.ts
-import { createTinybirdClient } from "@tinybird/sdk";
+import { createTinybirdClient } from "@tinybirdco/sdk";
 import { pageViews, type PageViewsRow } from "./datasources";
 import { topPages, type TopPagesParams, type TopPagesOutput } from "./pipes";
 
@@ -208,7 +208,7 @@ Create a `tinybird.json` in your project root:
 ### Datasources
 
 ```typescript
-import { defineDatasource, t, engine, type InferRow } from "@tinybird/sdk";
+import { defineDatasource, t, engine, type InferRow } from "@tinybirdco/sdk";
 
 export const events = defineDatasource("events", {
   description: "Event tracking data",
@@ -231,7 +231,7 @@ export type EventsRow = InferRow<typeof events>;
 ### Endpoints (API pipes)
 
 ```typescript
-import { defineEndpoint, node, t, p, type InferParams, type InferOutputRow } from "@tinybird/sdk";
+import { defineEndpoint, node, t, p, type InferParams, type InferOutputRow } from "@tinybirdco/sdk";
 
 export const topEvents = defineEndpoint("top_events", {
   description: "Get the most frequent events",
@@ -267,7 +267,7 @@ export type TopEventsOutput = InferOutputRow<typeof topEvents>;
 ### Internal Pipes (not exposed as API)
 
 ```typescript
-import { definePipe, node } from "@tinybird/sdk";
+import { definePipe, node } from "@tinybirdco/sdk";
 
 export const filteredEvents = definePipe("filtered_events", {
   description: "Filter events by date range",
@@ -291,7 +291,7 @@ export const filteredEvents = definePipe("filtered_events", {
 ### Materialized Views
 
 ```typescript
-import { defineDatasource, defineMaterializedView, t, engine } from "@tinybird/sdk";
+import { defineDatasource, defineMaterializedView, t, engine } from "@tinybirdco/sdk";
 
 // Target datasource for the materialized view
 export const dailyStats = defineDatasource("daily_stats", {
@@ -331,7 +331,7 @@ export const dailyStatsMv = defineMaterializedView("daily_stats_mv", {
 ### Copy Pipes
 
 ```typescript
-import { defineCopyPipe, node } from "@tinybird/sdk";
+import { defineCopyPipe, node } from "@tinybirdco/sdk";
 
 // Scheduled copy pipe
 export const dailySnapshot = defineCopyPipe("daily_snapshot", {
@@ -372,7 +372,7 @@ export const manualReport = defineCopyPipe("manual_report", {
 Use `t.*` to define column types with full TypeScript inference:
 
 ```typescript
-import { t } from "@tinybird/sdk";
+import { t } from "@tinybirdco/sdk";
 
 const schema = {
   // Strings
@@ -414,7 +414,7 @@ const schema = {
 Use `p.*` to define pipe query parameters:
 
 ```typescript
-import { p } from "@tinybird/sdk";
+import { p } from "@tinybirdco/sdk";
 
 const params = {
   // Required parameters
@@ -433,7 +433,7 @@ const params = {
 ## Engine Configurations
 
 ```typescript
-import { engine } from "@tinybird/sdk";
+import { engine } from "@tinybirdco/sdk";
 
 // MergeTree (default)
 engine.mergeTree({
@@ -497,7 +497,7 @@ Now `npm run dev` starts both Next.js and Tinybird sync together.
 The SDK provides full type inference for your schemas:
 
 ```typescript
-import { type InferRow, type InferParams, type InferOutputRow } from "@tinybird/sdk";
+import { type InferRow, type InferParams, type InferOutputRow } from "@tinybirdco/sdk";
 import { pageViews, topPages } from "./tinybird/datasources";
 
 // Infer the row type for a datasource

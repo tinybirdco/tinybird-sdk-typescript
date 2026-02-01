@@ -12,7 +12,7 @@ import type { PipeDefinition, ParamsDefinition, OutputDefinition } from "../sche
  *
  * @example
  * ```ts
- * import { t, Infer } from '@tinybird/sdk';
+ * import { t, Infer } from '@tinybirdco/sdk';
  *
  * const myType = t.string();
  * type MyType = Infer<typeof myType>; // string
@@ -41,7 +41,7 @@ type InferColumn<T> = T extends TypeValidator<infer U, string, TypeModifiers>
  *
  * @example
  * ```ts
- * import { defineDatasource, t, InferRow } from '@tinybird/sdk';
+ * import { defineDatasource, t, InferRow } from '@tinybirdco/sdk';
  *
  * const events = defineDatasource('events', {
  *   schema: {
@@ -87,7 +87,7 @@ type OptionalParamKeys<T extends ParamsDefinition> = {
  *
  * @example
  * ```ts
- * import { definePipe, p, InferParams } from '@tinybird/sdk';
+ * import { definePipe, p, InferParams } from '@tinybirdco/sdk';
  *
  * const myPipe = definePipe('my_pipe', {
  *   params: {
@@ -115,7 +115,7 @@ export type InferParams<T> = T extends PipeDefinition<infer P, OutputDefinition>
  *
  * @example
  * ```ts
- * import { definePipe, t, InferOutput } from '@tinybird/sdk';
+ * import { definePipe, t, InferOutput } from '@tinybirdco/sdk';
  *
  * const myPipe = definePipe('my_pipe', {
  *   params: {},
@@ -146,7 +146,7 @@ export type InferOutputRow<T> = T extends PipeDefinition<ParamsDefinition, infer
  *
  * @example
  * ```ts
- * import { defineDatasource, t, InferEvent } from '@tinybird/sdk';
+ * import { defineDatasource, t, InferEvent } from '@tinybirdco/sdk';
  *
  * const events = defineDatasource('events', {
  *   schema: {
@@ -195,7 +195,7 @@ export type InferTinybirdTypes<T extends SchemaDefinition> = {
  *
  * @example
  * ```ts
- * import { definePipe, defineDatasource, t, engine, InferMaterializedTarget } from '@tinybird/sdk';
+ * import { definePipe, defineDatasource, t, engine, InferMaterializedTarget } from '@tinybirdco/sdk';
  *
  * const salesByHour = defineDatasource('sales_by_hour', {
  *   schema: { day: t.date(), total: t.uint64() },

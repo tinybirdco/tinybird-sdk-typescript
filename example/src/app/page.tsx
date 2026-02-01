@@ -88,7 +88,7 @@ export default function Home() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900 p-8">
       <main className="max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold text-zinc-900 dark:text-white mb-2">
-          @tinybird/sdk Demo
+          @tinybirdco/sdk Demo
         </h1>
         <p className="text-zinc-600 dark:text-zinc-400 mb-8">
           Real-time analytics powered by the Tinybird TypeScript SDK.

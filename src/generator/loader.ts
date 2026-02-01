@@ -80,8 +80,8 @@ export async function loadSchema(options: LoaderOptions): Promise<LoadedSchema> 
       platform: "node",
       format: "esm",
       target: "node18",
-      // Mark @tinybird/sdk as external - it should already be installed
-      external: ["@tinybird/sdk"],
+      // Mark @tinybirdco/sdk as external - it should already be installed
+      external: ["@tinybirdco/sdk"],
       // Enable source maps for better error messages
       sourcemap: "inline",
       // Minify is off for debugging
@@ -226,8 +226,8 @@ export async function loadEntities(options: LoadEntitiesOptions): Promise<Loaded
         platform: "node",
         format: "esm",
         target: "node18",
-        // Mark @tinybird/sdk as external - it should already be installed
-        external: ["@tinybird/sdk"],
+        // Mark @tinybirdco/sdk as external - it should already be installed
+        external: ["@tinybirdco/sdk"],
         // Enable source maps for better error messages
         sourcemap: "inline",
         minify: false,

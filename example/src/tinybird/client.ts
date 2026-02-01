@@ -10,7 +10,7 @@ import {
   type InferRow,
   type InferParams,
   type InferOutputRow,
-} from "@tinybird/sdk";
+} from "@tinybirdco/sdk";
 
 // Import datasources
 import { pageViews, events } from "./datasources";

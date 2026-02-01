@@ -4,7 +4,7 @@ import {
   node,
   t,
   engine,
-} from "@tinybird/sdk";
+} from "@tinybirdco/sdk";
 
 /**
  * Daily stats snapshot - target datasource for copy pipe

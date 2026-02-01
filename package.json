@@ -1,5 +1,5 @@
 {
-  "name": "@tinybird/sdk",
+  "name": "@tinybirdco/sdk",
   "version": "0.0.1",
   "description": "TypeScript SDK for Tinybird Forward - define datasources and pipes as TypeScript",
   "type": "module",
