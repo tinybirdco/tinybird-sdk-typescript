@@ -35,26 +35,24 @@ export interface KafkaConnectionOptions {
 }
 
 /**
- * A connection definition with full type information
+ * Kafka-specific connection definition
  */
-export interface ConnectionDefinition<TType extends string = string> {
+export interface KafkaConnectionDefinition {
   readonly [CONNECTION_BRAND]: true;
   /** Connection name */
   readonly _name: string;
   /** Type marker for inference */
   readonly _type: "connection";
-  /** Connection type (e.g., 'kafka') */
-  readonly _connectionType: TType;
-  /** Full options */
-  readonly options: Record<string, unknown>;
+  /** Connection type */
+  readonly _connectionType: "kafka";
+  /** Kafka options */
+  readonly options: KafkaConnectionOptions;
 }
 
 /**
- * Kafka-specific connection definition
+ * A connection definition - union of all connection types
  */
-export type KafkaConnectionDefinition = ConnectionDefinition<"kafka"> & {
-  readonly options: KafkaConnectionOptions;
-};
+export type ConnectionDefinition = KafkaConnectionDefinition;
 
 /**
  * Create a Kafka connection

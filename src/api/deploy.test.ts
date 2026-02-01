@@ -31,6 +31,7 @@ describe("Deploy API", () => {
     pipes: [
       { name: "top_events", content: "NODE main\nSQL > SELECT * FROM events" },
     ],
+    connections: [],
   };
 
   describe("deployToMain", () => {
