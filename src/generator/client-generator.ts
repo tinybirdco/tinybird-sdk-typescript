@@ -39,6 +39,9 @@ function toRelativeImport(fromPath: string, toPath: string): string {
   // Get relative path from output dir to source file
   let relativePath = path.relative(fromDir, toPath);
 
+  // Normalize Windows separators to forward slashes for TS imports
+  relativePath = relativePath.replace(/\\/g, "/");
+
   // Remove .ts extension
   relativePath = relativePath.replace(/\.tsx?$/, "");
 
@@ -76,7 +79,7 @@ function toPascalCase(str: string): string {
  */
 export function generateClientFile(options: GenerateClientOptions): GeneratedClient {
   const { entities, outputPath, cwd } = options;
-  const absolutePath = path.join(cwd, outputPath);
+  const absolutePath = path.isAbsolute(outputPath) ? outputPath : path.join(cwd, outputPath);
 
   // Group entities by source file for imports
   const importsByFile = new Map<string, { datasources: string[]; pipes: string[] }>();
@@ -114,7 +117,9 @@ export function generateClientFile(options: GenerateClientOptions): GeneratedCli
     const allExports = [...datasources, ...pipes];
     if (allExports.length === 0) continue;
 
-    const relativePath = toRelativeImport(outputPath, sourceFile);
+    // Resolve to absolute paths for correct relative path calculation
+    const sourceAbsolute = path.isAbsolute(sourceFile) ? sourceFile : path.join(cwd, sourceFile);
+    const relativePath = toRelativeImport(absolutePath, sourceAbsolute);
     importLines.push(`import { ${allExports.join(", ")} } from "${relativePath}";`);
     reexportLines.push(`export { ${allExports.join(", ")} } from "${relativePath}";`);
   }
