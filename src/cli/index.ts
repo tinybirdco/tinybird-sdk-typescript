@@ -416,6 +416,21 @@ function createCli(): Command {
 
   program.addCommand(branchCommand);
 
+  // MCP command
+  program
+    .command("mcp")
+    .description("Start the Tinybird DevTools MCP server (stdio transport)")
+    .action(async () => {
+      const { createMcpServer } = await import("../mcp/server.js");
+      const { StdioServerTransport } = await import(
+        "@modelcontextprotocol/sdk/server/stdio.js"
+      );
+
+      const server = createMcpServer();
+      const transport = new StdioServerTransport();
+      await server.connect(transport);
+    });
+
   return program;
 }
 
