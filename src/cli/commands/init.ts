@@ -267,6 +267,36 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     }
   }
 
+  // Add scripts to package.json if it exists
+  const packageJsonPath = path.join(cwd, "package.json");
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+      let modified = false;
+
+      if (!packageJson.scripts) {
+        packageJson.scripts = {};
+      }
+
+      if (!packageJson.scripts["tinybird:dev"]) {
+        packageJson.scripts["tinybird:dev"] = "tinybird dev";
+        modified = true;
+      }
+
+      if (!packageJson.scripts["tinybird:build"]) {
+        packageJson.scripts["tinybird:build"] = "tinybird build";
+        modified = true;
+      }
+
+      if (modified) {
+        fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n");
+        created.push("package.json (added tinybird scripts)");
+      }
+    } catch {
+      // Silently ignore package.json errors - not critical
+    }
+  }
+
   // Check if login is needed
   if (!skipLogin && !hasValidToken(cwd)) {
     console.log("\nNo authentication found. Starting login flow...\n");

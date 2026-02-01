@@ -4,6 +4,12 @@
  * Commands for building and deploying Tinybird projects
  */
 
+import { config } from "dotenv";
+
+// Load .env files in priority order (later files don't override earlier ones)
+config({ path: ".env.local" });
+config({ path: ".env" });
+
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
