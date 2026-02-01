@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { TopEventsOutput, EventsRow } from "@tinybird/client";
 
 // Color mapping for different events
@@ -12,9 +12,16 @@ const eventColors: Record<string, string> = {
 export default function Home() {
   const [topEvents, setTopEvents] = useState<TopEventsOutput[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Click streak state
+  const [signupStreak, setSignupStreak] = useState(0);
+  const [purchaseStreak, setPurchaseStreak] = useState(0);
+  const signupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const purchaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchAnalytics = useCallback(async () => {
+    setIsRefreshing(true);
     try {
       const res = await fetch("/api/analytics");
       const data = await res.json();
@@ -23,18 +30,17 @@ export default function Home() {
       } else {
         setTopEvents(data.topEvents);
         setError(null);
-        setLastUpdated(new Date());
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setIsRefreshing(false);
     }
   }, []);
 
-  // Poll every second
+  // Initial fetch
   useEffect(() => {
     fetchAnalytics();
-    const interval = setInterval(fetchAnalytics, 1000);
-    return () => clearInterval(interval);
   }, [fetchAnalytics]);
 
   const trackEvent = async (eventName: string) => {
@@ -47,6 +53,25 @@ export default function Home() {
         page: window.location.pathname,
       }),
     };
+
+    // Update streak
+    if (eventName === "signup") {
+      if (signupTimeoutRef.current) {
+        clearTimeout(signupTimeoutRef.current);
+      }
+      setSignupStreak((prev) => prev + 1);
+      signupTimeoutRef.current = setTimeout(() => {
+        setSignupStreak(0);
+      }, 1500);
+    } else if (eventName === "purchase") {
+      if (purchaseTimeoutRef.current) {
+        clearTimeout(purchaseTimeoutRef.current);
+      }
+      setPurchaseStreak((prev) => prev + 1);
+      purchaseTimeoutRef.current = setTimeout(() => {
+        setPurchaseStreak(0);
+      }, 1500);
+    }
 
     try {
       await fetch("/api/track", {
@@ -65,28 +90,33 @@ export default function Home() {
         <h1 className="text-3xl font-bold text-zinc-900 dark:text-white mb-2">
           @tinybird/sdk Demo
         </h1>
-        <p className="text-zinc-600 dark:text-zinc-400 mb-2">
+        <p className="text-zinc-600 dark:text-zinc-400 mb-8">
           Real-time analytics powered by the Tinybird TypeScript SDK.
         </p>
-        {lastUpdated && (
-          <p className="text-zinc-400 text-sm mb-8">
-            Last updated: {lastUpdated.toLocaleTimeString()}
-          </p>
-        )}
 
         {/* Actions */}
         <div className="flex flex-wrap gap-4 mb-8">
           <button
             onClick={() => trackEvent("signup")}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+            className="relative px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-transform active:scale-95"
           >
             Track Signup
+            {signupStreak > 0 && (
+              <span className="absolute -top-2 -right-2 bg-green-800 text-white text-xs font-bold px-2 py-1 rounded-full animate-bounce">
+                +{signupStreak}
+              </span>
+            )}
           </button>
           <button
             onClick={() => trackEvent("purchase")}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            className="relative px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-transform active:scale-95"
           >
             Track Purchase
+            {purchaseStreak > 0 && (
+              <span className="absolute -top-2 -right-2 bg-blue-800 text-white text-xs font-bold px-2 py-1 rounded-full animate-bounce">
+                +{purchaseStreak}
+              </span>
+            )}
           </button>
         </div>
 
@@ -98,9 +128,31 @@ export default function Home() {
 
         {/* Top Events Chart */}
         <div className="bg-white dark:bg-zinc-800 rounded-xl p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-zinc-900 dark:text-white mb-4">
-            Events
-          </h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-zinc-900 dark:text-white">
+              Events
+            </h2>
+            <button
+              onClick={fetchAnalytics}
+              disabled={isRefreshing}
+              className="p-2 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-lg transition-colors disabled:opacity-50"
+              title="Refresh"
+            >
+              <svg
+                className={`w-5 h-5 ${isRefreshing ? "animate-spin" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </button>
+          </div>
           {topEvents.length === 0 ? (
             <p className="text-zinc-500">
               No data yet. Click a button above to track an event.
