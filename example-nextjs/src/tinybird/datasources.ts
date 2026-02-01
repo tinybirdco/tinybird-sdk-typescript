@@ -39,3 +39,21 @@ export const events = defineDatasource("events", {
     partitionKey: "toYYYYMM(timestamp)",
   }),
 });
+
+/**
+ * Daily page stats - target datasource for materialized view
+ * Pre-aggregates page view counts by day and pathname for fast queries
+ */
+export const dailyPageStats = defineDatasource("daily_page_stats", {
+  description: "Pre-aggregated daily page view statistics",
+  schema: {
+    date: t.date(),
+    pathname: t.string(),
+    views: t.simpleAggregateFunction("sum", t.uint64()),
+    unique_sessions: t.simpleAggregateFunction("uniq", t.uint64()),
+  },
+  engine: engine.aggregatingMergeTree({
+    sortingKey: ["date", "pathname"],
+    partitionKey: "toYYYYMM(date)",
+  }),
+});

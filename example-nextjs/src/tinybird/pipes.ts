@@ -1,4 +1,5 @@
-import { definePipe, node, p, t } from "@tinybird/sdk";
+import { definePipe, defineMaterializedView, node, p, t } from "@tinybird/sdk";
+import { dailyPageStats } from "./datasources.js";
 
 /**
  * Top pages pipe - get most visited pages
@@ -72,6 +73,68 @@ export const pageViewsOverTime = definePipe("page_views_over_time", {
   ],
   output: {
     time_bucket: t.dateTime(),
+    views: t.uint64(),
+    unique_sessions: t.uint64(),
+  },
+  endpoint: true,
+});
+
+/**
+ * Materialized view that pre-aggregates daily page stats
+ * Data flows: page_views -> daily_page_stats_mv -> daily_page_stats
+ */
+export const dailyPageStatsMv = defineMaterializedView("daily_page_stats_mv", {
+  description: "Materialize daily page view aggregations",
+  target_datasource: dailyPageStats,
+  nodes: [
+    node({
+      name: "aggregate",
+      sql: `
+        SELECT
+          toDate(timestamp) AS date,
+          pathname,
+          count() AS views,
+          uniqState(session_id) AS unique_sessions
+        FROM page_views
+        GROUP BY date, pathname
+      `,
+    }),
+  ],
+});
+
+/**
+ * Query the pre-aggregated daily stats (fast!)
+ */
+export const dailyStats = definePipe("daily_stats", {
+  description: "Get daily page stats from materialized view",
+  params: {
+    start_date: p.date().describe("Start date"),
+    end_date: p.date().describe("End date"),
+    pathname: p.string().optional().describe("Filter by pathname"),
+  },
+  nodes: [
+    node({
+      name: "query",
+      sql: `
+        SELECT
+          date,
+          pathname,
+          sum(views) AS views,
+          uniqMerge(unique_sessions) AS unique_sessions
+        FROM daily_page_stats
+        WHERE date >= {{Date(start_date)}}
+          AND date <= {{Date(end_date)}}
+          {% if defined(pathname) %}
+          AND pathname = {{String(pathname)}}
+          {% end %}
+        GROUP BY date, pathname
+        ORDER BY date DESC, views DESC
+      `,
+    }),
+  ],
+  output: {
+    date: t.date(),
+    pathname: t.string(),
     views: t.uint64(),
     unique_sessions: t.uint64(),
   },
