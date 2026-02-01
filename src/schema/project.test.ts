@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   defineProject,
   isProjectDefinition,
@@ -10,7 +10,6 @@ import {
 import { defineDatasource } from "./datasource.js";
 import { definePipe, node } from "./pipe.js";
 import { t } from "./types.js";
-import { p } from "./params.js";
 
 describe("Project Schema", () => {
   describe("defineProject", () => {
@@ -112,7 +111,9 @@ describe("Project Schema", () => {
         pipes: { internalPipe },
       });
 
-      await expect(project.tinybird.query.internalPipe()).rejects.toThrow(
+      // Cast to any since the type system expects params but stub throws regardless
+      const queryFn = project.tinybird.query.internalPipe as () => Promise<unknown>;
+      await expect(queryFn()).rejects.toThrow(
         'Pipe "internalPipe" is not exposed as an endpoint'
       );
     });
