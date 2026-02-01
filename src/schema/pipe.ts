@@ -442,7 +442,7 @@ export function definePipe<
   if (typeCount > 1) {
     throw new Error(
       `Pipe "${name}" can only have one of: endpoint, materialized, or copy configuration. ` +
-        `A pipe must be exactly one type.`
+        `A pipe must be at most one type.`
     );
   }
 
