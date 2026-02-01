@@ -228,6 +228,78 @@ describe("Init Command", () => {
     });
   });
 
+  describe("package.json scripts", () => {
+    it("adds tinybird:dev and tinybird:build scripts to existing package.json", async () => {
+      const packageJson = { name: "test-project", scripts: { dev: "next dev" } };
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify(packageJson, null, 2)
+      );
+
+      const result = await runInit({ cwd: tempDir, skipLogin: true });
+
+      expect(result.success).toBe(true);
+      expect(result.created).toContain("package.json (added tinybird scripts)");
+
+      const updatedPackageJson = JSON.parse(
+        fs.readFileSync(path.join(tempDir, "package.json"), "utf-8")
+      );
+      expect(updatedPackageJson.scripts["tinybird:dev"]).toBe("tinybird dev");
+      expect(updatedPackageJson.scripts["tinybird:build"]).toBe("tinybird build");
+      expect(updatedPackageJson.scripts.dev).toBe("next dev"); // preserved
+    });
+
+    it("does not overwrite existing tinybird scripts", async () => {
+      const packageJson = {
+        name: "test-project",
+        scripts: {
+          "tinybird:dev": "custom dev command",
+          "tinybird:build": "custom build command",
+        },
+      };
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify(packageJson, null, 2)
+      );
+
+      const result = await runInit({ cwd: tempDir, skipLogin: true });
+
+      expect(result.success).toBe(true);
+      expect(result.created).not.toContain("package.json (added tinybird scripts)");
+
+      const updatedPackageJson = JSON.parse(
+        fs.readFileSync(path.join(tempDir, "package.json"), "utf-8")
+      );
+      expect(updatedPackageJson.scripts["tinybird:dev"]).toBe("custom dev command");
+      expect(updatedPackageJson.scripts["tinybird:build"]).toBe("custom build command");
+    });
+
+    it("creates scripts object if package.json has no scripts", async () => {
+      const packageJson = { name: "test-project" };
+      fs.writeFileSync(
+        path.join(tempDir, "package.json"),
+        JSON.stringify(packageJson, null, 2)
+      );
+
+      const result = await runInit({ cwd: tempDir, skipLogin: true });
+
+      expect(result.success).toBe(true);
+
+      const updatedPackageJson = JSON.parse(
+        fs.readFileSync(path.join(tempDir, "package.json"), "utf-8")
+      );
+      expect(updatedPackageJson.scripts["tinybird:dev"]).toBe("tinybird dev");
+      expect(updatedPackageJson.scripts["tinybird:build"]).toBe("tinybird build");
+    });
+
+    it("does not fail if no package.json exists", async () => {
+      const result = await runInit({ cwd: tempDir, skipLogin: true });
+
+      expect(result.success).toBe(true);
+      expect(result.created).not.toContain("package.json (added tinybird scripts)");
+    });
+  });
+
   describe("directory creation", () => {
     it("creates tinybird directory if it does not exist", async () => {
       expect(fs.existsSync(path.join(tempDir, "tinybird"))).toBe(false);
