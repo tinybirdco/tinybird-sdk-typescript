@@ -33,7 +33,7 @@ interface ResolvedTokenInfo {
  *
  * @example
  * ```ts
- * import { TinybirdClient } from '@tinybird/sdk';
+ * import { TinybirdClient } from '@tinybirdco/sdk';
  *
  * const client = new TinybirdClient({
  *   baseUrl: 'https://api.tinybird.co',
@@ -401,7 +401,7 @@ export class TinybirdClient {
  *
  * @example
  * ```ts
- * import { createClient } from '@tinybird/sdk';
+ * import { createClient } from '@tinybirdco/sdk';
  *
  * const client = createClient({
  *   baseUrl: process.env.TINYBIRD_URL,

@@ -1,4 +1,4 @@
-import { definePipe, node, p } from "@tinybird/sdk";
+import { definePipe, node, p } from "@tinybirdco/sdk";
 
 /**
  * Reusable pipe - filter page views by date range

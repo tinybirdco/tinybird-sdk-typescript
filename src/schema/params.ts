@@ -113,7 +113,7 @@ function createParamValidator<
  *
  * @example
  * ```ts
- * import { p } from '@tinybird/sdk';
+ * import { p } from '@tinybirdco/sdk';
  *
  * const params = {
  *   user_id: p.string(),

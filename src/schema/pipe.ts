@@ -59,7 +59,7 @@ export interface NodeDefinition {
  *
  * @example
  * ```ts
- * import { node } from '@tinybird/sdk';
+ * import { node } from '@tinybirdco/sdk';
  *
  * const filteredNode = node({
  *   name: 'filtered',
@@ -272,7 +272,7 @@ export interface PipeDefinition<
  *
  * @example
  * ```ts
- * import { definePipe, node, p, t } from '@tinybird/sdk';
+ * import { definePipe, node, p, t } from '@tinybirdco/sdk';
  *
  * export const topEvents = definePipe('top_events', {
  *   description: 'Get top events by count',
@@ -513,7 +513,7 @@ type DatasourceSchemaToOutput<TSchema extends SchemaDefinition> = {
  *
  * @example
  * ```ts
- * import { defineDatasource, defineMaterializedView, node, t, engine } from '@tinybird/sdk';
+ * import { defineDatasource, defineMaterializedView, node, t, engine } from '@tinybirdco/sdk';
  *
  * // Target datasource for aggregated data
  * const salesByHour = defineDatasource('sales_by_hour', {
@@ -587,7 +587,7 @@ export function defineMaterializedView<
  *
  * @example
  * ```ts
- * import { defineEndpoint, node, p, t } from '@tinybird/sdk';
+ * import { defineEndpoint, node, p, t } from '@tinybirdco/sdk';
  *
  * export const topEvents = defineEndpoint('top_events', {
  *   description: 'Get top events by count',
@@ -651,7 +651,7 @@ export function defineEndpoint<
  *
  * @example
  * ```ts
- * import { defineCopyPipe, defineDatasource, node, t, engine } from '@tinybird/sdk';
+ * import { defineCopyPipe, defineDatasource, node, t, engine } from '@tinybirdco/sdk';
  *
  * // Target datasource for daily snapshots
  * const dailySalesSnapshot = defineDatasource('daily_sales_snapshot', {

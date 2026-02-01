@@ -1,4 +1,4 @@
-import { defineDatasource, t, engine } from "@tinybird/sdk";
+import { defineDatasource, t, engine } from "@tinybirdco/sdk";
 
 /**
  * Page views datasource - tracks page view events

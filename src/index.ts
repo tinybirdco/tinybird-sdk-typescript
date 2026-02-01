@@ -1,5 +1,5 @@
 /**
- * @tinybird/sdk - TypeScript SDK for Tinybird Forward
+ * @tinybirdco/sdk - TypeScript SDK for Tinybird Forward
  *
  * Define datasources and pipes as TypeScript with full type safety.
  *
@@ -14,7 +14,7 @@
  *   p,
  *   engine,
  *   createClient,
- * } from '@tinybird/sdk';
+ * } from '@tinybirdco/sdk';
  *
  * // Define a datasource
  * const events = defineDatasource('events', {

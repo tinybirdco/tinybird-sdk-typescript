@@ -4,7 +4,7 @@ import {
   node,
   t,
   engine,
-} from "@tinybird/sdk";
+} from "@tinybirdco/sdk";
 
 /**
  * Daily page stats - target datasource for materialized view

@@ -102,7 +102,7 @@ function normalizeSortingKey(key: string | readonly string[]): readonly string[]
  *
  * @example
  * ```ts
- * import { engine } from '@tinybird/sdk';
+ * import { engine } from '@tinybirdco/sdk';
  *
  * // Basic MergeTree
  * engine.mergeTree({

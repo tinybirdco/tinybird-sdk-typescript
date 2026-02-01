@@ -81,7 +81,7 @@ export interface DatasourceDefinition<TSchema extends SchemaDefinition = SchemaD
  *
  * @example
  * ```ts
- * import { defineDatasource, t, engine } from '@tinybird/sdk';
+ * import { defineDatasource, t, engine } from '@tinybirdco/sdk';
  *
  * export const events = defineDatasource('events', {
  *   description: 'User event tracking data',
@@ -172,7 +172,7 @@ export type ExtractSchema<T> = T extends DatasourceDefinition<infer S> ? S : nev
  *
  * @example
  * ```ts
- * import { defineDatasource, t, column } from '@tinybird/sdk';
+ * import { defineDatasource, t, column } from '@tinybirdco/sdk';
  *
  * export const events = defineDatasource('events', {
  *   schema: {

@@ -1,4 +1,4 @@
-import { defineEndpoint, node, p, t } from "@tinybird/sdk";
+import { defineEndpoint, node, p, t } from "@tinybirdco/sdk";
 
 /**
  * Top pages endpoint - get most visited pages

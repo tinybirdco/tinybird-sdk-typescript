@@ -139,7 +139,7 @@ export interface ProjectDefinition<
  * @example
  * ```ts
  * // tinybird/schema.ts
- * import { defineProject } from '@tinybird/sdk';
+ * import { defineProject } from '@tinybirdco/sdk';
  * import { events, users } from './datasources';
  * import { topEvents, userActivity } from './pipes';
  *
@@ -288,7 +288,7 @@ function buildProjectClient<
  *
  * @example
  * ```ts
- * import { createTinybirdClient } from '@tinybird/sdk';
+ * import { createTinybirdClient } from '@tinybirdco/sdk';
  * import { pageViews, events } from './datasources';
  * import { topPages } from './pipes';
  *
