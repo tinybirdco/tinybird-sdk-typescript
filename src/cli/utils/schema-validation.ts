@@ -4,16 +4,19 @@
  */
 
 import { TinybirdClient } from "../../client/base.js";
-import type { ProjectDefinition } from "../../schema/project.js";
+import type { ProjectDefinition, PipesDefinition } from "../../schema/project.js";
 import type { PipeDefinition, OutputDefinition } from "../../schema/pipe.js";
 import type { ColumnMeta } from "../../client/types.js";
+import type { LoadedEntities } from "../../generator/loader.js";
 
 /**
  * Options for schema validation
  */
 export interface SchemaValidationOptions {
-  /** The project definition containing pipe schemas */
-  project: ProjectDefinition;
+  /** The project definition containing pipe schemas (legacy) */
+  project?: ProjectDefinition;
+  /** The loaded entities containing pipe schemas (new) */
+  entities?: LoadedEntities;
   /** Names of pipes to validate */
   pipeNames: string[];
   /** Tinybird API base URL */
@@ -79,10 +82,17 @@ export async function validatePipeSchemas(
     pipesSkipped: [],
   };
 
+  // Get pipes from either project or entities
+  const pipes: PipesDefinition = options.entities
+    ? Object.fromEntries(
+        Object.entries(options.entities.pipes).map(([name, { definition }]) => [name, definition])
+      )
+    : options.project?.pipes ?? {};
+
   // Only validate the specified pipes
   for (const pipeName of options.pipeNames) {
-    // Find pipe in project by name
-    const pipe = Object.values(options.project.pipes).find(
+    // Find pipe by name
+    const pipe = Object.values(pipes).find(
       (p) => p._name === pipeName
     );
 

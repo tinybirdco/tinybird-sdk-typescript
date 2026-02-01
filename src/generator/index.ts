@@ -3,10 +3,11 @@
  * Orchestrates loading schema and generating all resources
  */
 
-import { loadSchema } from "./loader.js";
+import { loadSchema, loadEntities, entitiesToProject, type LoadedEntities } from "./loader.js";
 import { generateAllDatasources, type GeneratedDatasource } from "./datasource.js";
 import { generateAllPipes, type GeneratedPipe } from "./pipe.js";
-import type { ProjectDefinition } from "../schema/project.js";
+import { generateClientFile } from "./client-generator.js";
+import type { ProjectDefinition, DatasourcesDefinition, PipesDefinition } from "../schema/project.js";
 
 /**
  * Generated resources ready for API push
@@ -111,7 +112,114 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   };
 }
 
+/**
+ * Build options using include paths
+ */
+export interface BuildFromIncludeOptions {
+  /** Array of file paths to scan for datasources and pipes */
+  includePaths: string[];
+  /** Path for generated client file */
+  outputPath: string;
+  /** Working directory (defaults to cwd) */
+  cwd?: string;
+}
+
+/**
+ * Build result from include paths
+ */
+export interface BuildFromIncludeResult {
+  /** The generated resources */
+  resources: GeneratedResources;
+  /** Loaded entities from source files */
+  entities: LoadedEntities;
+  /** Generated client file content */
+  clientFile: {
+    content: string;
+    path: string;
+  };
+  /** Statistics about the build */
+  stats: {
+    datasourceCount: number;
+    pipeCount: number;
+  };
+}
+
+/**
+ * Generate resources from entities
+ */
+export function generateResourcesFromEntities(
+  datasources: DatasourcesDefinition,
+  pipes: PipesDefinition
+): GeneratedResources {
+  return {
+    datasources: generateAllDatasources(datasources),
+    pipes: generateAllPipes(pipes),
+  };
+}
+
+/**
+ * Build all resources from include paths
+ *
+ * This is the new entry point for the generator that works with
+ * auto-discovered entities instead of defineProject().
+ *
+ * @param options - Build options with include paths
+ * @returns Build result with generated resources and client file
+ *
+ * @example
+ * ```ts
+ * const result = await buildFromInclude({
+ *   includePaths: ['src/datasources.ts', 'src/pipes.ts'],
+ *   outputPath: 'src/tinybird.ts',
+ * });
+ *
+ * // Write the generated client file
+ * fs.writeFileSync(result.clientFile.path, result.clientFile.content);
+ *
+ * // Push resources to Tinybird
+ * await deploy(result.resources);
+ * ```
+ */
+export async function buildFromInclude(
+  options: BuildFromIncludeOptions
+): Promise<BuildFromIncludeResult> {
+  const cwd = options.cwd ?? process.cwd();
+
+  // Load entities from include paths
+  const entities = await loadEntities({
+    includePaths: options.includePaths,
+    cwd,
+  });
+
+  // Convert to format for generators
+  const { datasources, pipes } = entitiesToProject(entities);
+
+  // Generate resources
+  const resources = generateResourcesFromEntities(datasources, pipes);
+
+  // Generate client file
+  const clientFile = generateClientFile({
+    entities,
+    outputPath: options.outputPath,
+    cwd,
+  });
+
+  return {
+    resources,
+    entities,
+    clientFile: {
+      content: clientFile.content,
+      path: clientFile.absolutePath,
+    },
+    stats: {
+      datasourceCount: resources.datasources.length,
+      pipeCount: resources.pipes.length,
+    },
+  };
+}
+
 // Re-export types and utilities
-export { loadSchema, type LoaderOptions, type LoadedSchema } from "./loader.js";
+export { loadSchema, loadEntities, entitiesToProject, type LoaderOptions, type LoadedSchema, type LoadedEntities, type LoadEntitiesOptions } from "./loader.js";
 export { generateDatasource, generateAllDatasources, type GeneratedDatasource } from "./datasource.js";
 export { generatePipe, generateAllPipes, type GeneratedPipe } from "./pipe.js";
+export { generateClientFile, type GenerateClientOptions, type GeneratedClient } from "./client-generator.js";

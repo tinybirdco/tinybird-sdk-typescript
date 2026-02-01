@@ -10,20 +10,26 @@ import { getCurrentGitBranch, isMainBranch, getTinybirdBranchName } from "./git.
  * Tinybird configuration file structure
  */
 export interface TinybirdConfig {
-  /** Path to the TypeScript schema entry point */
-  schema: string;
+  /** Array of TypeScript files to scan for datasources and pipes */
+  include?: string[];
+  /** @deprecated Use `include` instead. Path to the TypeScript schema entry point */
+  schema?: string;
   /** API token (supports ${ENV_VAR} interpolation) */
   token: string;
   /** Tinybird API base URL (optional, defaults to EU region) */
   baseUrl?: string;
+  /** Path to generated client file (defaults to src/tinybird.ts or tinybird.ts) */
+  output?: string;
 }
 
 /**
  * Resolved configuration with all values expanded
  */
 export interface ResolvedConfig {
-  /** Path to the TypeScript schema entry point */
-  schema: string;
+  /** Array of TypeScript files to scan for datasources and pipes */
+  include: string[];
+  /** Path to generated client file */
+  output: string;
   /** Resolved API token (workspace main token) */
   token: string;
   /** Tinybird API base URL */
@@ -90,6 +96,22 @@ export function getTinybirdSchemaPath(cwd: string): string {
  */
 export function getRelativeSchemaPath(cwd: string): string {
   return `${getRelativeLibDir(cwd)}/${TINYBIRD_SCHEMA_FILE}`;
+}
+
+/**
+ * Get the default output path for generated client file
+ * Returns 'src/tinybird.ts' if project has src folder, otherwise 'tinybird.ts'
+ */
+export function getDefaultOutputPath(cwd: string): string {
+  return hasSrcFolder(cwd) ? "src/tinybird.ts" : "tinybird.ts";
+}
+
+/**
+ * Get the absolute output path for generated client file
+ */
+export function getOutputPath(cwd: string, configOutput?: string): string {
+  const relativePath = configOutput ?? getDefaultOutputPath(cwd);
+  return path.join(cwd, relativePath);
 }
 
 /**
@@ -167,14 +189,32 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
     throw new Error(`Failed to parse ${configPath}: ${(error as Error).message}`);
   }
 
-  // Validate required fields
-  if (!config.schema) {
-    throw new Error(`Missing 'schema' field in ${configPath}`);
+  // Validate required fields - need either include or schema
+  if (!config.include && !config.schema) {
+    throw new Error(`Missing 'include' field in ${configPath}. Add an array of files to scan for datasources and pipes.`);
   }
 
   if (!config.token) {
     throw new Error(`Missing 'token' field in ${configPath}`);
   }
+
+  // Resolve include paths (support legacy schema field)
+  let include: string[];
+  if (config.include) {
+    include = config.include;
+  } else if (config.schema) {
+    // Legacy mode: treat schema as a single include path
+    include = [config.schema];
+  } else {
+    // Should never reach here due to validation above
+    include = [];
+  }
+
+  // Get the directory containing the config file for resolving output path
+  const configDir = path.dirname(configPath);
+
+  // Resolve output path
+  const output = config.output ?? getDefaultOutputPath(configDir);
 
   // Resolve token (may contain env vars)
   let resolvedToken: string;
@@ -198,15 +238,13 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
     }
   }
 
-  // Get the directory containing the config file
-  const configDir = path.dirname(configPath);
-
   // Detect git branch
   const gitBranch = getCurrentGitBranch();
   const tinybirdBranch = getTinybirdBranchName();
 
   return {
-    schema: config.schema,
+    include,
+    output,
     token: resolvedToken,
     baseUrl: resolvedBaseUrl,
     configPath,

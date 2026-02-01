@@ -184,11 +184,17 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
   // Notify about branch readiness
   options.onBranchReady?.(branchInfo);
 
-  // Get the schema directory to watch
-  const schemaPath = path.isAbsolute(config.schema)
-    ? config.schema
-    : path.resolve(config.cwd, config.schema);
-  const schemaDir = path.dirname(schemaPath);
+  // Get directories to watch from include paths
+  const watchDirs = new Set<string>();
+  for (const includePath of config.include) {
+    const absolutePath = path.isAbsolute(includePath)
+      ? includePath
+      : path.resolve(config.cwd, includePath);
+    watchDirs.add(path.dirname(absolutePath));
+  }
+
+  // Get the output file path to ignore
+  const outputPath = path.resolve(config.cwd, config.output);
 
   // Debounce state
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -216,7 +222,7 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
       // Validate pipe schemas after successful deploy
       if (
         result.success &&
-        result.build?.project &&
+        result.build?.entities &&
         result.deploy?.pipes &&
         options.onSchemaValidation
       ) {
@@ -229,7 +235,7 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
         if (changedPipes.length > 0) {
           try {
             const validation = await validatePipeSchemas({
-              project: result.build.project,
+              entities: result.build.entities,
               pipeNames: changedPipes,
               baseUrl: config.baseUrl,
               token: effectiveToken,
@@ -277,12 +283,14 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
     }, debounceMs);
   }
 
-  // Set up file watcher
-  const watcher = watch(schemaDir, {
+  // Set up file watcher for all include directories
+  const watcher = watch(Array.from(watchDirs), {
     ignored: [
       /(^|[\/\\])\../, // Ignore dotfiles
       /node_modules/,
       /\.tinybird-schema-.*\.mjs$/, // Ignore temporary bundle files
+      /\.tinybird-entities-.*\.mjs$/, // Ignore temporary entity files
+      outputPath, // Ignore the generated client file
     ],
     persistent: true,
     ignoreInitial: true,

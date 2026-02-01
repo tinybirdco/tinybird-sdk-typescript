@@ -80,6 +80,23 @@ export interface ProjectClient<
 }
 
 /**
+ * Configuration for createTinybirdClient
+ */
+export interface TinybirdClientConfig<
+  TDatasources extends DatasourcesDefinition = DatasourcesDefinition,
+  TPipes extends PipesDefinition = PipesDefinition
+> {
+  /** All datasources */
+  datasources: TDatasources;
+  /** All pipes */
+  pipes: TPipes;
+  /** Tinybird API base URL (defaults to TINYBIRD_URL env var or https://api.tinybird.co) */
+  baseUrl?: string;
+  /** Tinybird API token (defaults to TINYBIRD_TOKEN env var) */
+  token?: string;
+}
+
+/**
  * Project configuration
  */
 export interface ProjectConfig<
@@ -147,6 +164,43 @@ export function defineProject<
   const datasources = (config.datasources ?? {}) as TDatasources;
   const pipes = (config.pipes ?? {}) as TPipes;
 
+  // Use the shared client builder
+  const tinybird = buildProjectClient(datasources, pipes);
+
+  return {
+    [PROJECT_BRAND]: true,
+    _type: "project",
+    datasources,
+    pipes,
+    tinybird,
+  };
+}
+
+/**
+ * Check if a value is a project definition
+ */
+export function isProjectDefinition(value: unknown): value is ProjectDefinition {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    PROJECT_BRAND in value &&
+    (value as Record<symbol, unknown>)[PROJECT_BRAND] === true
+  );
+}
+
+/**
+ * Build a typed Tinybird client from datasources and pipes
+ *
+ * This is an internal helper that builds query/ingest methods.
+ */
+function buildProjectClient<
+  TDatasources extends DatasourcesDefinition,
+  TPipes extends PipesDefinition
+>(
+  datasources: TDatasources,
+  pipes: TPipes,
+  options?: { baseUrl?: string; token?: string }
+): ProjectClient<TDatasources, TPipes> {
   // Lazy client initialization
   let _client: TinybirdClient | null = null;
 
@@ -155,8 +209,8 @@ export function defineProject<
       // Dynamic import to avoid circular dependencies
       const { createClient } = await import("../client/base.js");
       _client = createClient({
-        baseUrl: process.env.TINYBIRD_URL ?? "https://api.tinybird.co",
-        token: process.env.TINYBIRD_TOKEN!,
+        baseUrl: options?.baseUrl ?? process.env.TINYBIRD_URL ?? "https://api.tinybird.co",
+        token: options?.token ?? process.env.TINYBIRD_TOKEN!,
         devMode: process.env.NODE_ENV === "development",
       });
     }
@@ -207,7 +261,7 @@ export function defineProject<
   }
 
   // Create the typed client object
-  const tinybird = {
+  return {
     query: queryMethods,
     ingest: ingestMethods,
     get client(): TinybirdClient {
@@ -220,25 +274,53 @@ export function defineProject<
       return _client;
     },
   } as ProjectClient<TDatasources, TPipes>;
-
-  return {
-    [PROJECT_BRAND]: true,
-    _type: "project",
-    datasources,
-    pipes,
-    tinybird,
-  };
 }
 
 /**
- * Check if a value is a project definition
+ * Create a typed Tinybird client
+ *
+ * Creates a client with typed query and ingest methods based on the provided
+ * datasources and pipes. This is the recommended way to create a Tinybird client
+ * when using the SDK's auto-generated client file.
+ *
+ * @param config - Client configuration with datasources and pipes
+ * @returns A typed client with query and ingest methods
+ *
+ * @example
+ * ```ts
+ * import { createTinybirdClient } from '@tinybird/sdk';
+ * import { pageViews, events } from './datasources';
+ * import { topPages } from './pipes';
+ *
+ * export const tinybird = createTinybirdClient({
+ *   datasources: { pageViews, events },
+ *   pipes: { topPages },
+ * });
+ *
+ * // Query a pipe (fully typed)
+ * const result = await tinybird.query.topPages({
+ *   start_date: new Date('2024-01-01'),
+ *   end_date: new Date('2024-01-31'),
+ * });
+ *
+ * // Ingest an event (fully typed)
+ * await tinybird.ingest.pageViews({
+ *   timestamp: new Date(),
+ *   pathname: '/home',
+ *   session_id: 'abc123',
+ * });
+ * ```
  */
-export function isProjectDefinition(value: unknown): value is ProjectDefinition {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    PROJECT_BRAND in value &&
-    (value as Record<symbol, unknown>)[PROJECT_BRAND] === true
+export function createTinybirdClient<
+  TDatasources extends DatasourcesDefinition,
+  TPipes extends PipesDefinition
+>(
+  config: TinybirdClientConfig<TDatasources, TPipes>
+): ProjectClient<TDatasources, TPipes> {
+  return buildProjectClient(
+    config.datasources,
+    config.pipes,
+    { baseUrl: config.baseUrl, token: config.token }
   );
 }
 

@@ -15,22 +15,69 @@ import { browserLogin } from "../auth.js";
 import { saveTinybirdToken } from "../env.js";
 
 /**
- * Default schema content
+ * Default starter content for the tinybird file
+ * Contains example datasource and pipe definitions
  */
-const DEFAULT_SCHEMA = `import { defineProject } from "@tinybird/sdk";
+const DEFAULT_STARTER_CONTENT = `import { defineDatasource, definePipe, node, t, p, engine } from "@tinybird/sdk";
 
-export default defineProject({
-  datasources: {},
-  pipes: {},
+/**
+ * Example datasource - page views tracking
+ * Define your table schema with full type safety
+ */
+export const pageViews = defineDatasource("page_views", {
+  description: "Page view tracking data",
+  schema: {
+    timestamp: t.dateTime(),
+    session_id: t.string(),
+    pathname: t.string(),
+    referrer: t.string().nullable(),
+  },
+  engine: engine.mergeTree({
+    sortingKey: ["pathname", "timestamp"],
+  }),
+});
+
+/**
+ * Example pipe - top pages query
+ * Define SQL transformations with typed parameters and output
+ */
+export const topPages = definePipe("top_pages", {
+  description: "Get the most visited pages",
+  params: {
+    start_date: p.dateTime().describe("Start of date range"),
+    end_date: p.dateTime().describe("End of date range"),
+    limit: p.int32().optional(10).describe("Number of results"),
+  },
+  nodes: [
+    node({
+      name: "aggregated",
+      sql: \`
+        SELECT
+          pathname,
+          count() AS views
+        FROM page_views
+        WHERE timestamp >= {{DateTime(start_date)}}
+          AND timestamp <= {{DateTime(end_date)}}
+        GROUP BY pathname
+        ORDER BY views DESC
+        LIMIT {{Int32(limit, 10)}}
+      \`,
+    }),
+  ],
+  output: {
+    pathname: t.string(),
+    views: t.uint64(),
+  },
+  endpoint: true,
 });
 `;
 
 /**
  * Default config content generator
  */
-function createDefaultConfig(schemaPath: string) {
+function createDefaultConfig(includePath: string) {
   return {
-    schema: schemaPath,
+    include: [includePath],
     token: "${TINYBIRD_TOKEN}",
     baseUrl: "https://api.tinybird.co",
   };
@@ -110,21 +157,21 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     }
   }
 
-  // Create schema file
+  // Create starter file with example definitions
   if (fs.existsSync(schemaPath) && !force) {
     skipped.push(relativeSchemaPath);
   } else {
     try {
       // Create directory if needed
       fs.mkdirSync(schemaDir, { recursive: true });
-      fs.writeFileSync(schemaPath, DEFAULT_SCHEMA);
+      fs.writeFileSync(schemaPath, DEFAULT_STARTER_CONTENT);
       created.push(relativeSchemaPath);
     } catch (error) {
       return {
         success: false,
         created,
         skipped,
-        error: `Failed to create schema file: ${(error as Error).message}`,
+        error: `Failed to create starter file: ${(error as Error).message}`,
       };
     }
   }
