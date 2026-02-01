@@ -1,4 +1,10 @@
-import { defineDatasource, defineMaterializedView, node, t, engine } from "@tinybird/sdk";
+import {
+  defineDatasource,
+  defineMaterializedView,
+  node,
+  t,
+  engine,
+} from "@tinybird/sdk";
 
 /**
  * Daily page stats - target datasource for materialized view

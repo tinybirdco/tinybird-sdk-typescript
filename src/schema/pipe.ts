@@ -173,7 +173,7 @@ export interface PipeTokenConfig {
 }
 
 /**
- * Options for defining a pipe
+ * Options for defining a pipe (reusable SQL logic, no endpoint)
  */
 export interface PipeOptions<
   TParams extends ParamsDefinition,
@@ -185,13 +185,39 @@ export interface PipeOptions<
   params?: TParams;
   /** Nodes in the transformation pipeline */
   nodes: readonly NodeDefinition[];
-  /** Output schema (required for type safety) */
-  output: TOutput;
+  /** Output schema (optional for reusable pipes, required for endpoints) */
+  output?: TOutput;
   /** Whether this pipe is an API endpoint (shorthand for { enabled: true }). Mutually exclusive with materialized. */
   endpoint?: boolean | EndpointConfig;
   /** Materialized view configuration. Mutually exclusive with endpoint. */
   materialized?: MaterializedConfig;
   /** Access tokens for this pipe */
+  tokens?: readonly PipeTokenConfig[];
+}
+
+/**
+ * Options for defining an endpoint (API-exposed pipe)
+ */
+export interface EndpointOptions<
+  TParams extends ParamsDefinition,
+  TOutput extends OutputDefinition
+> {
+  /** Human-readable description of the endpoint */
+  description?: string;
+  /** Parameter definitions for query inputs */
+  params?: TParams;
+  /** Nodes in the transformation pipeline */
+  nodes: readonly NodeDefinition[];
+  /** Output schema (required for type safety) */
+  output: TOutput;
+  /** Cache configuration */
+  cache?: {
+    /** Whether caching is enabled */
+    enabled: boolean;
+    /** Cache TTL in seconds */
+    ttl?: number;
+  };
+  /** Access tokens for this endpoint */
   tokens?: readonly PipeTokenConfig[];
 }
 
@@ -209,8 +235,8 @@ export interface PipeDefinition<
   readonly _type: "pipe";
   /** Parameter definitions */
   readonly _params: TParams;
-  /** Output schema */
-  readonly _output: TOutput;
+  /** Output schema (optional for reusable pipes) */
+  readonly _output?: TOutput;
   /** Full options */
   readonly options: PipeOptions<TParams, TOutput>;
 }
@@ -382,10 +408,10 @@ export function definePipe<
     throw new Error(`Pipe "${name}" must have at least one node.`);
   }
 
-  // Validate output is provided (required for type safety)
-  if (!options.output || Object.keys(options.output).length === 0) {
+  // Validate output is provided for endpoints and materialized views
+  if ((options.endpoint || options.materialized) && (!options.output || Object.keys(options.output).length === 0)) {
     throw new Error(
-      `Pipe "${name}" must have an output schema defined for type safety.`
+      `Pipe "${name}" must have an output schema defined when used as an endpoint or materialized view.`
     );
   }
 
@@ -401,7 +427,8 @@ export function definePipe<
   let normalizedMaterialized: MaterializedConfig | undefined;
   if (options.materialized) {
     const targetDatasource = getTargetDatasource(options.materialized, name);
-    validateMaterializedSchema(name, options.output, targetDatasource);
+    // output is guaranteed to be defined here because of the earlier validation
+    validateMaterializedSchema(name, options.output!, targetDatasource);
     
     // Normalize the config to always use `datasource` internally (for generator compatibility)
     normalizedMaterialized = {
@@ -541,6 +568,66 @@ export function defineMaterializedView<
       target_datasource: targetDatasource,
       deploymentMethod: options.deploymentMethod,
     },
+    tokens: options.tokens,
+  });
+}
+
+/**
+ * Define a Tinybird endpoint
+ *
+ * This is a convenience function for creating API endpoints.
+ * Endpoints are pipes that are exposed as HTTP API endpoints.
+ *
+ * @param name - The endpoint name (must be valid identifier)
+ * @param options - Endpoint configuration including params, nodes, and output schema
+ * @returns A pipe definition configured as an endpoint
+ *
+ * @example
+ * ```ts
+ * import { defineEndpoint, node, p, t } from '@tinybird/sdk';
+ *
+ * export const topEvents = defineEndpoint('top_events', {
+ *   description: 'Get top events by count',
+ *   params: {
+ *     start_date: p.dateTime(),
+ *     end_date: p.dateTime(),
+ *     limit: p.int32().optional(10),
+ *   },
+ *   nodes: [
+ *     node({
+ *       name: 'aggregated',
+ *       sql: `
+ *         SELECT
+ *           event_type,
+ *           count() as event_count
+ *         FROM events
+ *         WHERE timestamp BETWEEN {{DateTime(start_date)}} AND {{DateTime(end_date)}}
+ *         GROUP BY event_type
+ *         ORDER BY event_count DESC
+ *         LIMIT {{Int32(limit, 10)}}
+ *       `,
+ *     }),
+ *   ],
+ *   output: {
+ *     event_type: t.string(),
+ *     event_count: t.uint64(),
+ *   },
+ * });
+ * ```
+ */
+export function defineEndpoint<
+  TParams extends ParamsDefinition,
+  TOutput extends OutputDefinition
+>(
+  name: string,
+  options: EndpointOptions<TParams, TOutput>
+): PipeDefinition<TParams, TOutput> {
+  return definePipe(name, {
+    description: options.description,
+    params: options.params,
+    nodes: options.nodes,
+    output: options.output,
+    endpoint: options.cache ? { enabled: true, cache: options.cache } : true,
     tokens: options.tokens,
   });
 }

@@ -107,6 +107,12 @@ export async function validatePipeSchemas(
       continue;
     }
 
+    // Skip if pipe has no output schema (reusable pipes)
+    if (!pipe._output) {
+      result.pipesSkipped.push(pipeName);
+      continue;
+    }
+
     // Build params using defaults
     const params = buildDefaultParams(pipe);
 

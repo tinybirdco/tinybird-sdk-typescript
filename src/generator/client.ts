@@ -159,9 +159,13 @@ export function generateClientFile(options: GenerateClientOptions): GeneratedCli
   }
 
   for (const name of pipeNames) {
+    const { definition } = entities.pipes[name];
     const pascalName = toPascalCase(name);
     typeLines.push(`export type ${pascalName}Params = InferParams<typeof ${name}>;`);
-    typeLines.push(`export type ${pascalName}Output = InferOutputRow<typeof ${name}>;`);
+    // Only generate Output type for pipes with output schema
+    if (definition._output) {
+      typeLines.push(`export type ${pascalName}Output = InferOutputRow<typeof ${name}>;`);
+    }
   }
 
   // Combine all sections

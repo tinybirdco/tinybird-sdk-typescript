@@ -2,6 +2,7 @@
   "include": [
     "src/tinybird/datasources.ts",
     "src/tinybird/pipes.ts",
+    "src/tinybird/endpoints.ts",
     "src/tinybird/mvs.ts"
   ],
   "token": "${TINYBIRD_TOKEN}",

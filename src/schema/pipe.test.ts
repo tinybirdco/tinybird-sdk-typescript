@@ -578,7 +578,7 @@ describe("Pipe Schema", () => {
         expect(pipe._name).toBe("sales_mv");
         expect(pipe.options.description).toBe("Sales materialized view");
         expect(pipe.options.materialized?.datasource?._name).toBe("sales_by_hour");
-        expect(Object.keys(pipe._output)).toEqual(["day", "country", "total_sales"]);
+        expect(Object.keys(pipe._output!)).toEqual(["day", "country", "total_sales"]);
       });
 
       it("creates a materialized view with deployment method", () => {

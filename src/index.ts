@@ -111,6 +111,7 @@ export type {
 // ============ Pipe ============
 export {
   definePipe,
+  defineEndpoint,
   defineMaterializedView,
   node,
   isPipeDefinition,
@@ -126,6 +127,7 @@ export {
 export type {
   PipeDefinition,
   PipeOptions,
+  EndpointOptions,
   NodeDefinition,
   NodeOptions,
   ParamsDefinition,
