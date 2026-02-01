@@ -23,6 +23,7 @@ import {
   runBranchStatus,
   runBranchDelete,
 } from "./commands/branch.js";
+import type { DevMode } from "./config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(
@@ -137,14 +138,27 @@ function createCli(): Command {
     .description("Build and push resources to Tinybird")
     .option("--dry-run", "Generate without pushing to API")
     .option("--debug", "Show debug output including API requests/responses")
+    .option("--local", "Use local Tinybird container")
+    .option("--branch", "Use Tinybird cloud with branches")
     .action(async (options) => {
       if (options.debug) {
         process.env.TINYBIRD_DEBUG = "1";
       }
-      console.log(`[${formatTime()}] Building...\n`);
+
+      // Determine devMode override
+      let devModeOverride: DevMode | undefined;
+      if (options.local) {
+        devModeOverride = "local";
+      } else if (options.branch) {
+        devModeOverride = "branch";
+      }
+
+      const modeLabel = devModeOverride === "local" ? " (local)" : "";
+      console.log(`[${formatTime()}] Building${modeLabel}...\n`);
 
       const result = await runBuild({
         dryRun: options.dryRun,
+        devModeOverride,
       });
 
       if (!result.success) {
@@ -190,12 +204,23 @@ function createCli(): Command {
   program
     .command("dev")
     .description("Watch for changes and sync with Tinybird")
-    .action(async () => {
+    .option("--local", "Use local Tinybird container")
+    .option("--branch", "Use Tinybird cloud with branches")
+    .action(async (options) => {
+      // Determine devMode override
+      let devModeOverride: DevMode | undefined;
+      if (options.local) {
+        devModeOverride = "local";
+      } else if (options.branch) {
+        devModeOverride = "branch";
+      }
+
       console.log(`tinybird dev v${VERSION}`);
       console.log("Loading config from tinybird.json...\n");
 
       try {
         const controller = await runDev({
+          devModeOverride,
           onLoginComplete: (info) => {
             console.log("\nAuthentication successful!");
             if (info.workspaceName) {
@@ -207,7 +232,18 @@ function createCli(): Command {
             console.log("");
           },
           onBranchReady: (info) => {
-            if (info.isMainBranch) {
+            if (info.isLocal) {
+              // Local mode
+              const workspaceName = info.localWorkspace?.name ?? "unknown";
+              if (info.wasCreated) {
+                console.log(`Using local Tinybird container`);
+                console.log(`Creating local workspace '${workspaceName}'...`);
+                console.log("Workspace created.\n");
+              } else {
+                console.log(`Using local Tinybird container`);
+                console.log(`Using existing local workspace '${workspaceName}'\n`);
+              }
+            } else if (info.isMainBranch) {
               console.log("On main branch - deploying to workspace\n");
             } else if (info.gitBranch) {
               const tinybirdName = info.tinybirdBranch?.name ?? info.gitBranch;

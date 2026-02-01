@@ -267,6 +267,53 @@ describe("Config", () => {
 
       expect(() => loadConfig(tempDir)).toThrow("Failed to parse");
     });
+
+    it("defaults devMode to branch when not specified", () => {
+      const config = {
+        include: ["lib/datasources.ts"],
+        token: "test-token",
+      };
+      fs.writeFileSync(
+        path.join(tempDir, "tinybird.json"),
+        JSON.stringify(config)
+      );
+
+      const result = loadConfig(tempDir);
+
+      expect(result.devMode).toBe("branch");
+    });
+
+    it("loads devMode as branch when explicitly set", () => {
+      const config = {
+        include: ["lib/datasources.ts"],
+        token: "test-token",
+        devMode: "branch",
+      };
+      fs.writeFileSync(
+        path.join(tempDir, "tinybird.json"),
+        JSON.stringify(config)
+      );
+
+      const result = loadConfig(tempDir);
+
+      expect(result.devMode).toBe("branch");
+    });
+
+    it("loads devMode as local when set", () => {
+      const config = {
+        include: ["lib/datasources.ts"],
+        token: "test-token",
+        devMode: "local",
+      };
+      fs.writeFileSync(
+        path.join(tempDir, "tinybird.json"),
+        JSON.stringify(config)
+      );
+
+      const result = loadConfig(tempDir);
+
+      expect(result.devMode).toBe("local");
+    });
   });
 
   describe("updateConfig", () => {
