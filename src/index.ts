@@ -117,6 +117,7 @@ export {
   isNodeDefinition,
   getEndpointConfig,
   getMaterializedConfig,
+  getTargetDatasource,
   isMaterializedView,
   getNodeNames,
   getNode,

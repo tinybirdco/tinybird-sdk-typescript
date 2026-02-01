@@ -279,7 +279,7 @@ LIMIT {{Int32(limit, 10)}}
       }),
     });
 
-    it('generates TYPE MATERIALIZED and DATASOURCE', () => {
+    it('generates TYPE MATERIALIZED and DATASOURCE with target_datasource', () => {
       const pipe = definePipe('sales_by_hour_mv', {
         nodes: [
           node({
@@ -293,7 +293,7 @@ LIMIT {{Int32(limit, 10)}}
           total_sales: t.simpleAggregateFunction('sum', t.uint64()),
         },
         materialized: {
-          datasource: salesByHour,
+          target_datasource: salesByHour,
         },
       });
 
@@ -318,7 +318,7 @@ LIMIT {{Int32(limit, 10)}}
           total_sales: t.simpleAggregateFunction('sum', t.uint64()),
         },
         materialized: {
-          datasource: salesByHour,
+          target_datasource: salesByHour,
           deploymentMethod: 'alter',
         },
       });
@@ -344,7 +344,7 @@ LIMIT {{Int32(limit, 10)}}
           total_sales: t.simpleAggregateFunction('sum', t.uint64()),
         },
         materialized: {
-          datasource: salesByHour,
+          target_datasource: salesByHour,
         },
       });
 
@@ -375,7 +375,7 @@ GROUP BY day, country
           total_sales: t.simpleAggregateFunction('sum', t.uint64()),
         },
         materialized: {
-          datasource: salesByHour,
+          target_datasource: salesByHour,
           deploymentMethod: 'alter',
         },
       });
@@ -393,10 +393,10 @@ GROUP BY day, country
       expect(result.content).toContain('DEPLOYMENT_METHOD alter');
     });
 
-    it('works with defineMaterializedView helper', () => {
+    it('works with defineMaterializedView helper using target_datasource', () => {
       const pipe = defineMaterializedView('sales_mv', {
         description: 'Sales materialized view',
-        datasource: salesByHour,
+        target_datasource: salesByHour,
         nodes: [
           node({
             name: 'daily_sales',
@@ -412,6 +412,32 @@ GROUP BY day, country
       expect(result.content).toContain('TYPE MATERIALIZED');
       expect(result.content).toContain('DATASOURCE sales_by_hour');
       expect(result.content).toContain('DEPLOYMENT_METHOD alter');
+    });
+
+    it('generates DATASOURCE correctly with deprecated datasource field', () => {
+      // Test that the deprecated field still generates correct output
+      const pipe = definePipe('sales_by_hour_mv_deprecated', {
+        nodes: [
+          node({
+            name: 'daily_sales',
+            sql: 'SELECT toStartOfDay(date) as day, country, sum(sales) as total_sales FROM teams GROUP BY day, country',
+          }),
+        ],
+        output: {
+          day: t.date(),
+          country: t.string().lowCardinality(),
+          total_sales: t.simpleAggregateFunction('sum', t.uint64()),
+        },
+        materialized: {
+          datasource: salesByHour, // deprecated
+        },
+      });
+
+      const result = generatePipe(pipe);
+
+      // Should still generate DATASOURCE correctly
+      expect(result.content).toContain('TYPE MATERIALIZED');
+      expect(result.content).toContain('DATASOURCE sales_by_hour');
     });
   });
 });

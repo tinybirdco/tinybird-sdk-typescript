@@ -121,14 +121,47 @@ export interface EndpointConfig {
 export interface MaterializedConfig<
   TDatasource extends DatasourceDefinition<SchemaDefinition> = DatasourceDefinition<SchemaDefinition>
 > {
-  /** Target datasource where materialized data is written */
-  datasource: TDatasource;
+  /** Target datasource where materialized data is written (preferred) */
+  target_datasource?: TDatasource;
+  /**
+   * Target datasource where materialized data is written
+   * @deprecated Use `target_datasource` instead. This will be removed in a future version.
+   */
+  datasource?: TDatasource;
   /**
    * Deployment method for materialized views.
    * Use 'alter' to update existing materialized views using ALTER TABLE ... MODIFY QUERY
    * instead of recreating the table. This preserves existing data and reduces deployment time.
    */
   deploymentMethod?: "alter";
+}
+
+/**
+ * Get the target datasource from a materialized config.
+ * Handles both `target_datasource` (preferred) and `datasource` (deprecated).
+ * Issues a deprecation warning if `datasource` is used.
+ */
+export function getTargetDatasource<TDatasource extends DatasourceDefinition<SchemaDefinition>>(
+  config: MaterializedConfig<TDatasource>,
+  context?: string
+): TDatasource {
+  if (config.target_datasource) {
+    return config.target_datasource;
+  }
+  
+  if (config.datasource) {
+    // Issue deprecation warning
+    const contextMsg = context ? ` in "${context}"` : "";
+    console.warn(
+      `[DEPRECATED]${contextMsg}: 'datasource' is deprecated in materialized view configuration. ` +
+      `Use 'target_datasource' instead. This will be removed in a future version.`
+    );
+    return config.datasource;
+  }
+  
+  throw new Error(
+    "Materialized view configuration must specify either 'target_datasource' (preferred) or 'datasource'."
+  );
 }
 
 /**
@@ -364,13 +397,17 @@ export function definePipe<
     );
   }
 
-  // Validate materialized view schema compatibility
+  // Validate materialized view schema compatibility and normalize config
+  let normalizedMaterialized: MaterializedConfig | undefined;
   if (options.materialized) {
-    validateMaterializedSchema(
-      name,
-      options.output,
-      options.materialized.datasource
-    );
+    const targetDatasource = getTargetDatasource(options.materialized, name);
+    validateMaterializedSchema(name, options.output, targetDatasource);
+    
+    // Normalize the config to always use `datasource` internally (for generator compatibility)
+    normalizedMaterialized = {
+      datasource: targetDatasource,
+      deploymentMethod: options.materialized.deploymentMethod,
+    };
   }
 
   const params = (options.params ?? {}) as TParams;
@@ -384,6 +421,7 @@ export function definePipe<
     options: {
       ...options,
       params,
+      materialized: normalizedMaterialized,
     },
   };
 }
@@ -398,8 +436,13 @@ export interface MaterializedViewOptions<
   description?: string;
   /** Nodes in the transformation pipeline */
   nodes: readonly NodeDefinition[];
-  /** Target datasource where materialized data is written */
-  datasource: TDatasource;
+  /** Target datasource where materialized data is written (preferred) */
+  target_datasource?: TDatasource;
+  /**
+   * Target datasource where materialized data is written
+   * @deprecated Use `target_datasource` instead. This will be removed in a future version.
+   */
+  datasource?: TDatasource;
   /**
    * Deployment method for materialized views.
    * Use 'alter' to update existing materialized views using ALTER TABLE ... MODIFY QUERY
@@ -451,7 +494,7 @@ type DatasourceSchemaToOutput<TSchema extends SchemaDefinition> = {
  * // Materialized view - output schema is inferred from datasource
  * export const salesByHourMv = defineMaterializedView('sales_by_hour_mv', {
  *   description: 'Aggregate sales per hour',
- *   datasource: salesByHour,
+ *   target_datasource: salesByHour,
  *   nodes: [
  *     node({
  *       name: 'daily_sales',
@@ -476,8 +519,14 @@ export function defineMaterializedView<
   name: string,
   options: MaterializedViewOptions<TDatasource>
 ): PipeDefinition<Record<string, never>, DatasourceSchemaToOutput<TSchema>> {
+  // Resolve the target datasource (supports both target_datasource and deprecated datasource)
+  const targetDatasource = getTargetDatasource(
+    { target_datasource: options.target_datasource, datasource: options.datasource },
+    name
+  );
+  
   // Extract the schema from the datasource to build the output
-  const datasourceSchema = options.datasource._schema as TSchema;
+  const datasourceSchema = targetDatasource._schema as TSchema;
   const output: Record<string, AnyTypeValidator> = {};
 
   for (const [columnName, column] of Object.entries(datasourceSchema)) {
@@ -489,7 +538,7 @@ export function defineMaterializedView<
     nodes: options.nodes,
     output: output as DatasourceSchemaToOutput<TSchema>,
     materialized: {
-      datasource: options.datasource,
+      target_datasource: targetDatasource,
       deploymentMethod: options.deploymentMethod,
     },
     tokens: options.tokens,

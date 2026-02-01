@@ -79,7 +79,11 @@ function generateEndpoint(endpoint: EndpointConfig): string {
  */
 function generateMaterialized(config: MaterializedConfig): string {
   const parts: string[] = ["TYPE MATERIALIZED"];
-  parts.push(`DATASOURCE ${config.datasource._name}`);
+  
+  // The config is normalized by definePipe to always have `datasource` set.
+  // Use non-null assertion since we know it's always present after normalization.
+  const datasourceName = config.datasource!._name;
+  parts.push(`DATASOURCE ${datasourceName}`);
 
   if (config.deploymentMethod === "alter") {
     parts.push("DEPLOYMENT_METHOD alter");

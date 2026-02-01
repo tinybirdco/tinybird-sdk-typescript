@@ -86,7 +86,11 @@ export const events_daily_stats_mv = defineMaterializedView("events_daily_stats_
   nodes: [
     node({
       name: "daily_stats",
-      sql: "SELECT toStartOfDay(timestamp) as day, event_type, count() as count FROM events GROUP BY day, event_type",
+      sql: `
+        SELECT toStartOfDay(timestamp) as day, event_type, count() as count
+        FROM events
+        GROUP BY day, event_type
+      `,
     }),
   ],
 });
