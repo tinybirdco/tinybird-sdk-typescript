@@ -202,10 +202,20 @@ Create a `tinybird.json` in your project root:
 }
 ```
 
-- `include` - Array of TypeScript files to scan for datasources and pipes
-- `token` - API token (supports environment variable interpolation)
-- `baseUrl` - Tinybird API URL (defaults to EU region)
-- `devMode` - Development mode: `"branch"` (default) or `"local"`
+### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `include` | `string[]` | *required* | Array of TypeScript files to scan for datasources and pipes |
+| `token` | `string` | *required* | API token. Supports `${ENV_VAR}` interpolation for environment variables |
+| `baseUrl` | `string` | `"https://api.tinybird.co"` | Tinybird API URL. Use `"https://api.us-east.tinybird.co"` for US region |
+| `devMode` | `"branch"` \| `"local"` | `"branch"` | Development mode. `"branch"` uses Tinybird cloud with branches, `"local"` uses local Docker container |
+
+#### Legacy Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `schema` | `string` | *Deprecated.* Use `include` instead. Path to a single TypeScript schema entry point |
 
 ### Local Development Mode
 
