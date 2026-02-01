@@ -10,7 +10,7 @@ export const dailyPageStats = defineDatasource("daily_page_stats", {
     date: t.date(),
     pathname: t.string(),
     views: t.simpleAggregateFunction("sum", t.uint64()),
-    unique_sessions: t.simpleAggregateFunction("uniq", t.uint64()),
+    unique_sessions: t.aggregateFunction("uniq", t.string()),
   },
   engine: engine.aggregatingMergeTree({
     sortingKey: ["date", "pathname"],
