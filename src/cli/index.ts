@@ -228,7 +228,7 @@ function createCli(): Command {
               if (deploy.result === "no_changes") {
                 console.log(`[${formatTime()}] No changes detected`);
               } else {
-                console.log(`[${formatTime()}] Deployed in ${result.durationMs}ms`);
+                console.log(`[${formatTime()}] Built in ${result.durationMs}ms`);
 
                 // Show datasource changes
                 if (deploy.datasources) {
