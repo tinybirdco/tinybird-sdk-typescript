@@ -7,8 +7,6 @@ import { watch } from "chokidar";
 import { loadConfig, configExists, findConfigFile, hasValidToken, updateConfig, type ResolvedConfig } from "../config.js";
 import { runBuild, type BuildCommandResult } from "./build.js";
 import { getOrCreateBranch, type TinybirdBranch } from "../../api/branches.js";
-import { getWorkspace } from "../../api/workspaces.js";
-import { getBranchToken, setBranchToken } from "../branch-store.js";
 import { browserLogin } from "../auth.js";
 import { saveTinybirdToken } from "../env.js";
 import {
@@ -156,63 +154,31 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
   // If we're on a feature branch, get or create the Tinybird branch
   // Use tinybirdBranch (sanitized name) for Tinybird API, gitBranch for display
   if (!config.isMainBranch && config.tinybirdBranch) {
-    // Fetch the workspace ID from the API
-    const workspace = await getWorkspace({
-      baseUrl: config.baseUrl,
-      token: config.token,
-    });
-    const workspaceId = workspace.id;
     const branchName = config.tinybirdBranch; // Sanitized name for Tinybird
 
-    // Check if we have a cached token
-    const cachedBranch = getBranchToken(workspaceId, branchName);
+    // Always fetch fresh from API to avoid stale cache issues
+    const tinybirdBranch = await getOrCreateBranch(
+      {
+        baseUrl: config.baseUrl,
+        token: config.token,
+      },
+      branchName
+    );
 
-    if (cachedBranch) {
-      // Use cached token
-      effectiveToken = cachedBranch.token;
-      branchInfo = {
-        gitBranch: config.gitBranch, // Original git branch name for display
-        isMainBranch: false,
-        tinybirdBranch: {
-          id: cachedBranch.id,
-          name: branchName,
-          token: cachedBranch.token,
-          created_at: cachedBranch.createdAt,
-        },
-        wasCreated: false,
-      };
-    } else {
-      // Create or get the branch from API
-      const tinybirdBranch = await getOrCreateBranch(
-        {
-          baseUrl: config.baseUrl,
-          token: config.token,
-        },
-        branchName
+    if (!tinybirdBranch.token) {
+      throw new Error(
+        `Branch '${branchName}' was created but no token was returned. ` +
+          `This may be an API issue.`
       );
-
-      if (!tinybirdBranch.token) {
-        throw new Error(
-          `Branch '${branchName}' was created but no token was returned. ` +
-            `This may be an API issue.`
-        );
-      }
-
-      // Cache the token
-      setBranchToken(workspaceId, branchName, {
-        id: tinybirdBranch.id,
-        token: tinybirdBranch.token,
-        createdAt: tinybirdBranch.created_at,
-      });
-
-      effectiveToken = tinybirdBranch.token;
-      branchInfo = {
-        gitBranch: config.gitBranch, // Original git branch name for display
-        isMainBranch: false,
-        tinybirdBranch,
-        wasCreated: true,
-      };
     }
+
+    effectiveToken = tinybirdBranch.token;
+    branchInfo = {
+      gitBranch: config.gitBranch, // Original git branch name for display
+      isMainBranch: false,
+      tinybirdBranch,
+      wasCreated: tinybirdBranch.wasCreated ?? false,
+    };
   }
 
   // Notify about branch readiness

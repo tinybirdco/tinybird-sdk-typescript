@@ -4,13 +4,13 @@ import { useState } from "react";
 import type {
   TopPagesOutput,
   TopEventsOutput,
-  PageViewRow,
-  EventRow,
-} from "@/tinybird/client";
+  PageViewsRow,
+  EventsRow,
+} from "@/tinybird/schema";
 
 export default function Home() {
-  const [topPages, setTopPages] = useState<TopPagesOutput>([]);
-  const [topEvents, setTopEvents] = useState<TopEventsOutput>([]);
+  const [topPages, setTopPages] = useState<TopPagesOutput[]>([]);
+  const [topEvents, setTopEvents] = useState<TopEventsOutput[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +34,7 @@ export default function Home() {
 
   const trackPageView = async () => {
     // This demonstrates the type-safe event structure
-    const pageView: PageViewRow = {
+    const pageView: PageViewsRow = {
       timestamp: new Date(),
       session_id: crypto.randomUUID(),
       user_id: null,
@@ -53,13 +53,15 @@ export default function Home() {
       });
       alert("Page view tracked!");
     } catch (e) {
-      alert("Failed to track: " + (e instanceof Error ? e.message : "Unknown error"));
+      alert(
+        "Failed to track: " + (e instanceof Error ? e.message : "Unknown error")
+      );
     }
   };
 
   const trackEvent = async () => {
     // This demonstrates the type-safe event structure
-    const event: EventRow = {
+    const event: EventsRow = {
       timestamp: new Date(),
       session_id: crypto.randomUUID(),
       user_id: null,
@@ -78,7 +80,9 @@ export default function Home() {
       });
       alert("Event tracked!");
     } catch (e) {
-      alert("Failed to track: " + (e instanceof Error ? e.message : "Unknown error"));
+      alert(
+        "Failed to track: " + (e instanceof Error ? e.message : "Unknown error")
+      );
     }
   };
 
@@ -89,7 +93,8 @@ export default function Home() {
           @tinybird/sdk Demo
         </h1>
         <p className="text-zinc-600 dark:text-zinc-400 mb-8">
-          This example demonstrates the developer experience of using the Tinybird TypeScript SDK.
+          This example demonstrates the developer experience of using the
+          Tinybird TypeScript SDK.
         </p>
 
         {/* Actions */}
@@ -129,7 +134,9 @@ export default function Home() {
               Top Pages
             </h2>
             {topPages.length === 0 ? (
-              <p className="text-zinc-500">No data yet. Click &quot;Fetch Analytics&quot; to load.</p>
+              <p className="text-zinc-500">
+                No data yet. Click &quot;Fetch Analytics&quot; to load.
+              </p>
             ) : (
               <table className="w-full">
                 <thead>
@@ -141,7 +148,10 @@ export default function Home() {
                 </thead>
                 <tbody>
                   {topPages.map((page, i) => (
-                    <tr key={i} className="border-t border-zinc-100 dark:border-zinc-700">
+                    <tr
+                      key={i}
+                      className="border-t border-zinc-100 dark:border-zinc-700"
+                    >
                       <td className="py-2 text-zinc-900 dark:text-white font-mono text-sm">
                         {page.pathname}
                       </td>
@@ -164,7 +174,9 @@ export default function Home() {
               Top Events
             </h2>
             {topEvents.length === 0 ? (
-              <p className="text-zinc-500">No data yet. Click &quot;Fetch Analytics&quot; to load.</p>
+              <p className="text-zinc-500">
+                No data yet. Click &quot;Fetch Analytics&quot; to load.
+              </p>
             ) : (
               <table className="w-full">
                 <thead>
@@ -176,7 +188,10 @@ export default function Home() {
                 </thead>
                 <tbody>
                   {topEvents.map((event, i) => (
-                    <tr key={i} className="border-t border-zinc-100 dark:border-zinc-700">
+                    <tr
+                      key={i}
+                      className="border-t border-zinc-100 dark:border-zinc-700"
+                    >
                       <td className="py-2 text-zinc-900 dark:text-white font-mono text-sm">
                         {event.event_name}
                       </td>
@@ -196,9 +211,11 @@ export default function Home() {
 
         {/* Code Example */}
         <div className="mt-8 bg-zinc-900 rounded-xl p-6 overflow-x-auto">
-          <h2 className="text-lg font-semibold text-white mb-4">Type-Safe Usage Example</h2>
+          <h2 className="text-lg font-semibold text-white mb-4">
+            Type-Safe Usage Example
+          </h2>
           <pre className="text-sm text-green-400 font-mono">
-{`// Define your datasource schema
+            {`// Define your datasource schema
 const pageViews = defineDatasource("page_views", {
   schema: {
     timestamp: t.dateTime(),

@@ -112,8 +112,6 @@ export class TinybirdClient {
       // out of the client bundle when not using dev mode
       const { loadConfig } = await import("../cli/config.js");
       const { getOrCreateBranch } = await import("../api/branches.js");
-      const { getWorkspace } = await import("../api/workspaces.js");
-      const { getBranchToken, setBranchToken } = await import("../cli/branch-store.js");
 
       const config = loadConfig();
 
@@ -124,23 +122,7 @@ export class TinybirdClient {
 
       const branchName = config.tinybirdBranch;
 
-      // Fetch workspace ID
-      const workspace = await getWorkspace({
-        baseUrl: this.config.baseUrl,
-        token: this.config.token,
-      });
-
-      // Check cache first
-      const cached = getBranchToken(workspace.id, branchName);
-      if (cached) {
-        return {
-          token: cached.token,
-          isBranchToken: true,
-          branchName,
-        };
-      }
-
-      // Get or create branch
+      // Get or create branch (always fetch fresh to avoid stale cache issues)
       const branch = await getOrCreateBranch(
         { baseUrl: this.config.baseUrl, token: this.config.token },
         branchName
@@ -150,13 +132,6 @@ export class TinybirdClient {
         // Fall back to workspace token if no branch token
         return { token: this.config.token, isBranchToken: false };
       }
-
-      // Cache the token
-      setBranchToken(workspace.id, branchName, {
-        id: branch.id,
-        token: branch.token,
-        createdAt: branch.created_at,
-      });
 
       return {
         token: branch.token,
@@ -388,11 +363,20 @@ export class TinybirdClient {
    */
   private async handleErrorResponse(response: Response): Promise<never> {
     let errorResponse: TinybirdErrorResponse | undefined;
+    let rawBody: string | undefined;
 
     try {
-      errorResponse = (await response.json()) as TinybirdErrorResponse;
+      rawBody = await response.text();
+      errorResponse = JSON.parse(rawBody) as TinybirdErrorResponse;
     } catch {
-      // Failed to parse error response
+      // Failed to parse error response - include raw body in message
+      if (rawBody) {
+        throw new TinybirdError(
+          `Request failed with status ${response.status}: ${rawBody}`,
+          response.status,
+          undefined
+        );
+      }
     }
 
     const message =
