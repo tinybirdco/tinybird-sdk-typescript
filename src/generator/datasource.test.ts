@@ -124,7 +124,7 @@ describe('Datasource Generator', () => {
       });
 
       const result = generateDatasource(ds);
-      expect(result.content).toContain("status String DEFAULT 'pending'");
+      expect(result.content).toContain("status String `json:$.status` DEFAULT 'pending'");
     });
 
     it('includes codec', () => {
@@ -135,7 +135,7 @@ describe('Datasource Generator', () => {
       });
 
       const result = generateDatasource(ds);
-      expect(result.content).toContain('data String CODEC(LZ4)');
+      expect(result.content).toContain('data String `json:$.data` CODEC(LZ4)');
     });
 
     it('adds commas between columns except last', () => {
