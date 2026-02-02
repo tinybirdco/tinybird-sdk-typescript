@@ -16,6 +16,7 @@ import { dirname, resolve } from "node:path";
 import { Command } from "commander";
 import { runInit } from "./commands/init.js";
 import { runBuild } from "./commands/build.js";
+import { runDeploy } from "./commands/deploy.js";
 import { runDev } from "./commands/dev.js";
 import { runLogin } from "./commands/login.js";
 import { runPull } from "./commands/pull.js";
@@ -199,7 +200,6 @@ function createCli(): Command {
       const result = await runBuild({
         dryRun: options.dryRun,
         devModeOverride,
-        preventMainDeploy: true, // Prevent deploying to main workspace
       });
 
       if (!result.success) {
@@ -254,9 +254,8 @@ function createCli(): Command {
 
       console.log(`[${formatTime()}] Deploying to main workspace...\n`);
 
-      const result = await runBuild({
+      const result = await runDeploy({
         dryRun: options.dryRun,
-        forceMainDeploy: true, // Force deploy to main workspace
       });
 
       if (!result.success) {

@@ -6,6 +6,7 @@ import * as path from "path";
 import { watch } from "chokidar";
 import { loadConfig, configExists, findConfigFile, hasValidToken, updateConfig, LOCAL_BASE_URL, type ResolvedConfig, type DevMode } from "../config.js";
 import { runBuild, type BuildCommandResult } from "./build.js";
+import { runDeploy } from "./deploy.js";
 import { getOrCreateBranch, type TinybirdBranch } from "../../api/branches.js";
 import { browserLogin } from "../auth.js";
 import { saveTinybirdToken } from "../env.js";
@@ -246,12 +247,16 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
     options.onBuildStart?.();
 
     try {
-      const result = await runBuild({
-        cwd: config.cwd,
-        tokenOverride: effectiveToken,
-        useDeployEndpoint: devMode !== "local" && config.isMainBranch,
-        devModeOverride: devMode,
-      });
+      // Use runDeploy for main branch (cloud mode), runBuild for branches/local
+      const shouldUseDeploy = devMode !== "local" && config.isMainBranch;
+
+      const result = shouldUseDeploy
+        ? await runDeploy({ cwd: config.cwd })
+        : await runBuild({
+            cwd: config.cwd,
+            tokenOverride: effectiveToken,
+            devModeOverride: devMode,
+          });
       options.onBuildComplete?.(result);
 
       // Validate pipe schemas after successful deploy
