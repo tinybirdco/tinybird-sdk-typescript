@@ -8,7 +8,6 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import {
   hasValidToken,
-  getTinybirdDir,
   getRelativeTinybirdDir,
   getConfigPath,
   updateConfig,
@@ -139,6 +138,8 @@ export interface InitOptions {
   skipLogin?: boolean;
   /** Development mode - if provided, skip interactive prompt */
   devMode?: DevMode;
+  /** Client path - if provided, skip interactive prompt */
+  clientPath?: string;
 }
 
 /**
@@ -161,6 +162,8 @@ export interface InitResult {
   userEmail?: string;
   /** Selected development mode */
   devMode?: DevMode;
+  /** Selected client path */
+  clientPath?: string;
 }
 
 /**
@@ -218,8 +221,31 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   }
 
   // Determine tinybird folder path based on project structure
-  const tinybirdDir = getTinybirdDir(cwd);
-  const relativeTinybirdDir = getRelativeTinybirdDir(cwd);
+  const defaultRelativePath = getRelativeTinybirdDir(cwd);
+  let relativeTinybirdDir = options.clientPath ?? defaultRelativePath;
+
+  if (!options.clientPath && !options.devMode) {
+    // Ask user to confirm or change the client path
+    const clientPathChoice = await p.text({
+      message: "Where should we generate the Tinybird client?",
+      placeholder: defaultRelativePath,
+      defaultValue: defaultRelativePath,
+    });
+
+    if (p.isCancel(clientPathChoice)) {
+      p.cancel("Init cancelled.");
+      return {
+        success: false,
+        created: [],
+        skipped: [],
+        error: "Cancelled by user",
+      };
+    }
+
+    relativeTinybirdDir = clientPathChoice || defaultRelativePath;
+  }
+
+  const tinybirdDir = path.join(cwd, relativeTinybirdDir);
 
   // File paths
   const datasourcesPath = path.join(tinybirdDir, "datasources.ts");
@@ -373,6 +399,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
           workspaceName: authResult.workspaceName,
           userEmail: authResult.userEmail,
           devMode,
+          clientPath: relativeTinybirdDir,
         };
       } catch (error) {
         // Login succeeded but saving credentials failed
@@ -385,6 +412,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
           skipped,
           loggedIn: false,
           devMode,
+          clientPath: relativeTinybirdDir,
         };
       }
     } else {
@@ -395,6 +423,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         skipped,
         loggedIn: false,
         devMode,
+        clientPath: relativeTinybirdDir,
       };
     }
   }
@@ -404,5 +433,6 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     created,
     skipped,
     devMode,
+    clientPath: relativeTinybirdDir,
   };
 }

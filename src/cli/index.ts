@@ -56,6 +56,7 @@ function createCli(): Command {
     .option("-f, --force", "Overwrite existing files")
     .option("--skip-login", "Skip browser login flow")
     .option("-m, --mode <mode>", "Development mode: 'branch' or 'local'")
+    .option("-p, --path <path>", "Path for Tinybird client files")
     .action(async (options) => {
       // Validate mode if provided
       if (options.mode && !["branch", "local"].includes(options.mode)) {
@@ -67,6 +68,7 @@ function createCli(): Command {
         force: options.force,
         skipLogin: options.skipLogin,
         devMode: options.mode,
+        clientPath: options.path,
       });
 
       if (!result.success) {
