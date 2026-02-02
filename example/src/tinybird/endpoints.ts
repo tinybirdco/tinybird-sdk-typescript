@@ -23,7 +23,7 @@ export const topPages = defineEndpoint("top_pages", {
           AND timestamp <= {{DateTime(end_date)}}
         GROUP BY pathname
         ORDER BY views DESC
-        LIMIT {{Int32(limit, 10)}}
+        LIMIT {{Int32(limit, 5)}}
       `,
     }),
   ],
