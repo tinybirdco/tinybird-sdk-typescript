@@ -104,7 +104,7 @@ Sends generated resources to Tinybird's API and fetches existing resources.
 
 ### Codegen Layer (`src/codegen/`)
 
-Converts Tinybird API responses to TypeScript SDK code. Used by `pull` command.
+Converts Tinybird API responses to TypeScript SDK code.
 
 **Files:**
 - `index.ts` - Main code generators (`generateDatasourceCode()`, `generatePipeCode()`, etc.)
@@ -121,8 +121,7 @@ Converts Tinybird API responses to TypeScript SDK code. Used by `pull` command.
 User-facing commands for development workflow.
 
 **Commands:**
-- `tinybird init` - Initialize a new project (auto-pulls existing resources)
-- `tinybird pull` - Pull existing workspace resources as TypeScript
+- `tinybird init` - Initialize a new project (detects existing `.datasource`/`.pipe` files)
 - `tinybird dev` - Watch mode with hot reload (feature branches only)
 - `tinybird build` - Build and deploy to branches (not main)
 - `tinybird deploy` - Deploy to main workspace (production)
@@ -131,8 +130,7 @@ User-facing commands for development workflow.
 
 **Key Files:**
 - `index.ts` - Command definitions and entry point
-- `commands/init.ts` - Project initialization with auto-pull
-- `commands/pull.ts` - Pull resources from workspace
+- `commands/init.ts` - Project initialization with datafile detection
 - `commands/build.ts` - Build to branches
 - `commands/deploy.ts` - Deploy to main
 - `commands/dev.ts` - Watch mode

@@ -160,7 +160,7 @@ const result = await tinybird.query.topPages({
 
 ### `npx tinybird init`
 
-Initialize a new Tinybird TypeScript project. If you're logged in and your workspace has existing resources (datasources, pipes), they will be automatically pulled and converted to TypeScript.
+Initialize a new Tinybird TypeScript project. If you have existing `.datasource` and `.pipe` files in your repository, the CLI will detect them and ask if you want to include them in your configuration.
 
 ```bash
 npx tinybird init
@@ -168,14 +168,7 @@ npx tinybird init --force       # Overwrite existing files
 npx tinybird init --skip-login  # Skip browser login flow
 ```
 
-### `npx tinybird pull`
-
-Pull workspace resources and convert them to TypeScript SDK format. Useful for importing existing Tinybird resources into your TypeScript project.
-
-```bash
-npx tinybird pull
-npx tinybird pull --force  # Overwrite existing files
-```
+This enables incremental migration for existing Tinybird projects - you can keep your `.datasource` and `.pipe` files alongside TypeScript definitions.
 
 ### `npx tinybird dev`
 
