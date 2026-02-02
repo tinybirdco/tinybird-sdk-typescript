@@ -106,18 +106,14 @@ function createCli(): Command {
           console.log(`  User: ${result.userEmail}`);
         }
 
-        if (result.resourcesPulled) {
+        if (result.existingDatafiles && result.existingDatafiles.length > 0) {
           console.log(
-            `\nPulled ${result.datasourceCount} datasource(s) and ${result.pipeCount} pipe(s) from workspace.`
+            `\nAdded ${result.existingDatafiles.length} existing datafile(s) to tinybird.json.`
           );
-          console.log("\nDone! Next steps:");
-          console.log(`  1. Review generated files in ${clientPath}/`);
-          console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
-        } else {
-          console.log("\nDone! Next steps:");
-          console.log(`  1. Edit your schema in ${clientPath}/`);
-          console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
         }
+        console.log("\nDone! Next steps:");
+        console.log(`  1. Edit your schema in ${clientPath}/`);
+        console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
       } else if (result.loggedIn === false) {
         console.log("\nLogin was skipped or failed.");
         console.log("\nDone! Next steps:");
