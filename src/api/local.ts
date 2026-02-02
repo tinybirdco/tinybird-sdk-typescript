@@ -261,10 +261,10 @@ export function getLocalWorkspaceName(
   cwd: string
 ): string {
   if (tinybirdBranch) {
-    return `Local_${tinybirdBranch}`;
+    return tinybirdBranch;
   }
 
   // No branch detected - use hash of path like Python implementation
   const hash = crypto.createHash("sha256").update(cwd).digest("hex");
-  return `Local_Build_${hash.substring(0, 16)}`;
+  return `Build_${hash.substring(0, 16)}`;
 }

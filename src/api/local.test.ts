@@ -227,12 +227,12 @@ describe("Local API", () => {
   describe("getLocalWorkspaceName", () => {
     it("uses branch name when available", () => {
       const name = getLocalWorkspaceName("feature_branch", "/some/path");
-      expect(name).toBe("Local_feature_branch");
+      expect(name).toBe("feature_branch");
     });
 
     it("uses hash-based name when no branch", () => {
       const name = getLocalWorkspaceName(null, "/some/path");
-      expect(name).toMatch(/^Local_Build_[a-f0-9]{16}$/);
+      expect(name).toMatch(/^Build_[a-f0-9]{16}$/);
     });
 
     it("generates consistent hash for same path", () => {
