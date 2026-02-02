@@ -28,6 +28,10 @@ export interface BuildCommandOptions {
   useDeployEndpoint?: boolean;
   /** Override the devMode from config */
   devModeOverride?: DevMode;
+  /** Prevent deploying to main workspace (build command safety) */
+  preventMainDeploy?: boolean;
+  /** Force deploy to main workspace (deploy command) */
+  forceMainDeploy?: boolean;
 }
 
 /**
@@ -154,17 +158,35 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
     // Deploy to Tinybird
     // Determine token and endpoint based on git branch
     let effectiveToken = options.tokenOverride ?? config.token;
-    // Use deploy endpoint if on main branch OR if no branch can be detected
+
+    // Determine if we should use the deploy endpoint
     let useDeployEndpoint = options.useDeployEndpoint ?? (config.isMainBranch || !config.tinybirdBranch);
+
+    // Handle forceMainDeploy (deploy command)
+    if (options.forceMainDeploy) {
+      useDeployEndpoint = true;
+    }
+
+    // Handle preventMainDeploy (build command safety)
+    if (options.preventMainDeploy && useDeployEndpoint && !options.dryRun) {
+      return {
+        success: false,
+        build: buildResult,
+        error: `Cannot deploy to main workspace with 'build' command. Use 'tinybird deploy' to deploy to production, or switch to a feature branch.`,
+        durationMs: Date.now() - startTime,
+      };
+    }
 
     if (debug) {
       console.log(`[debug] isMainBranch: ${config.isMainBranch}`);
       console.log(`[debug] tinybirdBranch: ${config.tinybirdBranch}`);
       console.log(`[debug] tokenOverride: ${!!options.tokenOverride}`);
+      console.log(`[debug] preventMainDeploy: ${!!options.preventMainDeploy}`);
+      console.log(`[debug] forceMainDeploy: ${!!options.forceMainDeploy}`);
     }
 
     // For feature branches, get or create the Tinybird branch and use its token
-    if (!config.isMainBranch && config.tinybirdBranch && !options.tokenOverride) {
+    if (!options.forceMainDeploy && !config.isMainBranch && config.tinybirdBranch && !options.tokenOverride) {
       if (debug) {
         console.log(`[debug] Getting/creating Tinybird branch: ${config.tinybirdBranch}`);
       }

@@ -301,6 +301,11 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         modified = true;
       }
 
+      if (!packageJson.scripts["tinybird:deploy"]) {
+        packageJson.scripts["tinybird:deploy"] = "tinybird deploy";
+        modified = true;
+      }
+
       if (modified) {
         fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n");
         created.push("package.json (added tinybird scripts)");
