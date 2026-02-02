@@ -19,7 +19,6 @@ import { runBuild } from "./commands/build.js";
 import { runDeploy } from "./commands/deploy.js";
 import { runDev } from "./commands/dev.js";
 import { runLogin } from "./commands/login.js";
-import { runPull } from "./commands/pull.js";
 import {
   runBranchList,
   runBranchStatus,
@@ -151,38 +150,6 @@ function createCli(): Command {
       if (result.baseUrl) {
         console.log(`  API Host: ${result.baseUrl}`);
       }
-    });
-
-  // Pull command
-  program
-    .command("pull")
-    .description("Pull workspace resources as TypeScript files")
-    .option("-f, --force", "Overwrite existing files")
-    .action(async (options) => {
-      const result = await runPull({
-        force: options.force,
-      });
-
-      if (!result.success) {
-        console.error(`Error: ${result.error}`);
-        process.exit(1);
-      }
-
-      if (result.datasourceCount === 0 && result.pipeCount === 0) {
-        console.log("No resources found in workspace.");
-        return;
-      }
-
-      if (result.created.length > 0) {
-        console.log("Created:");
-        result.created.forEach((file) => {
-          console.log(`  - ${file}`);
-        });
-      }
-
-      console.log(
-        `\nPulled ${result.datasourceCount} datasource(s) and ${result.pipeCount} pipe(s).`
-      );
     });
 
   // Build command
