@@ -151,6 +151,18 @@ export interface EntityInfo {
 }
 
 /**
+ * Raw datafile loaded directly from disk
+ */
+export interface RawDatafile {
+  /** The file name (without extension) */
+  name: string;
+  /** The raw content of the file */
+  content: string;
+  /** The source file path (relative to cwd) */
+  sourceFile: string;
+}
+
+/**
  * Result of loading entities from multiple files
  */
 export interface LoadedEntities {
@@ -160,6 +172,10 @@ export interface LoadedEntities {
   pipes: Record<string, { definition: PipeDefinition; info: EntityInfo }>;
   /** Discovered connections with their metadata */
   connections: Record<string, { definition: ConnectionDefinition; info: EntityInfo }>;
+  /** Raw .datasource files loaded directly */
+  rawDatasources: RawDatafile[];
+  /** Raw .pipe files loaded directly */
+  rawPipes: RawDatafile[];
   /** All source files that were scanned */
   sourceFiles: string[];
 }
@@ -199,6 +215,8 @@ export async function loadEntities(options: LoadEntitiesOptions): Promise<Loaded
     datasources: {},
     pipes: {},
     connections: {},
+    rawDatasources: [],
+    rawPipes: [],
     sourceFiles: [],
   };
 
@@ -213,6 +231,31 @@ export async function loadEntities(options: LoadEntitiesOptions): Promise<Loaded
     }
 
     result.sourceFiles.push(includePath);
+
+    // Check if this is a raw datafile (.datasource or .pipe)
+    if (includePath.endsWith(".datasource")) {
+      const content = fs.readFileSync(absolutePath, "utf-8");
+      const name = path.basename(includePath, ".datasource");
+      result.rawDatasources.push({
+        name,
+        content,
+        sourceFile: includePath,
+      });
+      continue;
+    }
+
+    if (includePath.endsWith(".pipe")) {
+      const content = fs.readFileSync(absolutePath, "utf-8");
+      const name = path.basename(includePath, ".pipe");
+      result.rawPipes.push({
+        name,
+        content,
+        sourceFile: includePath,
+      });
+      continue;
+    }
+
+    // TypeScript file - process through esbuild
     const fileDir = path.dirname(absolutePath);
 
     // Create a temporary output file for the bundle

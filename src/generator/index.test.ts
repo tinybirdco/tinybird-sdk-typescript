@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { generateResources, build } from "./index.js";
+import { generateResources, build, buildFromInclude } from "./index.js";
 import { defineProject } from "../schema/project.js";
 import { defineDatasource } from "../schema/datasource.js";
 import { definePipe, node } from "../schema/pipe.js";
@@ -204,6 +204,126 @@ export const notAProject = { foo: "bar" };
       await expect(build({ schemaPath })).rejects.toThrow(
         "No ProjectDefinition found"
       );
+    });
+  });
+
+  describe("buildFromInclude with raw datafiles", () => {
+    let tempDir: string;
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-raw-test-"));
+    });
+
+    afterEach(() => {
+      try {
+        fs.rmSync(tempDir, { recursive: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    });
+
+    it("includes raw .datasource files directly", async () => {
+      // Create a raw datasource file
+      const datasourceContent = `SCHEMA >
+    timestamp DateTime,
+    user_id String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "timestamp"
+`;
+      const datasourcePath = path.join(tempDir, "events.datasource");
+      fs.writeFileSync(datasourcePath, datasourceContent);
+
+      const result = await buildFromInclude({
+        includePaths: [datasourcePath],
+        cwd: tempDir,
+      });
+
+      expect(result.resources.datasources).toHaveLength(1);
+      expect(result.resources.datasources[0].name).toBe("events");
+      expect(result.resources.datasources[0].content).toBe(datasourceContent);
+      expect(result.stats.datasourceCount).toBe(1);
+    });
+
+    it("includes raw .pipe files directly", async () => {
+      // Create a raw pipe file
+      const pipeContent = `NODE endpoint
+SQL >
+    SELECT count() AS total FROM events
+
+TYPE endpoint
+`;
+      const pipePath = path.join(tempDir, "stats.pipe");
+      fs.writeFileSync(pipePath, pipeContent);
+
+      const result = await buildFromInclude({
+        includePaths: [pipePath],
+        cwd: tempDir,
+      });
+
+      expect(result.resources.pipes).toHaveLength(1);
+      expect(result.resources.pipes[0].name).toBe("stats");
+      expect(result.resources.pipes[0].content).toBe(pipeContent);
+      expect(result.stats.pipeCount).toBe(1);
+    });
+
+    it("includes multiple raw datasource and pipe files", async () => {
+      // Create multiple raw datasource files
+      const datasource1Content = `SCHEMA >
+    event_id String,
+    timestamp DateTime
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "timestamp"
+`;
+      const datasource1Path = path.join(tempDir, "raw_events.datasource");
+      fs.writeFileSync(datasource1Path, datasource1Content);
+
+      const datasource2Content = `SCHEMA >
+    user_id String,
+    name String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "user_id"
+`;
+      const datasource2Path = path.join(tempDir, "users.datasource");
+      fs.writeFileSync(datasource2Path, datasource2Content);
+
+      // Create a raw pipe file
+      const rawPipeContent = `NODE main
+SQL >
+    SELECT * FROM raw_events
+
+TYPE endpoint
+`;
+      const rawPipePath = path.join(tempDir, "raw_endpoint.pipe");
+      fs.writeFileSync(rawPipePath, rawPipeContent);
+
+      const result = await buildFromInclude({
+        includePaths: [datasource1Path, datasource2Path, rawPipePath],
+        cwd: tempDir,
+      });
+
+      // Should have 2 datasources (both from raw)
+      expect(result.resources.datasources).toHaveLength(2);
+      expect(result.stats.datasourceCount).toBe(2);
+
+      // Should have 1 pipe (from raw)
+      expect(result.resources.pipes).toHaveLength(1);
+      expect(result.stats.pipeCount).toBe(1);
+
+      // Check the raw files are included with correct content
+      const rawDs1 = result.resources.datasources.find(d => d.name === "raw_events");
+      expect(rawDs1).toBeDefined();
+      expect(rawDs1!.content).toBe(datasource1Content);
+
+      const rawDs2 = result.resources.datasources.find(d => d.name === "users");
+      expect(rawDs2).toBeDefined();
+      expect(rawDs2!.content).toBe(datasource2Content);
+
+      const rawPipe = result.resources.pipes.find(p => p.name === "raw_endpoint");
+      expect(rawPipe).toBeDefined();
+      expect(rawPipe!.content).toBe(rawPipeContent);
     });
   });
 });
