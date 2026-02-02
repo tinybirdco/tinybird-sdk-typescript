@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterEach, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
 import { deployToMain } from "./deploy.js";
@@ -10,12 +10,21 @@ import {
   createSetLiveSuccessResponse,
   createBuildFailureResponse,
   createBuildMultipleErrorsResponse,
+  createDeploymentsListResponse,
 } from "../test/handlers.js";
 import type { GeneratedResources } from "../generator/index.js";
 
 const server = setupServer();
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+beforeEach(() => {
+  // Set up default handler for deployments list (used by stale deployment cleanup)
+  server.use(
+    http.get(`${BASE_URL}/v1/deployments`, () => {
+      return HttpResponse.json(createDeploymentsListResponse());
+    })
+  );
+});
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 

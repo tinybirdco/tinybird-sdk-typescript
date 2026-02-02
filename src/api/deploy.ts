@@ -12,8 +12,16 @@ import type { BuildConfig, BuildApiResult } from "./build.js";
 export interface Deployment {
   id: string;
   status: string;
+  live?: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+/**
+ * Response from /v1/deployments list endpoint
+ */
+export interface DeploymentsListResponse {
+  deployments: Deployment[];
 }
 
 /**
@@ -104,6 +112,40 @@ export async function deployToMain(
       new Blob([pipe.content], { type: "text/plain" }),
       fileName
     );
+  }
+
+  // Step 0: Clean up any stale non-live deployments that might block the new deployment
+  try {
+    const deploymentsUrl = `${baseUrl}/v1/deployments`;
+    const deploymentsResponse = await fetch(deploymentsUrl, {
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+      },
+    });
+
+    if (deploymentsResponse.ok) {
+      const deploymentsBody = (await deploymentsResponse.json()) as DeploymentsListResponse;
+      const staleDeployments = deploymentsBody.deployments.filter(
+        (d) => !d.live && d.status !== "live"
+      );
+
+      for (const stale of staleDeployments) {
+        if (debug) {
+          console.log(`[debug] Cleaning up stale deployment: ${stale.id} (status: ${stale.status})`);
+        }
+        await fetch(`${baseUrl}/v1/deployments/${stale.id}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${config.token}`,
+          },
+        });
+      }
+    }
+  } catch (e) {
+    // Ignore errors during cleanup - we'll try to deploy anyway
+    if (debug) {
+      console.log(`[debug] Failed to clean up stale deployments: ${e}`);
+    }
   }
 
   // Step 1: Create deployment via /v1/deploy
