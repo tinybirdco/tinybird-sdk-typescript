@@ -176,20 +176,19 @@ export async function createLocalWorkspace(
 ): Promise<LocalWorkspace> {
   const url = `${LOCAL_BASE_URL}/v1/workspaces`;
 
-  const body: Record<string, string> = {
-    name: workspaceName,
-  };
+  const formData = new URLSearchParams();
+  formData.append("name", workspaceName);
   if (organizationId) {
-    body.assign_to_organization_id = organizationId;
+    formData.append("assign_to_organization_id", organizationId);
   }
 
   const response = await fetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${userToken}`,
-      "Content-Type": "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: JSON.stringify(body),
+    body: formData.toString(),
   });
 
   if (!response.ok) {

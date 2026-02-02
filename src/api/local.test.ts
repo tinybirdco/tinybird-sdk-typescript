@@ -131,10 +131,11 @@ describe("Local API", () => {
     it("creates a new workspace", async () => {
       server.use(
         http.post(`${LOCAL_BASE_URL}/v1/workspaces`, async ({ request }) => {
-          const body = (await request.json()) as { name: string };
+          const formData = await request.text();
+          const params = new URLSearchParams(formData);
           return HttpResponse.json({
             id: "new-ws-id",
-            name: body.name,
+            name: params.get("name"),
             token: "new-ws-token",
           });
         })
