@@ -10,9 +10,9 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 config({ path: ".env" });
 
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, join } from "node:path";
 import { Command } from "commander";
 import { runInit } from "./commands/init.js";
 import { runBuild } from "./commands/build.js";
@@ -36,6 +36,25 @@ const VERSION = packageJson.version;
  */
 function formatTime(): string {
   return new Date().toLocaleTimeString("en-US", { hour12: false });
+}
+
+/**
+ * Detect package manager and return the appropriate run command
+ */
+function detectPackageManagerRunCmd(): string {
+  const cwd = process.cwd();
+
+  if (existsSync(join(cwd, "pnpm-lock.yaml"))) {
+    return "pnpm";
+  }
+  if (existsSync(join(cwd, "yarn.lock"))) {
+    return "yarn";
+  }
+  if (existsSync(join(cwd, "bun.lockb"))) {
+    return "bun run";
+  }
+  // Default to npm
+  return "npm run";
 }
 
 /**
@@ -90,6 +109,10 @@ function createCli(): Command {
         });
       }
 
+      // Detect package manager for run command
+      const runCmd = detectPackageManagerRunCmd();
+      const clientPath = result.clientPath ?? "tinybird";
+
       if (result.loggedIn) {
         console.log(`\nLogged in successfully!`);
         if (result.workspaceName) {
@@ -99,18 +122,18 @@ function createCli(): Command {
           console.log(`  User: ${result.userEmail}`);
         }
         console.log("\nDone! Next steps:");
-        console.log("  1. Edit src/tinybird/schema.ts with your schema");
-        console.log("  2. Run 'npx tinybird dev' to start development");
+        console.log(`  1. Edit your schema in ${clientPath}/`);
+        console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
       } else if (result.loggedIn === false) {
         console.log("\nLogin was skipped or failed.");
         console.log("\nDone! Next steps:");
         console.log("  1. Run 'npx tinybird login' to authenticate");
-        console.log("  2. Edit src/tinybird/schema.ts with your schema");
-        console.log("  3. Run 'npx tinybird dev' to start development");
+        console.log(`  2. Edit your schema in ${clientPath}/`);
+        console.log(`  3. Run '${runCmd} tinybird:dev' to start development`);
       } else {
         console.log("\nDone! Next steps:");
-        console.log("  1. Edit src/tinybird/schema.ts with your schema");
-        console.log("  2. Run 'npx tinybird dev' to start development");
+        console.log(`  1. Edit your schema in ${clientPath}/`);
+        console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
       }
     });
 
