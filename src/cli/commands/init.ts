@@ -4,12 +4,14 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import * as p from "@clack/prompts";
+import pc from "picocolors";
 import {
   hasValidToken,
-  getTinybirdDir,
   getRelativeTinybirdDir,
   getConfigPath,
   updateConfig,
+  type DevMode,
 } from "../config.js";
 import { browserLogin } from "../auth.js";
 import { saveTinybirdToken } from "../env.js";
@@ -40,9 +42,9 @@ export type PageViewsRow = InferRow<typeof pageViews>;
 `;
 
 /**
- * Default starter content for pipes.ts
+ * Default starter content for endpoints.ts
  */
-const PIPES_CONTENT = `import { defineEndpoint, node, t, p, type InferParams, type InferOutputRow } from "@tinybirdco/sdk";
+const ENDPOINTS_CONTENT = `import { defineEndpoint, node, t, p, type InferParams, type InferOutputRow } from "@tinybirdco/sdk";
 
 /**
  * Top pages endpoint - get the most visited pages
@@ -88,7 +90,7 @@ const CLIENT_CONTENT = `/**
  * Tinybird Client
  *
  * This file defines the typed Tinybird client for your project.
- * Add your datasources and pipes here as you create them.
+ * Add your datasources and endpoints here as you create them.
  */
 
 import { createTinybirdClient } from "@tinybirdco/sdk";
@@ -97,7 +99,7 @@ import { createTinybirdClient } from "@tinybirdco/sdk";
 import { pageViews, type PageViewsRow } from "./datasources";
 
 // Import endpoints and their types
-import { topPages, type TopPagesParams, type TopPagesOutput } from "./pipes";
+import { topPages, type TopPagesParams, type TopPagesOutput } from "./endpoints";
 
 // Create the typed Tinybird client
 export const tinybird = createTinybirdClient({
@@ -115,14 +117,12 @@ export { pageViews, topPages };
 /**
  * Default config content generator
  */
-function createDefaultConfig(tinybirdDir: string) {
+function createDefaultConfig(tinybirdDir: string, devMode: DevMode) {
   return {
-    include: [
-      `${tinybirdDir}/datasources.ts`,
-      `${tinybirdDir}/pipes.ts`,
-    ],
+    include: [`${tinybirdDir}/datasources.ts`, `${tinybirdDir}/endpoints.ts`],
     token: "${TINYBIRD_TOKEN}",
     baseUrl: "https://api.tinybird.co",
+    devMode,
   };
 }
 
@@ -136,6 +136,10 @@ export interface InitOptions {
   force?: boolean;
   /** Skip the login flow */
   skipLogin?: boolean;
+  /** Development mode - if provided, skip interactive prompt */
+  devMode?: DevMode;
+  /** Client path - if provided, skip interactive prompt */
+  clientPath?: string;
 }
 
 /**
@@ -156,6 +160,10 @@ export interface InitResult {
   workspaceName?: string;
   /** User email after login */
   userEmail?: string;
+  /** Selected development mode */
+  devMode?: DevMode;
+  /** Selected client path */
+  clientPath?: string;
 }
 
 /**
@@ -163,7 +171,7 @@ export interface InitResult {
  *
  * Creates:
  * - tinybird.json in the project root
- * - src/tinybird/ folder with datasources.ts, pipes.ts, and client.ts
+ * - src/tinybird/ folder with datasources.ts, endpoints.ts, and client.ts
  *
  * @param options - Init options
  * @returns Init result
@@ -176,13 +184,72 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   const created: string[] = [];
   const skipped: string[] = [];
 
+  // Determine devMode - prompt if not provided
+  let devMode: DevMode = options.devMode ?? "branch";
+
+  if (!options.devMode) {
+    // Show interactive prompt for workflow selection
+    p.intro(pc.cyan("tinybird init"));
+
+    const workflowChoice = await p.select({
+      message: "How do you want to develop with Tinybird?",
+      options: [
+        {
+          value: "branch",
+          label: "Branches",
+          hint: "Use Tinybird Cloud with git-based branching",
+        },
+        {
+          value: "local",
+          label: "Tinybird Local",
+          hint: "Run your own Tinybird instance locally",
+        },
+      ],
+    });
+
+    if (p.isCancel(workflowChoice)) {
+      p.cancel("Init cancelled.");
+      return {
+        success: false,
+        created: [],
+        skipped: [],
+        error: "Cancelled by user",
+      };
+    }
+
+    devMode = workflowChoice as DevMode;
+  }
+
   // Determine tinybird folder path based on project structure
-  const tinybirdDir = getTinybirdDir(cwd);
-  const relativeTinybirdDir = getRelativeTinybirdDir(cwd);
+  const defaultRelativePath = getRelativeTinybirdDir(cwd);
+  let relativeTinybirdDir = options.clientPath ?? defaultRelativePath;
+
+  if (!options.clientPath && !options.devMode) {
+    // Ask user to confirm or change the client path
+    const clientPathChoice = await p.text({
+      message: "Where should we generate the Tinybird client?",
+      placeholder: defaultRelativePath,
+      defaultValue: defaultRelativePath,
+    });
+
+    if (p.isCancel(clientPathChoice)) {
+      p.cancel("Init cancelled.");
+      return {
+        success: false,
+        created: [],
+        skipped: [],
+        error: "Cancelled by user",
+      };
+    }
+
+    relativeTinybirdDir = clientPathChoice || defaultRelativePath;
+  }
+
+  const tinybirdDir = path.join(cwd, relativeTinybirdDir);
 
   // File paths
   const datasourcesPath = path.join(tinybirdDir, "datasources.ts");
-  const pipesPath = path.join(tinybirdDir, "pipes.ts");
+  const endpointsPath = path.join(tinybirdDir, "endpoints.ts");
   const clientPath = path.join(tinybirdDir, "client.ts");
 
   // Create config file (tinybird.json)
@@ -191,7 +258,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     skipped.push("tinybird.json");
   } else {
     try {
-      const config = createDefaultConfig(relativeTinybirdDir);
+      const config = createDefaultConfig(relativeTinybirdDir, devMode);
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
       created.push("tinybird.json");
     } catch (error) {
@@ -212,7 +279,9 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
       success: false,
       created,
       skipped,
-      error: `Failed to create ${relativeTinybirdDir} folder: ${(error as Error).message}`,
+      error: `Failed to create ${relativeTinybirdDir} folder: ${
+        (error as Error).message
+      }`,
     };
   }
 
@@ -233,19 +302,19 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     }
   }
 
-  // Create pipes.ts
-  if (fs.existsSync(pipesPath) && !force) {
-    skipped.push(`${relativeTinybirdDir}/pipes.ts`);
+  // Create endpoints.ts
+  if (fs.existsSync(endpointsPath) && !force) {
+    skipped.push(`${relativeTinybirdDir}/endpoints.ts`);
   } else {
     try {
-      fs.writeFileSync(pipesPath, PIPES_CONTENT);
-      created.push(`${relativeTinybirdDir}/pipes.ts`);
+      fs.writeFileSync(endpointsPath, ENDPOINTS_CONTENT);
+      created.push(`${relativeTinybirdDir}/endpoints.ts`);
     } catch (error) {
       return {
         success: false,
         created,
         skipped,
-        error: `Failed to create pipes.ts: ${(error as Error).message}`,
+        error: `Failed to create endpoints.ts: ${(error as Error).message}`,
       };
     }
   }
@@ -289,7 +358,10 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
       }
 
       if (modified) {
-        fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n");
+        fs.writeFileSync(
+          packageJsonPath,
+          JSON.stringify(packageJson, null, 2) + "\n"
+        );
         created.push("package.json (added tinybird scripts)");
       }
     } catch {
@@ -312,7 +384,10 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         }
 
         // If custom base URL, update tinybird.json
-        if (authResult.baseUrl && authResult.baseUrl !== "https://api.tinybird.co") {
+        if (
+          authResult.baseUrl &&
+          authResult.baseUrl !== "https://api.tinybird.co"
+        ) {
           updateConfig(configPath, { baseUrl: authResult.baseUrl });
         }
 
@@ -323,15 +398,21 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
           loggedIn: true,
           workspaceName: authResult.workspaceName,
           userEmail: authResult.userEmail,
+          devMode,
+          clientPath: relativeTinybirdDir,
         };
       } catch (error) {
         // Login succeeded but saving credentials failed
-        console.error(`Warning: Failed to save credentials: ${(error as Error).message}`);
+        console.error(
+          `Warning: Failed to save credentials: ${(error as Error).message}`
+        );
         return {
           success: true,
           created,
           skipped,
           loggedIn: false,
+          devMode,
+          clientPath: relativeTinybirdDir,
         };
       }
     } else {
@@ -341,6 +422,8 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         created,
         skipped,
         loggedIn: false,
+        devMode,
+        clientPath: relativeTinybirdDir,
       };
     }
   }
@@ -349,5 +432,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     success: true,
     created,
     skipped,
+    devMode,
+    clientPath: relativeTinybirdDir,
   };
 }

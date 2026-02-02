@@ -23,6 +23,7 @@ import {
   runBranchStatus,
   runBranchDelete,
 } from "./commands/branch.js";
+import { detectPackageManagerRunCmd } from "./utils/package-manager.js";
 import type { DevMode } from "./config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -55,12 +56,20 @@ function createCli(): Command {
     .description("Initialize a new Tinybird TypeScript project")
     .option("-f, --force", "Overwrite existing files")
     .option("--skip-login", "Skip browser login flow")
+    .option("-m, --mode <mode>", "Development mode: 'branch' or 'local'")
+    .option("-p, --path <path>", "Path for Tinybird client files")
     .action(async (options) => {
-      console.log("Initializing Tinybird project...\n");
+      // Validate mode if provided
+      if (options.mode && !["branch", "local"].includes(options.mode)) {
+        console.error(`Error: Invalid mode '${options.mode}'. Use 'branch' or 'local'.`);
+        process.exit(1);
+      }
 
       const result = await runInit({
         force: options.force,
         skipLogin: options.skipLogin,
+        devMode: options.mode,
+        clientPath: options.path,
       });
 
       if (!result.success) {
@@ -82,6 +91,10 @@ function createCli(): Command {
         });
       }
 
+      // Detect package manager for run command
+      const runCmd = detectPackageManagerRunCmd();
+      const clientPath = result.clientPath ?? "tinybird";
+
       if (result.loggedIn) {
         console.log(`\nLogged in successfully!`);
         if (result.workspaceName) {
@@ -91,18 +104,18 @@ function createCli(): Command {
           console.log(`  User: ${result.userEmail}`);
         }
         console.log("\nDone! Next steps:");
-        console.log("  1. Edit src/tinybird/schema.ts with your schema");
-        console.log("  2. Run 'npx tinybird dev' to start development");
+        console.log(`  1. Edit your schema in ${clientPath}/`);
+        console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
       } else if (result.loggedIn === false) {
         console.log("\nLogin was skipped or failed.");
         console.log("\nDone! Next steps:");
         console.log("  1. Run 'npx tinybird login' to authenticate");
-        console.log("  2. Edit src/tinybird/schema.ts with your schema");
-        console.log("  3. Run 'npx tinybird dev' to start development");
+        console.log(`  2. Edit your schema in ${clientPath}/`);
+        console.log(`  3. Run '${runCmd} tinybird:dev' to start development`);
       } else {
         console.log("\nDone! Next steps:");
-        console.log("  1. Edit src/tinybird/schema.ts with your schema");
-        console.log("  2. Run 'npx tinybird dev' to start development");
+        console.log(`  1. Edit your schema in ${clientPath}/`);
+        console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
       }
     });
 
