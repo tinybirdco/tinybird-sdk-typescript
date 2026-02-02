@@ -7,6 +7,13 @@ import * as path from "path";
 import { getCurrentGitBranch, isMainBranch, getTinybirdBranchName } from "./git.js";
 
 /**
+ * Development mode options
+ * - "branch": Use Tinybird cloud with branches (default)
+ * - "local": Use local Tinybird container at localhost:7181
+ */
+export type DevMode = "branch" | "local";
+
+/**
  * Tinybird configuration file structure
  */
 export interface TinybirdConfig {
@@ -18,6 +25,8 @@ export interface TinybirdConfig {
   token: string;
   /** Tinybird API base URL (optional, defaults to EU region) */
   baseUrl?: string;
+  /** Development mode: "branch" (default) or "local" */
+  devMode?: DevMode;
 }
 
 /**
@@ -40,12 +49,19 @@ export interface ResolvedConfig {
   tinybirdBranch: string | null;
   /** Whether we're on the main/master branch */
   isMainBranch: boolean;
+  /** Development mode: "branch" or "local" */
+  devMode: DevMode;
 }
 
 /**
  * Default base URL (EU region)
  */
 const DEFAULT_BASE_URL = "https://api.tinybird.co";
+
+/**
+ * Local Tinybird base URL
+ */
+export const LOCAL_BASE_URL = "http://localhost:7181";
 
 /**
  * Config file name
@@ -243,6 +259,9 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
   const gitBranch = getCurrentGitBranch();
   const tinybirdBranch = getTinybirdBranchName();
 
+  // Resolve devMode (default to "branch")
+  const devMode: DevMode = config.devMode ?? "branch";
+
   return {
     include,
     token: resolvedToken,
@@ -252,6 +271,7 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
     gitBranch,
     tinybirdBranch,
     isMainBranch: isMainBranch(),
+    devMode,
   };
 }
 

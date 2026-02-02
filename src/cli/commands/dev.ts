@@ -4,7 +4,7 @@
 
 import * as path from "path";
 import { watch } from "chokidar";
-import { loadConfig, configExists, findConfigFile, hasValidToken, updateConfig, type ResolvedConfig } from "../config.js";
+import { loadConfig, configExists, findConfigFile, hasValidToken, updateConfig, LOCAL_BASE_URL, type ResolvedConfig, type DevMode } from "../config.js";
 import { runBuild, type BuildCommandResult } from "./build.js";
 import { getOrCreateBranch, type TinybirdBranch } from "../../api/branches.js";
 import { browserLogin } from "../auth.js";
@@ -13,6 +13,12 @@ import {
   validatePipeSchemas,
   type SchemaValidationResult,
 } from "../utils/schema-validation.js";
+import {
+  getLocalTokens,
+  getOrCreateLocalWorkspace,
+  getLocalWorkspaceName,
+  type LocalWorkspace,
+} from "../../api/local.js";
 
 /**
  * Login result info
@@ -44,6 +50,8 @@ export interface DevCommandOptions {
   onLoginComplete?: (info: LoginInfo) => void;
   /** Callback when schema validation completes */
   onSchemaValidation?: (result: SchemaValidationResult) => void;
+  /** Override the devMode from config */
+  devModeOverride?: DevMode;
 }
 
 /**
@@ -54,10 +62,14 @@ export interface BranchReadyInfo {
   gitBranch: string | null;
   /** Whether we're on the main branch */
   isMainBranch: boolean;
-  /** Tinybird branch info (null if on main) */
+  /** Tinybird branch info (null if on main or local mode) */
   tinybirdBranch?: TinybirdBranch;
   /** Whether the branch was newly created */
   wasCreated?: boolean;
+  /** Whether using local mode */
+  isLocal?: boolean;
+  /** Local workspace info (only in local mode) */
+  localWorkspace?: LocalWorkspace;
 }
 
 /**
@@ -98,8 +110,19 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
     );
   }
 
-  // Check if authentication is set up, if not trigger login
-  if (!hasValidToken(cwd)) {
+  // Load config first to determine devMode
+  let config: ResolvedConfig;
+  try {
+    config = loadConfig(cwd);
+  } catch (error) {
+    throw error;
+  }
+
+  // Determine devMode
+  const devMode = options.devModeOverride ?? config.devMode;
+
+  // Check if authentication is set up, if not trigger login (skip for local mode)
+  if (devMode !== "local" && !hasValidToken(cwd)) {
     console.log("No authentication found. Starting login flow...\n");
 
     const authResult = await browserLogin();
@@ -134,51 +157,65 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
       workspaceName: authResult.workspaceName,
       userEmail: authResult.userEmail,
     });
-  }
 
-  // Load config (now should have valid token)
-  let config: ResolvedConfig;
-  try {
+    // Reload config after login
     config = loadConfig(cwd);
-  } catch (error) {
-    throw error;
   }
 
-  // Determine effective token based on git branch
+  // Determine effective token and branch info based on devMode
   let effectiveToken = config.token;
+  let effectiveBaseUrl = config.baseUrl;
   let branchInfo: BranchReadyInfo = {
     gitBranch: config.gitBranch,
     isMainBranch: config.isMainBranch,
   };
 
-  // If we're on a feature branch, get or create the Tinybird branch
-  // Use tinybirdBranch (sanitized name) for Tinybird API, gitBranch for display
-  if (!config.isMainBranch && config.tinybirdBranch) {
-    const branchName = config.tinybirdBranch; // Sanitized name for Tinybird
+  if (devMode === "local") {
+    // Local mode: get tokens from local container and set up workspace
+    const localTokens = await getLocalTokens();
+    const workspaceName = getLocalWorkspaceName(config.tinybirdBranch, config.cwd);
+    const { workspace, wasCreated } = await getOrCreateLocalWorkspace(localTokens, workspaceName);
 
-    // Always fetch fresh from API to avoid stale cache issues
-    const tinybirdBranch = await getOrCreateBranch(
-      {
-        baseUrl: config.baseUrl,
-        token: config.token,
-      },
-      branchName
-    );
-
-    if (!tinybirdBranch.token) {
-      throw new Error(
-        `Branch '${branchName}' was created but no token was returned. ` +
-          `This may be an API issue.`
-      );
-    }
-
-    effectiveToken = tinybirdBranch.token;
+    effectiveToken = workspace.token;
+    effectiveBaseUrl = LOCAL_BASE_URL;
     branchInfo = {
-      gitBranch: config.gitBranch, // Original git branch name for display
-      isMainBranch: false,
-      tinybirdBranch,
-      wasCreated: tinybirdBranch.wasCreated ?? false,
+      gitBranch: config.gitBranch,
+      isMainBranch: false, // Local mode always uses build, not deploy
+      isLocal: true,
+      localWorkspace: workspace,
+      wasCreated,
     };
+  } else {
+    // Branch mode: use Tinybird cloud with branches
+    // If we're on a feature branch, get or create the Tinybird branch
+    // Use tinybirdBranch (sanitized name) for Tinybird API, gitBranch for display
+    if (!config.isMainBranch && config.tinybirdBranch) {
+      const branchName = config.tinybirdBranch; // Sanitized name for Tinybird
+
+      // Always fetch fresh from API to avoid stale cache issues
+      const tinybirdBranch = await getOrCreateBranch(
+        {
+          baseUrl: config.baseUrl,
+          token: config.token,
+        },
+        branchName
+      );
+
+      if (!tinybirdBranch.token) {
+        throw new Error(
+          `Branch '${branchName}' was created but no token was returned. ` +
+            `This may be an API issue.`
+        );
+      }
+
+      effectiveToken = tinybirdBranch.token;
+      branchInfo = {
+        gitBranch: config.gitBranch, // Original git branch name for display
+        isMainBranch: false,
+        tinybirdBranch,
+        wasCreated: tinybirdBranch.wasCreated ?? false,
+      };
+    }
   }
 
   // Notify about branch readiness
@@ -212,7 +249,8 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
       const result = await runBuild({
         cwd: config.cwd,
         tokenOverride: effectiveToken,
-        useDeployEndpoint: config.isMainBranch,
+        useDeployEndpoint: devMode !== "local" && config.isMainBranch,
+        devModeOverride: devMode,
       });
       options.onBuildComplete?.(result);
 
@@ -234,7 +272,7 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
             const validation = await validatePipeSchemas({
               entities: result.build.entities,
               pipeNames: changedPipes,
-              baseUrl: config.baseUrl,
+              baseUrl: effectiveBaseUrl,
               token: effectiveToken,
             });
 
