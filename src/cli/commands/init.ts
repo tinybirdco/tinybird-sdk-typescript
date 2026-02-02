@@ -11,6 +11,7 @@ import {
   getRelativeTinybirdDir,
   getConfigPath,
   updateConfig,
+  loadConfig,
   type DevMode,
 } from "../config.js";
 import { browserLogin } from "../auth.js";
@@ -484,6 +485,55 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         devMode,
         clientPath: relativeTinybirdDir,
       };
+    }
+  }
+
+  // If we have a valid token, try to pull resources from the workspace
+  // This handles the case where the user already has a token configured
+  if (hasValidToken(cwd)) {
+    // Only pull if files were just created (force) or would have been created
+    const filesWereCreated =
+      created.some((f) => f.includes("datasources.ts")) ||
+      created.some((f) => f.includes("endpoints.ts")) ||
+      created.some((f) => f.includes("client.ts"));
+
+    if (filesWereCreated || force) {
+      try {
+        const config = loadConfig(cwd);
+        const pullResult = await pullResourcesFromWorkspace({
+          token: config.token,
+          baseUrl: config.baseUrl,
+          tinybirdDir,
+          relativeTinybirdDir,
+          datasourcesPath,
+          endpointsPath,
+          clientPath,
+        });
+
+        if (pullResult.pulled) {
+          // Replace created files with pulled ones
+          const pulledCreated = created.filter(
+            (f) =>
+              !f.includes("datasources.ts") &&
+              !f.includes("endpoints.ts") &&
+              !f.includes("client.ts")
+          );
+          pulledCreated.push(...pullResult.filesCreated);
+
+          return {
+            success: true,
+            created: pulledCreated,
+            skipped,
+            resourcesPulled: true,
+            datasourceCount: pullResult.datasourceCount,
+            pipeCount: pullResult.pipeCount,
+            devMode,
+            clientPath: relativeTinybirdDir,
+          };
+        }
+      } catch {
+        // Ignore errors - just use default files
+      }
     }
   }
 

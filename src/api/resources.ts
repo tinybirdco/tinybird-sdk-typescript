@@ -85,27 +85,55 @@ interface DatasourceListItem {
 }
 
 /**
+ * Column definition from API response
+ */
+interface ColumnResponse {
+  name: string;
+  type: string;
+  jsonpath?: string;
+  default_value?: string;
+  codec?: string;
+  nullable?: boolean;
+}
+
+/**
+ * Engine object from API response
+ * Note: The detail endpoint uses different property names than the list endpoint
+ */
+interface EngineResponse {
+  engine?: string;
+  // Detail endpoint uses these names
+  sorting_key?: string;
+  partition_key?: string;
+  primary_key?: string;
+  // List endpoint uses these names
+  engine_sorting_key?: string;
+  engine_partition_key?: string;
+  engine_primary_key?: string;
+  // Other engine properties
+  engine_ver?: string;
+  engine_sign?: string;
+  engine_version?: string;
+  engine_summing_columns?: string;
+}
+
+/**
  * Datasource detail response from /v0/datasources/{name}
  */
 interface DatasourceDetailResponse {
   name: string;
   description?: string;
-  columns?: Array<{
-    name: string;
-    type: string;
-    jsonpath?: string;
-    default?: string;
-    codec?: string;
-  }>;
-  engine?: string;
+  // Detail endpoint has columns under schema.columns
+  schema?: {
+    columns?: ColumnResponse[];
+  };
+  // List endpoint has columns at top level
+  columns?: ColumnResponse[];
+  engine?: EngineResponse;
   sorting_key?: string;
   partition_key?: string;
   primary_key?: string;
   ttl?: string;
-  engine_ver?: string;
-  engine_sign?: string;
-  engine_version?: string;
-  engine_summing_columns?: string;
 }
 
 // ============ Pipe Types ============
@@ -311,29 +339,41 @@ export async function getDatasource(
     `/v0/datasources/${name}`
   );
 
-  // Parse engine type from engine string (e.g., "MergeTree" from engine settings)
-  const engineType = parseEngineType(data.engine);
+  // Extract columns from either schema.columns (detail) or columns (list)
+  const rawColumns = data.schema?.columns ?? data.columns ?? [];
+
+  // Extract engine info from the engine object
+  const engineObj = data.engine;
+  const engineType = parseEngineType(engineObj?.engine);
+
+  // Engine properties can be in different places depending on the endpoint
+  const sortingKey =
+    engineObj?.sorting_key ?? engineObj?.engine_sorting_key ?? data.sorting_key;
+  const partitionKey =
+    engineObj?.partition_key ?? engineObj?.engine_partition_key ?? data.partition_key;
+  const primaryKey =
+    engineObj?.primary_key ?? engineObj?.engine_primary_key ?? data.primary_key;
 
   return {
     name: data.name,
     description: data.description,
-    columns: (data.columns ?? []).map((col) => ({
+    columns: rawColumns.map((col) => ({
       name: col.name,
       type: col.type,
       jsonpath: col.jsonpath,
-      default: col.default,
+      default: col.default_value,
       codec: col.codec,
     })),
     engine: {
       type: engineType,
-      sorting_key: data.sorting_key,
-      partition_key: data.partition_key,
-      primary_key: data.primary_key,
+      sorting_key: sortingKey,
+      partition_key: partitionKey,
+      primary_key: primaryKey,
       ttl: data.ttl,
-      ver: data.engine_ver,
-      sign: data.engine_sign,
-      version: data.engine_version,
-      summing_columns: data.engine_summing_columns,
+      ver: engineObj?.engine_ver,
+      sign: engineObj?.engine_sign,
+      version: engineObj?.engine_version,
+      summing_columns: engineObj?.engine_summing_columns,
     },
   };
 }
