@@ -6,7 +6,6 @@ import * as path from "path";
 import { watch } from "chokidar";
 import { loadConfig, configExists, findConfigFile, hasValidToken, updateConfig, LOCAL_BASE_URL, type ResolvedConfig, type DevMode } from "../config.js";
 import { runBuild, type BuildCommandResult } from "./build.js";
-import { runDeploy } from "./deploy.js";
 import { getOrCreateBranch, type TinybirdBranch } from "../../api/branches.js";
 import { browserLogin } from "../auth.js";
 import { saveTinybirdToken } from "../env.js";
@@ -188,9 +187,16 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
     };
   } else {
     // Branch mode: use Tinybird cloud with branches
-    // If we're on a feature branch, get or create the Tinybird branch
+    // Prevent dev mode on main branch - must use deploy command
+    if (config.isMainBranch || !config.tinybirdBranch) {
+      throw new Error(
+        `Cannot use 'dev' command on main branch. Use 'tinybird deploy' to deploy to production, or switch to a feature branch.`
+      );
+    }
+
+    // Get or create the Tinybird branch
     // Use tinybirdBranch (sanitized name) for Tinybird API, gitBranch for display
-    if (!config.isMainBranch && config.tinybirdBranch) {
+    if (config.tinybirdBranch) {
       const branchName = config.tinybirdBranch; // Sanitized name for Tinybird
 
       // Always fetch fresh from API to avoid stale cache issues
@@ -247,16 +253,12 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
     options.onBuildStart?.();
 
     try {
-      // Use runDeploy for main branch (cloud mode), runBuild for branches/local
-      const shouldUseDeploy = devMode !== "local" && config.isMainBranch;
-
-      const result = shouldUseDeploy
-        ? await runDeploy({ cwd: config.cwd })
-        : await runBuild({
-            cwd: config.cwd,
-            tokenOverride: effectiveToken,
-            devModeOverride: devMode,
-          });
+      // Always use runBuild - main branch is blocked at startup
+      const result = await runBuild({
+        cwd: config.cwd,
+        tokenOverride: effectiveToken,
+        devModeOverride: devMode,
+      });
       options.onBuildComplete?.(result);
 
       // Validate pipe schemas after successful deploy
