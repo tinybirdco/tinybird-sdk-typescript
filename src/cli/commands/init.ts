@@ -42,9 +42,9 @@ export type PageViewsRow = InferRow<typeof pageViews>;
 `;
 
 /**
- * Default starter content for pipes.ts
+ * Default starter content for endpoints.ts
  */
-const PIPES_CONTENT = `import { defineEndpoint, node, t, p, type InferParams, type InferOutputRow } from "@tinybirdco/sdk";
+const ENDPOINTS_CONTENT = `import { defineEndpoint, node, t, p, type InferParams, type InferOutputRow } from "@tinybirdco/sdk";
 
 /**
  * Top pages endpoint - get the most visited pages
@@ -90,7 +90,7 @@ const CLIENT_CONTENT = `/**
  * Tinybird Client
  *
  * This file defines the typed Tinybird client for your project.
- * Add your datasources and pipes here as you create them.
+ * Add your datasources and endpoints here as you create them.
  */
 
 import { createTinybirdClient } from "@tinybirdco/sdk";
@@ -99,7 +99,7 @@ import { createTinybirdClient } from "@tinybirdco/sdk";
 import { pageViews, type PageViewsRow } from "./datasources";
 
 // Import endpoints and their types
-import { topPages, type TopPagesParams, type TopPagesOutput } from "./pipes";
+import { topPages, type TopPagesParams, type TopPagesOutput } from "./endpoints";
 
 // Create the typed Tinybird client
 export const tinybird = createTinybirdClient({
@@ -119,7 +119,7 @@ export { pageViews, topPages };
  */
 function createDefaultConfig(tinybirdDir: string, devMode: DevMode) {
   return {
-    include: [`${tinybirdDir}/datasources.ts`, `${tinybirdDir}/pipes.ts`],
+    include: [`${tinybirdDir}/datasources.ts`, `${tinybirdDir}/endpoints.ts`],
     token: "${TINYBIRD_TOKEN}",
     baseUrl: "https://api.tinybird.co",
     devMode,
@@ -171,7 +171,7 @@ export interface InitResult {
  *
  * Creates:
  * - tinybird.json in the project root
- * - src/tinybird/ folder with datasources.ts, pipes.ts, and client.ts
+ * - src/tinybird/ folder with datasources.ts, endpoints.ts, and client.ts
  *
  * @param options - Init options
  * @returns Init result
@@ -249,7 +249,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
 
   // File paths
   const datasourcesPath = path.join(tinybirdDir, "datasources.ts");
-  const pipesPath = path.join(tinybirdDir, "pipes.ts");
+  const endpointsPath = path.join(tinybirdDir, "endpoints.ts");
   const clientPath = path.join(tinybirdDir, "client.ts");
 
   // Create config file (tinybird.json)
@@ -302,19 +302,19 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     }
   }
 
-  // Create pipes.ts
-  if (fs.existsSync(pipesPath) && !force) {
-    skipped.push(`${relativeTinybirdDir}/pipes.ts`);
+  // Create endpoints.ts
+  if (fs.existsSync(endpointsPath) && !force) {
+    skipped.push(`${relativeTinybirdDir}/endpoints.ts`);
   } else {
     try {
-      fs.writeFileSync(pipesPath, PIPES_CONTENT);
-      created.push(`${relativeTinybirdDir}/pipes.ts`);
+      fs.writeFileSync(endpointsPath, ENDPOINTS_CONTENT);
+      created.push(`${relativeTinybirdDir}/endpoints.ts`);
     } catch (error) {
       return {
         success: false,
         created,
         skipped,
-        error: `Failed to create pipes.ts: ${(error as Error).message}`,
+        error: `Failed to create endpoints.ts: ${(error as Error).message}`,
       };
     }
   }

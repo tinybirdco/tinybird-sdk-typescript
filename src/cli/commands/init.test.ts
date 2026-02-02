@@ -25,15 +25,15 @@ describe("Init Command", () => {
   });
 
   describe("folder structure creation", () => {
-    it("creates tinybird folder with datasources.ts, pipes.ts, client.ts when project has no src folder", async () => {
+    it("creates tinybird folder with datasources.ts, endpoints.ts, client.ts when project has no src folder", async () => {
       const result = await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch", clientPath: "tinybird" });
 
       expect(result.success).toBe(true);
       expect(result.created).toContain("tinybird/datasources.ts");
-      expect(result.created).toContain("tinybird/pipes.ts");
+      expect(result.created).toContain("tinybird/endpoints.ts");
       expect(result.created).toContain("tinybird/client.ts");
       expect(fs.existsSync(path.join(tempDir, "tinybird", "datasources.ts"))).toBe(true);
-      expect(fs.existsSync(path.join(tempDir, "tinybird", "pipes.ts"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, "tinybird", "endpoints.ts"))).toBe(true);
       expect(fs.existsSync(path.join(tempDir, "tinybird", "client.ts"))).toBe(true);
     });
 
@@ -45,13 +45,13 @@ describe("Init Command", () => {
 
       expect(result.success).toBe(true);
       expect(result.created).toContain("src/tinybird/datasources.ts");
-      expect(result.created).toContain("src/tinybird/pipes.ts");
+      expect(result.created).toContain("src/tinybird/endpoints.ts");
       expect(result.created).toContain("src/tinybird/client.ts");
       expect(
         fs.existsSync(path.join(tempDir, "src", "tinybird", "datasources.ts"))
       ).toBe(true);
       expect(
-        fs.existsSync(path.join(tempDir, "src", "tinybird", "pipes.ts"))
+        fs.existsSync(path.join(tempDir, "src", "tinybird", "endpoints.ts"))
       ).toBe(true);
       expect(
         fs.existsSync(path.join(tempDir, "src", "tinybird", "client.ts"))
@@ -69,7 +69,7 @@ describe("Init Command", () => {
       );
       expect(config.include).toEqual([
         "tinybird/datasources.ts",
-        "tinybird/pipes.ts",
+        "tinybird/endpoints.ts",
       ]);
     });
 
@@ -85,7 +85,7 @@ describe("Init Command", () => {
       );
       expect(config.include).toEqual([
         "src/tinybird/datasources.ts",
-        "src/tinybird/pipes.ts",
+        "src/tinybird/endpoints.ts",
       ]);
     });
   });
@@ -138,7 +138,7 @@ describe("Init Command", () => {
       );
       expect(config.include).toEqual([
         "tinybird/datasources.ts",
-        "tinybird/pipes.ts",
+        "tinybird/endpoints.ts",
       ]);
     });
   });
@@ -158,11 +158,11 @@ describe("Init Command", () => {
       expect(content).toContain("PageViewsRow");
     });
 
-    it("creates pipes.ts with example endpoint and types", async () => {
+    it("creates endpoints.ts with example endpoint and types", async () => {
       await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch", clientPath: "tinybird" });
 
       const content = fs.readFileSync(
-        path.join(tempDir, "tinybird", "pipes.ts"),
+        path.join(tempDir, "tinybird", "endpoints.ts"),
         "utf-8"
       );
 
