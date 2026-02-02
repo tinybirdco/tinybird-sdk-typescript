@@ -246,6 +246,7 @@ describe("Init Command", () => {
       );
       expect(updatedPackageJson.scripts["tinybird:dev"]).toBe("tinybird dev");
       expect(updatedPackageJson.scripts["tinybird:build"]).toBe("tinybird build");
+      expect(updatedPackageJson.scripts["tinybird:pull"]).toBe("tinybird pull");
       expect(updatedPackageJson.scripts.dev).toBe("next dev"); // preserved
     });
 
@@ -255,6 +256,7 @@ describe("Init Command", () => {
         scripts: {
           "tinybird:dev": "custom dev command",
           "tinybird:build": "custom build command",
+          "tinybird:pull": "custom pull command",
         },
       };
       fs.writeFileSync(
@@ -272,6 +274,7 @@ describe("Init Command", () => {
       );
       expect(updatedPackageJson.scripts["tinybird:dev"]).toBe("custom dev command");
       expect(updatedPackageJson.scripts["tinybird:build"]).toBe("custom build command");
+      expect(updatedPackageJson.scripts["tinybird:pull"]).toBe("custom pull command");
     });
 
     it("creates scripts object if package.json has no scripts", async () => {
