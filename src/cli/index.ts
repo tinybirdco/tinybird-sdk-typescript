@@ -10,9 +10,9 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 config({ path: ".env" });
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve, join } from "node:path";
+import { dirname, resolve } from "node:path";
 import { Command } from "commander";
 import { runInit } from "./commands/init.js";
 import { runBuild } from "./commands/build.js";
@@ -23,6 +23,7 @@ import {
   runBranchStatus,
   runBranchDelete,
 } from "./commands/branch.js";
+import { detectPackageManagerRunCmd } from "./utils/package-manager.js";
 import type { DevMode } from "./config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -36,46 +37,6 @@ const VERSION = packageJson.version;
  */
 function formatTime(): string {
   return new Date().toLocaleTimeString("en-US", { hour12: false });
-}
-
-/**
- * Detect package manager and return the appropriate run command
- */
-function detectPackageManagerRunCmd(): string {
-  const cwd = process.cwd();
-
-  // Check lockfiles first (most reliable)
-  if (existsSync(join(cwd, "pnpm-lock.yaml"))) {
-    return "pnpm";
-  }
-  if (existsSync(join(cwd, "yarn.lock"))) {
-    return "yarn";
-  }
-  if (existsSync(join(cwd, "bun.lockb"))) {
-    return "bun run";
-  }
-  if (existsSync(join(cwd, "package-lock.json"))) {
-    return "npm run";
-  }
-
-  // Check packageManager field in package.json
-  const packageJsonPath = join(cwd, "package.json");
-  if (existsSync(packageJsonPath)) {
-    try {
-      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
-      const pm = packageJson.packageManager;
-      if (typeof pm === "string") {
-        if (pm.startsWith("pnpm")) return "pnpm";
-        if (pm.startsWith("yarn")) return "yarn";
-        if (pm.startsWith("bun")) return "bun run";
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }
-
-  // Default to npm
-  return "npm run";
 }
 
 /**
