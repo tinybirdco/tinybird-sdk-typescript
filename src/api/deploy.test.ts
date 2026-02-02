@@ -5,10 +5,11 @@ import { deployToMain } from "./deploy.js";
 import type { BuildConfig } from "./build.js";
 import {
   BASE_URL,
-  createBuildSuccessResponse,
+  createDeploySuccessResponse,
+  createDeploymentStatusResponse,
+  createSetLiveSuccessResponse,
   createBuildFailureResponse,
   createBuildMultipleErrorsResponse,
-  createNoChangesResponse,
 } from "../test/handlers.js";
 import type { GeneratedResources } from "../generator/index.js";
 
@@ -34,42 +35,64 @@ describe("Deploy API", () => {
     connections: [],
   };
 
-  describe("deployToMain", () => {
-    it("successfully deploys resources", async () => {
-      server.use(
-        http.post(`${BASE_URL}/v1/deploy`, () => {
-          return HttpResponse.json(
-            createBuildSuccessResponse({
-              buildId: "deploy-abc",
-              newPipes: ["top_events"],
-              newDatasources: ["events"],
-            })
-          );
-        })
-      );
+  // Helper to set up successful deploy flow
+  function setupSuccessfulDeployFlow(deploymentId = "deploy-abc") {
+    server.use(
+      http.post(`${BASE_URL}/v1/deploy`, () => {
+        return HttpResponse.json(
+          createDeploySuccessResponse({ deploymentId, status: "pending" })
+        );
+      }),
+      http.get(`${BASE_URL}/v1/deployments/${deploymentId}`, () => {
+        return HttpResponse.json(
+          createDeploymentStatusResponse({ deploymentId, status: "data_ready" })
+        );
+      }),
+      http.post(`${BASE_URL}/v1/deployments/${deploymentId}/set-live`, () => {
+        return HttpResponse.json(createSetLiveSuccessResponse());
+      })
+    );
+  }
 
-      const result = await deployToMain(config, resources);
+  describe("deployToMain", () => {
+    it("successfully deploys resources with full flow", async () => {
+      setupSuccessfulDeployFlow("deploy-abc");
+
+      const result = await deployToMain(config, resources, { pollIntervalMs: 1 });
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("success");
       expect(result.buildId).toBe("deploy-abc");
       expect(result.datasourceCount).toBe(1);
       expect(result.pipeCount).toBe(1);
-      expect(result.pipes?.created).toEqual(["top_events"]);
-      expect(result.datasources?.created).toEqual(["events"]);
     });
 
-    it("handles no changes response", async () => {
+    it("polls until deployment is ready", async () => {
+      let pollCount = 0;
+
       server.use(
         http.post(`${BASE_URL}/v1/deploy`, () => {
-          return HttpResponse.json(createNoChangesResponse());
+          return HttpResponse.json(
+            createDeploySuccessResponse({ deploymentId: "deploy-poll", status: "pending" })
+          );
+        }),
+        http.get(`${BASE_URL}/v1/deployments/deploy-poll`, () => {
+          pollCount++;
+          // Return pending for first 2 polls, then data_ready
+          const status = pollCount < 3 ? "pending" : "data_ready";
+          return HttpResponse.json(
+            createDeploymentStatusResponse({ deploymentId: "deploy-poll", status })
+          );
+        }),
+        http.post(`${BASE_URL}/v1/deployments/deploy-poll/set-live`, () => {
+          return HttpResponse.json(createSetLiveSuccessResponse());
         })
       );
 
-      const result = await deployToMain(config, resources);
+      const result = await deployToMain(config, resources, { pollIntervalMs: 1 });
 
       expect(result.success).toBe(true);
-      expect(result.result).toBe("no_changes");
+      expect(pollCount).toBe(3);
     });
 
     it("handles deploy failure with single error", async () => {
@@ -146,31 +169,66 @@ describe("Deploy API", () => {
       server.use(
         http.post(`${BASE_URL}/v1/deploy`, ({ request }) => {
           capturedUrl = request.url;
-          return HttpResponse.json(createBuildSuccessResponse());
+          return HttpResponse.json(
+            createDeploySuccessResponse({ deploymentId: "deploy-url-test" })
+          );
+        }),
+        http.get(`${BASE_URL}/v1/deployments/deploy-url-test`, () => {
+          return HttpResponse.json(
+            createDeploymentStatusResponse({ deploymentId: "deploy-url-test", status: "data_ready" })
+          );
+        }),
+        http.post(`${BASE_URL}/v1/deployments/deploy-url-test/set-live`, () => {
+          return HttpResponse.json(createSetLiveSuccessResponse());
         })
       );
 
-      await deployToMain(config, resources);
+      await deployToMain(config, resources, { pollIntervalMs: 1 });
 
       expect(capturedUrl).toBe(`${BASE_URL}/v1/deploy`);
     });
 
-    it("tracks changed and deleted resources", async () => {
+    it("handles failed deployment status", async () => {
       server.use(
         http.post(`${BASE_URL}/v1/deploy`, () => {
           return HttpResponse.json(
-            createBuildSuccessResponse({
-              changedPipes: ["top_events"],
-              deletedDatasources: ["old_ds"],
-            })
+            createDeploySuccessResponse({ deploymentId: "deploy-fail", status: "pending" })
+          );
+        }),
+        http.get(`${BASE_URL}/v1/deployments/deploy-fail`, () => {
+          return HttpResponse.json(
+            createDeploymentStatusResponse({ deploymentId: "deploy-fail", status: "failed" })
           );
         })
       );
 
-      const result = await deployToMain(config, resources);
+      const result = await deployToMain(config, resources, { pollIntervalMs: 1 });
 
-      expect(result.pipes?.changed).toEqual(["top_events"]);
-      expect(result.datasources?.deleted).toEqual(["old_ds"]);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Deployment failed with status: failed");
+    });
+
+    it("handles set-live failure", async () => {
+      server.use(
+        http.post(`${BASE_URL}/v1/deploy`, () => {
+          return HttpResponse.json(
+            createDeploySuccessResponse({ deploymentId: "deploy-setlive-fail" })
+          );
+        }),
+        http.get(`${BASE_URL}/v1/deployments/deploy-setlive-fail`, () => {
+          return HttpResponse.json(
+            createDeploymentStatusResponse({ deploymentId: "deploy-setlive-fail", status: "data_ready" })
+          );
+        }),
+        http.post(`${BASE_URL}/v1/deployments/deploy-setlive-fail/set-live`, () => {
+          return HttpResponse.json({ error: "Set live failed" }, { status: 500 });
+        })
+      );
+
+      const result = await deployToMain(config, resources, { pollIntervalMs: 1 });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Failed to set deployment as live");
     });
 
     it("normalizes baseUrl with trailing slash", async () => {
@@ -179,16 +237,50 @@ describe("Deploy API", () => {
       server.use(
         http.post(`${BASE_URL}/v1/deploy`, ({ request }) => {
           capturedUrl = request.url;
-          return HttpResponse.json(createBuildSuccessResponse());
+          return HttpResponse.json(
+            createDeploySuccessResponse({ deploymentId: "deploy-slash" })
+          );
+        }),
+        http.get(`${BASE_URL}/v1/deployments/deploy-slash`, () => {
+          return HttpResponse.json(
+            createDeploymentStatusResponse({ deploymentId: "deploy-slash", status: "data_ready" })
+          );
+        }),
+        http.post(`${BASE_URL}/v1/deployments/deploy-slash/set-live`, () => {
+          return HttpResponse.json(createSetLiveSuccessResponse());
         })
       );
 
       await deployToMain(
         { ...config, baseUrl: `${BASE_URL}/` },
-        resources
+        resources,
+        { pollIntervalMs: 1 }
       );
 
       expect(capturedUrl).toBe(`${BASE_URL}/v1/deploy`);
+    });
+
+    it("times out when deployment never becomes ready", async () => {
+      server.use(
+        http.post(`${BASE_URL}/v1/deploy`, () => {
+          return HttpResponse.json(
+            createDeploySuccessResponse({ deploymentId: "deploy-timeout", status: "pending" })
+          );
+        }),
+        http.get(`${BASE_URL}/v1/deployments/deploy-timeout`, () => {
+          return HttpResponse.json(
+            createDeploymentStatusResponse({ deploymentId: "deploy-timeout", status: "pending" })
+          );
+        })
+      );
+
+      const result = await deployToMain(config, resources, {
+        pollIntervalMs: 1,
+        maxPollAttempts: 3,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Deployment timed out");
     });
   });
 });

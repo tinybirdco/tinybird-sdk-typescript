@@ -1,17 +1,46 @@
 /**
  * Deploy resources to Tinybird main workspace
- * Uses the /v1/deploy endpoint (same payload format as /v1/build)
+ * Uses the /v1/deploy endpoint to create a deployment, then sets it live
  */
 
 import type { GeneratedResources } from "../generator/index.js";
-import type { BuildConfig, BuildApiResult, BuildResponse } from "./build.js";
+import type { BuildConfig, BuildApiResult } from "./build.js";
+
+/**
+ * Deployment object returned by the /v1/deploy endpoint
+ */
+export interface Deployment {
+  id: string;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * Response from /v1/deploy endpoint
+ */
+export interface DeployResponse {
+  result: "success" | "failed";
+  deployment?: Deployment;
+  error?: string;
+  errors?: Array<{ filename?: string; error: string }>;
+}
+
+/**
+ * Response from /v1/deployments/{id} endpoint
+ */
+export interface DeploymentStatusResponse {
+  result: string;
+  deployment: Deployment;
+}
 
 /**
  * Deploy generated resources to Tinybird main workspace
  *
  * Uses the /v1/deploy endpoint which accepts all resources in a single
- * multipart form request. This is used for deploying to the main workspace
- * (not branches).
+ * multipart form request. After creating the deployment, this function:
+ * 1. Polls until the deployment is ready (status === 'data_ready')
+ * 2. Sets the deployment as live via /v1/deployments/{id}/set-live
  *
  * @param config - Build configuration with API URL and token
  * @param resources - Generated resources to deploy
@@ -38,9 +67,13 @@ import type { BuildConfig, BuildApiResult, BuildResponse } from "./build.js";
 export async function deployToMain(
   config: BuildConfig,
   resources: GeneratedResources,
-  options?: { debug?: boolean }
+  options?: { debug?: boolean; pollIntervalMs?: number; maxPollAttempts?: number }
 ): Promise<BuildApiResult> {
   const debug = options?.debug ?? !!process.env.TINYBIRD_DEBUG;
+  const pollIntervalMs = options?.pollIntervalMs ?? 1000;
+  const maxPollAttempts = options?.maxPollAttempts ?? 120; // 2 minutes max
+  const baseUrl = config.baseUrl.replace(/\/$/, "");
+
   const formData = new FormData();
 
   // Add datasources
@@ -73,14 +106,14 @@ export async function deployToMain(
     );
   }
 
-  // Make the request to /v1/deploy (instead of /v1/build)
-  const url = `${config.baseUrl.replace(/\/$/, "")}/v1/deploy`;
+  // Step 1: Create deployment via /v1/deploy
+  const deployUrl = `${baseUrl}/v1/deploy`;
 
   if (debug) {
-    console.log(`[debug] POST ${url}`);
+    console.log(`[debug] POST ${deployUrl}`);
   }
 
-  const response = await fetch(url, {
+  const response = await fetch(deployUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.token}`,
@@ -89,7 +122,7 @@ export async function deployToMain(
   });
 
   // Parse response
-  let body: BuildResponse;
+  let body: DeployResponse;
   const rawBody = await response.text();
 
   if (debug) {
@@ -98,7 +131,7 @@ export async function deployToMain(
   }
 
   try {
-    body = JSON.parse(rawBody) as BuildResponse;
+    body = JSON.parse(rawBody) as DeployResponse;
   } catch {
     throw new Error(
       `Failed to parse response from Tinybird API: ${response.status} ${response.statusText}\nBody: ${rawBody}`
@@ -131,7 +164,7 @@ export async function deployToMain(
   }
 
   // Handle API result
-  if (body.result === "failed") {
+  if (body.result === "failed" || !body.deployment) {
     return {
       success: false,
       result: "failed",
@@ -142,25 +175,130 @@ export async function deployToMain(
     };
   }
 
+  const deploymentId = body.deployment.id;
+
+  if (debug) {
+    console.log(`[debug] Deployment created with ID: ${deploymentId}`);
+  }
+
+  // Step 2: Poll until deployment is ready
+  let deployment = body.deployment;
+  let attempts = 0;
+
+  while (deployment.status !== "data_ready" && attempts < maxPollAttempts) {
+    await sleep(pollIntervalMs);
+    attempts++;
+
+    if (debug) {
+      console.log(`[debug] Polling deployment status (attempt ${attempts})...`);
+    }
+
+    const statusUrl = `${baseUrl}/v1/deployments/${deploymentId}`;
+    const statusResponse = await fetch(statusUrl, {
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+      },
+    });
+
+    if (!statusResponse.ok) {
+      return {
+        success: false,
+        result: "failed",
+        error: `Failed to check deployment status: ${statusResponse.status} ${statusResponse.statusText}`,
+        datasourceCount: resources.datasources.length,
+        pipeCount: resources.pipes.length,
+        connectionCount: resources.connections?.length ?? 0,
+        buildId: deploymentId,
+      };
+    }
+
+    const statusBody = (await statusResponse.json()) as DeploymentStatusResponse;
+    deployment = statusBody.deployment;
+
+    if (debug) {
+      console.log(`[debug] Deployment status: ${deployment.status}`);
+    }
+
+    // Check for failed status
+    if (deployment.status === "failed" || deployment.status === "error") {
+      return {
+        success: false,
+        result: "failed",
+        error: `Deployment failed with status: ${deployment.status}`,
+        datasourceCount: resources.datasources.length,
+        pipeCount: resources.pipes.length,
+        connectionCount: resources.connections?.length ?? 0,
+        buildId: deploymentId,
+      };
+    }
+  }
+
+  if (deployment.status !== "data_ready") {
+    return {
+      success: false,
+      result: "failed",
+      error: `Deployment timed out after ${maxPollAttempts} attempts. Last status: ${deployment.status}`,
+      datasourceCount: resources.datasources.length,
+      pipeCount: resources.pipes.length,
+      connectionCount: resources.connections?.length ?? 0,
+      buildId: deploymentId,
+    };
+  }
+
+  // Step 3: Set the deployment as live
+  const setLiveUrl = `${baseUrl}/v1/deployments/${deploymentId}/set-live`;
+
+  if (debug) {
+    console.log(`[debug] POST ${setLiveUrl}`);
+  }
+
+  const setLiveResponse = await fetch(setLiveUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+    },
+  });
+
+  if (!setLiveResponse.ok) {
+    const setLiveBody = await setLiveResponse.text();
+    return {
+      success: false,
+      result: "failed",
+      error: `Failed to set deployment as live: ${setLiveResponse.status} ${setLiveResponse.statusText}\n${setLiveBody}`,
+      datasourceCount: resources.datasources.length,
+      pipeCount: resources.pipes.length,
+      connectionCount: resources.connections?.length ?? 0,
+      buildId: deploymentId,
+    };
+  }
+
+  if (debug) {
+    console.log(`[debug] Deployment ${deploymentId} is now live`);
+  }
+
   return {
     success: true,
-    result: body.result,
+    result: "success",
     datasourceCount: resources.datasources.length,
     pipeCount: resources.pipes.length,
     connectionCount: resources.connections?.length ?? 0,
-    buildId: body.build?.id,
+    buildId: deploymentId,
     pipes: {
-      changed: body.build?.changed_pipe_names ?? [],
-      created: body.build?.new_pipe_names ?? [],
-      deleted: body.build?.deleted_pipe_names ?? [],
+      changed: [],
+      created: [],
+      deleted: [],
     },
     datasources: {
-      changed: body.build?.changed_datasource_names ?? [],
-      created: body.build?.new_datasource_names ?? [],
-      deleted: body.build?.deleted_datasource_names ?? [],
+      changed: [],
+      created: [],
+      deleted: [],
     },
-    // Keep deprecated fields for backwards compatibility
-    changedPipeNames: body.build?.changed_pipe_names ?? [],
-    newPipeNames: body.build?.new_pipe_names ?? [],
   };
+}
+
+/**
+ * Helper function to sleep for a given number of milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
