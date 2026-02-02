@@ -26,7 +26,7 @@ describe("Init Command", () => {
 
   describe("folder structure creation", () => {
     it("creates tinybird folder with datasources.ts, pipes.ts, client.ts when project has no src folder", async () => {
-      const result = await runInit({ cwd: tempDir, skipLogin: true });
+      const result = await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       expect(result.success).toBe(true);
       expect(result.created).toContain("tinybird/datasources.ts");
@@ -41,7 +41,7 @@ describe("Init Command", () => {
       // Create src folder to simulate existing project
       fs.mkdirSync(path.join(tempDir, "src"));
 
-      const result = await runInit({ cwd: tempDir, skipLogin: true });
+      const result = await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       expect(result.success).toBe(true);
       expect(result.created).toContain("src/tinybird/datasources.ts");
@@ -59,7 +59,7 @@ describe("Init Command", () => {
     });
 
     it("creates tinybird.json with correct include paths for tinybird folder", async () => {
-      const result = await runInit({ cwd: tempDir, skipLogin: true });
+      const result = await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       expect(result.success).toBe(true);
       expect(result.created).toContain("tinybird.json");
@@ -76,7 +76,7 @@ describe("Init Command", () => {
     it("creates tinybird.json with correct include paths for src/tinybird", async () => {
       fs.mkdirSync(path.join(tempDir, "src"));
 
-      const result = await runInit({ cwd: tempDir, skipLogin: true });
+      const result = await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       expect(result.success).toBe(true);
 
@@ -92,7 +92,7 @@ describe("Init Command", () => {
 
   describe("config file creation", () => {
     it("creates tinybird.json with default values", async () => {
-      await runInit({ cwd: tempDir, skipLogin: true });
+      await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       const config = JSON.parse(
         fs.readFileSync(path.join(tempDir, "tinybird.json"), "utf-8")
@@ -109,7 +109,7 @@ describe("Init Command", () => {
         JSON.stringify(existingConfig)
       );
 
-      const result = await runInit({ cwd: tempDir, skipLogin: true });
+      const result = await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       expect(result.success).toBe(true);
       expect(result.skipped).toContain("tinybird.json");
@@ -128,7 +128,7 @@ describe("Init Command", () => {
         JSON.stringify(existingConfig)
       );
 
-      const result = await runInit({ cwd: tempDir, skipLogin: true, force: true });
+      const result = await runInit({ cwd: tempDir, skipLogin: true, force: true, devMode: "branch" });
 
       expect(result.success).toBe(true);
       expect(result.created).toContain("tinybird.json");
@@ -145,7 +145,7 @@ describe("Init Command", () => {
 
   describe("file content creation", () => {
     it("creates datasources.ts with example datasource and InferRow type", async () => {
-      await runInit({ cwd: tempDir, skipLogin: true });
+      await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       const content = fs.readFileSync(
         path.join(tempDir, "tinybird", "datasources.ts"),
@@ -159,7 +159,7 @@ describe("Init Command", () => {
     });
 
     it("creates pipes.ts with example endpoint and types", async () => {
-      await runInit({ cwd: tempDir, skipLogin: true });
+      await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       const content = fs.readFileSync(
         path.join(tempDir, "tinybird", "pipes.ts"),
@@ -175,7 +175,7 @@ describe("Init Command", () => {
     });
 
     it("creates client.ts with createTinybirdClient", async () => {
-      await runInit({ cwd: tempDir, skipLogin: true });
+      await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       const content = fs.readFileSync(
         path.join(tempDir, "tinybird", "client.ts"),
@@ -195,7 +195,7 @@ describe("Init Command", () => {
         "// existing content"
       );
 
-      const result = await runInit({ cwd: tempDir, skipLogin: true });
+      const result = await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       expect(result.success).toBe(true);
       expect(result.skipped).toContain("tinybird/datasources.ts");
@@ -215,7 +215,7 @@ describe("Init Command", () => {
         "// existing content"
       );
 
-      const result = await runInit({ cwd: tempDir, skipLogin: true, force: true });
+      const result = await runInit({ cwd: tempDir, skipLogin: true, force: true, devMode: "branch" });
 
       expect(result.success).toBe(true);
       expect(result.created).toContain("tinybird/datasources.ts");
@@ -236,7 +236,7 @@ describe("Init Command", () => {
         JSON.stringify(packageJson, null, 2)
       );
 
-      const result = await runInit({ cwd: tempDir, skipLogin: true });
+      const result = await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       expect(result.success).toBe(true);
       expect(result.created).toContain("package.json (added tinybird scripts)");
@@ -262,7 +262,7 @@ describe("Init Command", () => {
         JSON.stringify(packageJson, null, 2)
       );
 
-      const result = await runInit({ cwd: tempDir, skipLogin: true });
+      const result = await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       expect(result.success).toBe(true);
       expect(result.created).not.toContain("package.json (added tinybird scripts)");
@@ -281,7 +281,7 @@ describe("Init Command", () => {
         JSON.stringify(packageJson, null, 2)
       );
 
-      const result = await runInit({ cwd: tempDir, skipLogin: true });
+      const result = await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       expect(result.success).toBe(true);
 
@@ -293,7 +293,7 @@ describe("Init Command", () => {
     });
 
     it("does not fail if no package.json exists", async () => {
-      const result = await runInit({ cwd: tempDir, skipLogin: true });
+      const result = await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       expect(result.success).toBe(true);
       expect(result.created).not.toContain("package.json (added tinybird scripts)");
@@ -304,7 +304,7 @@ describe("Init Command", () => {
     it("creates tinybird directory if it does not exist", async () => {
       expect(fs.existsSync(path.join(tempDir, "tinybird"))).toBe(false);
 
-      await runInit({ cwd: tempDir, skipLogin: true });
+      await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       expect(fs.existsSync(path.join(tempDir, "tinybird"))).toBe(true);
     });
@@ -313,7 +313,7 @@ describe("Init Command", () => {
       fs.mkdirSync(path.join(tempDir, "src"));
       expect(fs.existsSync(path.join(tempDir, "src", "tinybird"))).toBe(false);
 
-      await runInit({ cwd: tempDir, skipLogin: true });
+      await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch" });
 
       expect(fs.existsSync(path.join(tempDir, "src", "tinybird"))).toBe(true);
     });

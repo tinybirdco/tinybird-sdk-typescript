@@ -55,12 +55,18 @@ function createCli(): Command {
     .description("Initialize a new Tinybird TypeScript project")
     .option("-f, --force", "Overwrite existing files")
     .option("--skip-login", "Skip browser login flow")
+    .option("-m, --mode <mode>", "Development mode: 'branch' or 'local'")
     .action(async (options) => {
-      console.log("Initializing Tinybird project...\n");
+      // Validate mode if provided
+      if (options.mode && !["branch", "local"].includes(options.mode)) {
+        console.error(`Error: Invalid mode '${options.mode}'. Use 'branch' or 'local'.`);
+        process.exit(1);
+      }
 
       const result = await runInit({
         force: options.force,
         skipLogin: options.skipLogin,
+        devMode: options.mode,
       });
 
       if (!result.success) {
