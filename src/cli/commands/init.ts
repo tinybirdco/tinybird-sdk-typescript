@@ -13,6 +13,8 @@ import {
 } from "../config.js";
 import { browserLogin } from "../auth.js";
 import { saveTinybirdToken } from "../env.js";
+import { fetchAllResources, ResourceApiError } from "../../api/resources.js";
+import { generateAllFiles } from "../../codegen/index.js";
 
 /**
  * Default starter content for datasources.ts
@@ -156,6 +158,12 @@ export interface InitResult {
   workspaceName?: string;
   /** User email after login */
   userEmail?: string;
+  /** Whether resources were pulled from workspace */
+  resourcesPulled?: boolean;
+  /** Number of datasources pulled */
+  datasourceCount?: number;
+  /** Number of pipes pulled */
+  pipeCount?: number;
 }
 
 /**
@@ -312,8 +320,64 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         }
 
         // If custom base URL, update tinybird.json
-        if (authResult.baseUrl && authResult.baseUrl !== "https://api.tinybird.co") {
-          updateConfig(configPath, { baseUrl: authResult.baseUrl });
+        const baseUrl = authResult.baseUrl ?? "https://api.tinybird.co";
+        if (baseUrl !== "https://api.tinybird.co") {
+          updateConfig(configPath, { baseUrl });
+        }
+
+        // Check if TypeScript files already exist
+        const filesExist =
+          fs.existsSync(datasourcesPath) ||
+          fs.existsSync(pipesPath) ||
+          fs.existsSync(clientPath);
+
+        if (!filesExist || force) {
+          // Try to pull resources from workspace
+          const pullResult = await pullResourcesFromWorkspace({
+            token: authResult.token,
+            baseUrl,
+            tinybirdDir,
+            relativeTinybirdDir,
+            datasourcesPath,
+            pipesPath,
+            clientPath,
+          });
+
+          if (pullResult.pulled) {
+            // Add pulled files to created list
+            created.push(...pullResult.filesCreated);
+
+            return {
+              success: true,
+              created,
+              skipped,
+              loggedIn: true,
+              workspaceName: authResult.workspaceName,
+              userEmail: authResult.userEmail,
+              resourcesPulled: true,
+              datasourceCount: pullResult.datasourceCount,
+              pipeCount: pullResult.pipeCount,
+            };
+          }
+        } else {
+          // Files exist, skip pull
+          skipped.push(`${relativeTinybirdDir}/datasources.ts`);
+          skipped.push(`${relativeTinybirdDir}/pipes.ts`);
+          skipped.push(`${relativeTinybirdDir}/client.ts`);
+        }
+
+        // If no resources were pulled, create default files
+        if (!fs.existsSync(datasourcesPath) || force) {
+          fs.writeFileSync(datasourcesPath, DATASOURCES_CONTENT);
+          created.push(`${relativeTinybirdDir}/datasources.ts`);
+        }
+        if (!fs.existsSync(pipesPath) || force) {
+          fs.writeFileSync(pipesPath, PIPES_CONTENT);
+          created.push(`${relativeTinybirdDir}/pipes.ts`);
+        }
+        if (!fs.existsSync(clientPath) || force) {
+          fs.writeFileSync(clientPath, CLIENT_CONTENT);
+          created.push(`${relativeTinybirdDir}/client.ts`);
         }
 
         return {
@@ -350,4 +414,98 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     created,
     skipped,
   };
+}
+
+/**
+ * Pull resources from workspace and generate TypeScript files
+ */
+interface PullResourcesOptions {
+  token: string;
+  baseUrl: string;
+  tinybirdDir: string;
+  relativeTinybirdDir: string;
+  datasourcesPath: string;
+  pipesPath: string;
+  clientPath: string;
+}
+
+interface PullResourcesResult {
+  pulled: boolean;
+  filesCreated: string[];
+  datasourceCount: number;
+  pipeCount: number;
+}
+
+async function pullResourcesFromWorkspace(
+  options: PullResourcesOptions
+): Promise<PullResourcesResult> {
+  const {
+    token,
+    baseUrl,
+    tinybirdDir,
+    relativeTinybirdDir,
+    datasourcesPath,
+    pipesPath,
+    clientPath,
+  } = options;
+
+  try {
+    // Fetch all resources from workspace
+    const { datasources, pipes } = await fetchAllResources({ baseUrl, token });
+
+    // If no resources, don't pull
+    if (datasources.length === 0 && pipes.length === 0) {
+      return {
+        pulled: false,
+        filesCreated: [],
+        datasourceCount: 0,
+        pipeCount: 0,
+      };
+    }
+
+    console.log(
+      `\nFound ${datasources.length} datasource(s) and ${pipes.length} pipe(s) in workspace. Pulling...\n`
+    );
+
+    // Generate TypeScript files
+    const generated = generateAllFiles(datasources, pipes);
+    const filesCreated: string[] = [];
+
+    // Ensure tinybird directory exists
+    fs.mkdirSync(tinybirdDir, { recursive: true });
+
+    // Write datasources.ts
+    fs.writeFileSync(datasourcesPath, generated.datasourcesContent);
+    filesCreated.push(`${relativeTinybirdDir}/datasources.ts`);
+
+    // Write pipes.ts
+    fs.writeFileSync(pipesPath, generated.pipesContent);
+    filesCreated.push(`${relativeTinybirdDir}/pipes.ts`);
+
+    // Write client.ts
+    fs.writeFileSync(clientPath, generated.clientContent);
+    filesCreated.push(`${relativeTinybirdDir}/client.ts`);
+
+    return {
+      pulled: true,
+      filesCreated,
+      datasourceCount: generated.datasourceCount,
+      pipeCount: generated.pipeCount,
+    };
+  } catch (error) {
+    // Log error but don't fail - fall back to default files
+    if (error instanceof ResourceApiError) {
+      console.warn(`\nUnable to fetch resources: ${error.message}`);
+    } else {
+      console.warn(`\nUnable to fetch resources: ${(error as Error).message}`);
+    }
+    console.log("Creating default starter files instead...\n");
+
+    return {
+      pulled: false,
+      filesCreated: [],
+      datasourceCount: 0,
+      pipeCount: 0,
+    };
+  }
 }

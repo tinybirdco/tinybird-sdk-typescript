@@ -18,6 +18,7 @@ import { runInit } from "./commands/init.js";
 import { runBuild } from "./commands/build.js";
 import { runDev } from "./commands/dev.js";
 import { runLogin } from "./commands/login.js";
+import { runPull } from "./commands/pull.js";
 import {
   runBranchList,
   runBranchStatus,
@@ -90,18 +91,28 @@ function createCli(): Command {
         if (result.userEmail) {
           console.log(`  User: ${result.userEmail}`);
         }
-        console.log("\nDone! Next steps:");
-        console.log("  1. Edit src/tinybird/schema.ts with your schema");
-        console.log("  2. Run 'npx tinybird dev' to start development");
+
+        if (result.resourcesPulled) {
+          console.log(
+            `\nPulled ${result.datasourceCount} datasource(s) and ${result.pipeCount} pipe(s) from workspace.`
+          );
+          console.log("\nDone! Next steps:");
+          console.log("  1. Review generated files in src/tinybird/");
+          console.log("  2. Run 'npx tinybird dev' to start development");
+        } else {
+          console.log("\nDone! Next steps:");
+          console.log("  1. Edit src/tinybird/datasources.ts and pipes.ts with your schema");
+          console.log("  2. Run 'npx tinybird dev' to start development");
+        }
       } else if (result.loggedIn === false) {
         console.log("\nLogin was skipped or failed.");
         console.log("\nDone! Next steps:");
         console.log("  1. Run 'npx tinybird login' to authenticate");
-        console.log("  2. Edit src/tinybird/schema.ts with your schema");
+        console.log("  2. Edit src/tinybird/datasources.ts and pipes.ts with your schema");
         console.log("  3. Run 'npx tinybird dev' to start development");
       } else {
         console.log("\nDone! Next steps:");
-        console.log("  1. Edit src/tinybird/schema.ts with your schema");
+        console.log("  1. Edit src/tinybird/datasources.ts and pipes.ts with your schema");
         console.log("  2. Run 'npx tinybird dev' to start development");
       }
     });
@@ -130,6 +141,38 @@ function createCli(): Command {
       if (result.baseUrl) {
         console.log(`  API Host: ${result.baseUrl}`);
       }
+    });
+
+  // Pull command
+  program
+    .command("pull")
+    .description("Pull workspace resources as TypeScript files")
+    .option("-f, --force", "Overwrite existing files")
+    .action(async (options) => {
+      const result = await runPull({
+        force: options.force,
+      });
+
+      if (!result.success) {
+        console.error(`Error: ${result.error}`);
+        process.exit(1);
+      }
+
+      if (result.datasourceCount === 0 && result.pipeCount === 0) {
+        console.log("No resources found in workspace.");
+        return;
+      }
+
+      if (result.created.length > 0) {
+        console.log("Created:");
+        result.created.forEach((file) => {
+          console.log(`  - ${file}`);
+        });
+      }
+
+      console.log(
+        `\nPulled ${result.datasourceCount} datasource(s) and ${result.pipeCount} pipe(s).`
+      );
     });
 
   // Build command
