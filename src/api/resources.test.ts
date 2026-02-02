@@ -102,6 +102,23 @@ const handlers = [
       ],
     });
   }),
+
+  // Get pipe detail - copy
+  http.get(`${BASE_URL}/v0/pipes/daily_snapshot`, () => {
+    return HttpResponse.json({
+      name: "daily_snapshot",
+      description: "Daily snapshot copy",
+      copy_target_datasource: "snapshots",
+      copy_schedule: "0 0 * * *",
+      copy_mode: "append",
+      nodes: [
+        {
+          name: "snapshot",
+          sql: "SELECT * FROM events WHERE date = today()",
+        },
+      ],
+    });
+  }),
 ];
 
 const server = setupServer(...handlers);
@@ -215,6 +232,16 @@ describe("getPipe", () => {
     expect(result.name).toBe("daily_stats_mv");
     expect(result.type).toBe("materialized");
     expect(result.materialized?.datasource).toBe("daily_stats");
+  });
+
+  it("returns copy pipe info", async () => {
+    const result = await getPipe({ baseUrl: BASE_URL, token: TOKEN }, "daily_snapshot");
+
+    expect(result.name).toBe("daily_snapshot");
+    expect(result.type).toBe("copy");
+    expect(result.copy?.target_datasource).toBe("snapshots");
+    expect(result.copy?.copy_schedule).toBe("0 0 * * *");
+    expect(result.copy?.copy_mode).toBe("append");
   });
 });
 
