@@ -170,55 +170,55 @@ npx tinybird init --skip-login  # Skip browser login flow
 
 This enables incremental migration for existing Tinybird projects - you can keep your `.datasource` and `.pipe` files alongside TypeScript definitions.
 
-### `npx tinybird dev`
+### `tinybird dev`
 
 Watch for changes and sync with Tinybird automatically. Only works on feature branches (not main).
 
 ```bash
-npx tinybird dev
-npx tinybird dev --local   # Sync with local Tinybird container
-npx tinybird dev --branch  # Explicitly use Tinybird cloud with branches
+tinybird dev
+tinybird dev --local   # Sync with local Tinybird container
+tinybird dev --branch  # Explicitly use Tinybird cloud with branches
 ```
 
 **Note:** `dev` mode is blocked on the main branch to prevent accidental production deployments. Use `tinybird deploy` for production, or switch to a feature branch.
 
-### `npx tinybird build`
+### `tinybird build`
 
 Build and push resources to a Tinybird branch (not main).
 
 ```bash
-npx tinybird build
-npx tinybird build --dry-run  # Preview without pushing
-npx tinybird build --local    # Build to local Tinybird container
+tinybird build
+tinybird build --dry-run  # Preview without pushing
+tinybird build --local    # Build to local Tinybird container
 ```
 
 **Note:** `build` is blocked on the main branch. Use `tinybird deploy` for production deployments.
 
-### `npx tinybird deploy`
+### `tinybird deploy`
 
 Deploy resources to the main Tinybird workspace (production). This is the only way to deploy to main.
 
 ```bash
-npx tinybird deploy
-npx tinybird deploy --dry-run  # Preview without pushing
+tinybird deploy
+tinybird deploy --dry-run  # Preview without pushing
 ```
 
-### `npx tinybird login`
+### `tinybird login`
 
 Authenticate with Tinybird via browser.
 
 ```bash
-npx tinybird login
+tinybird login
 ```
 
-### `npx tinybird branch`
+### `tinybird branch`
 
 Manage Tinybird branches.
 
 ```bash
-npx tinybird branch list      # List all branches
-npx tinybird branch status    # Show current branch status
-npx tinybird branch delete <name>  # Delete a branch
+tinybird branch list      # List all branches
+tinybird branch status    # Show current branch status
+tinybird branch delete <name>  # Delete a branch
 ```
 
 ## Configuration
