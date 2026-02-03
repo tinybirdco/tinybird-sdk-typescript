@@ -437,4 +437,162 @@ describe("E2E: Init + Build Happy Path", () => {
       expect(branchCreateCalled).toBe(false);
     });
   });
+
+  describe("build error handling", () => {
+    it("fails when tinybird.json is missing", async () => {
+      // Don't run init - no config file
+      const buildResult = await runBuild({ cwd: tempDir });
+
+      expect(buildResult.success).toBe(false);
+      expect(buildResult.error).toContain("tinybird.json");
+    });
+
+    it("fails when include file does not exist", async () => {
+      // Create config pointing to non-existent file
+      const config = {
+        include: ["tinybird/datasources.ts", "tinybird/endpoints.ts"],
+        token: "${TINYBIRD_TOKEN}",
+        baseUrl: "https://api.tinybird.co",
+        devMode: "branch",
+      };
+      fs.writeFileSync(
+        path.join(tempDir, "tinybird.json"),
+        JSON.stringify(config, null, 2)
+      );
+
+      const buildResult = await runBuild({ cwd: tempDir });
+
+      expect(buildResult.success).toBe(false);
+      expect(buildResult.error).toContain("not found");
+    });
+
+
+    it("fails when branch is created but no token returned", async () => {
+      server.use(
+        // Branch exists but no token
+        http.get(`${BASE_URL}/v0/environments/:name`, () => {
+          return HttpResponse.json({
+            id: "branch-feature_test_branch",
+            name: "feature_test_branch",
+            // No token field
+            created_at: new Date().toISOString(),
+          });
+        })
+      );
+
+      // Run init
+      await runInit({
+        cwd: tempDir,
+        skipLogin: true,
+        devMode: "branch",
+        clientPath: "tinybird",
+      });
+
+      const buildResult = await runBuild({ cwd: tempDir });
+
+      expect(buildResult.success).toBe(false);
+      expect(buildResult.error).toContain("no token was returned");
+    });
+
+    it("fails when branch creation API fails", async () => {
+      server.use(
+        // Branch doesn't exist
+        http.get(`${BASE_URL}/v0/environments/:name`, () => {
+          return HttpResponse.json({ error: "Not found" }, { status: 404 });
+        }),
+        // Create branch fails
+        http.post(`${BASE_URL}/v1/environments`, () => {
+          return HttpResponse.json(
+            { error: "Quota exceeded" },
+            { status: 429 }
+          );
+        })
+      );
+
+      // Run init
+      await runInit({
+        cwd: tempDir,
+        skipLogin: true,
+        devMode: "branch",
+        clientPath: "tinybird",
+      });
+
+      const buildResult = await runBuild({ cwd: tempDir });
+
+      expect(buildResult.success).toBe(false);
+      expect(buildResult.error).toContain("Failed to get/create branch");
+    });
+
+    it("fails when build API returns error", async () => {
+      server.use(
+        // Branch exists
+        http.get(`${BASE_URL}/v0/environments/:name`, () => {
+          return HttpResponse.json({
+            id: "branch-feature_test_branch",
+            name: "feature_test_branch",
+            token: "p.branch-token",
+            created_at: new Date().toISOString(),
+          });
+        }),
+        // Build API fails
+        http.post(`${BASE_URL}/v1/build`, () => {
+          return HttpResponse.json(
+            {
+              result: "error",
+              error: "Schema validation failed: invalid column type",
+            },
+            { status: 400 }
+          );
+        })
+      );
+
+      // Run init
+      await runInit({
+        cwd: tempDir,
+        skipLogin: true,
+        devMode: "branch",
+        clientPath: "tinybird",
+      });
+
+      const buildResult = await runBuild({ cwd: tempDir });
+
+      expect(buildResult.success).toBe(false);
+      expect(buildResult.error).toBeDefined();
+    });
+
+    it("returns error details from failed build API response", async () => {
+      server.use(
+        // Branch exists
+        http.get(`${BASE_URL}/v0/environments/:name`, () => {
+          return HttpResponse.json({
+            id: "branch-feature_test_branch",
+            name: "feature_test_branch",
+            token: "p.branch-token",
+            created_at: new Date().toISOString(),
+          });
+        }),
+        // Build API returns result: "failed" with error
+        http.post(`${BASE_URL}/v1/build`, () => {
+          return HttpResponse.json({
+            result: "failed",
+            error: "Datasource 'page_views' already exists with different schema",
+          });
+        })
+      );
+
+      // Run init
+      await runInit({
+        cwd: tempDir,
+        skipLogin: true,
+        devMode: "branch",
+        clientPath: "tinybird",
+      });
+
+      const buildResult = await runBuild({ cwd: tempDir });
+
+      expect(buildResult.success).toBe(false);
+      expect(buildResult.deploy?.success).toBe(false);
+      expect(buildResult.deploy?.error).toContain("already exists");
+    });
+  });
 });
