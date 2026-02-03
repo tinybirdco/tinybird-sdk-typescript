@@ -28,10 +28,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 
-// Check if the package is built (dist/ exists)
-// Build tests require the compiled package to resolve @tinybirdco/sdk
-const DIST_EXISTS = fs.existsSync(path.join(PROJECT_ROOT, "dist", "index.js"));
-
 describe("E2E: Init + Build Happy Path", () => {
   let tempDir: string;
   let originalEnv: NodeJS.ProcessEnv;
@@ -110,7 +106,7 @@ describe("E2E: Init + Build Happy Path", () => {
       expect(config.devMode).toBe("branch");
     });
 
-    it.skipIf(!DIST_EXISTS)("init then build succeeds with mocked API", async () => {
+    it("init then build succeeds with mocked API", async () => {
       // Track API calls
       let buildCalled = false;
       let branchGetCalled = false;
@@ -215,7 +211,7 @@ describe("E2E: Init + Build Happy Path", () => {
       expect(clientContent).toContain('from "./endpoints"');
     });
 
-    it.skipIf(!DIST_EXISTS)("build with dry run does not call API", async () => {
+    it("build with dry run does not call API", async () => {
       let apiCalled = false;
 
       server.use(
@@ -309,7 +305,7 @@ describe("E2E: Init + Build Happy Path", () => {
       ]);
     });
 
-    it.skipIf(!DIST_EXISTS)("init + build works with src/tinybird structure", async () => {
+    it("init + build works with src/tinybird structure", async () => {
       // Create src folder
       fs.mkdirSync(path.join(tempDir, "src"));
 
@@ -332,7 +328,7 @@ describe("E2E: Init + Build Happy Path", () => {
   });
 
   describe("branch creation flow", () => {
-    it.skipIf(!DIST_EXISTS)("creates branch when it does not exist", async () => {
+    it("creates branch when it does not exist", async () => {
       let branchCreateCalled = false;
       let jobPollCalled = false;
 
