@@ -222,6 +222,7 @@ function createCli(): Command {
     .command("deploy")
     .description("Deploy resources to main Tinybird workspace (production)")
     .option("--dry-run", "Generate without pushing to API")
+    .option("--check", "Validate deploy with Tinybird API without applying")
     .option("--debug", "Show debug output including API requests/responses")
     .action(async (options) => {
       if (options.debug) {
@@ -232,6 +233,7 @@ function createCli(): Command {
 
       const result = await runDeploy({
         dryRun: options.dryRun,
+        check: options.check,
       });
 
       if (!result.success) {
@@ -262,6 +264,8 @@ function createCli(): Command {
             console.log(pipe.content);
           });
         }
+      } else if (options.check) {
+        console.log("\n[Check] Resources validated with Tinybird API");
       } else if (deploy) {
         if (deploy.result === "no_changes") {
           console.log("No changes detected - already up to date");

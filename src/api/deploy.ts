@@ -75,7 +75,12 @@ export interface DeploymentStatusResponse {
 export async function deployToMain(
   config: BuildConfig,
   resources: GeneratedResources,
-  options?: { debug?: boolean; pollIntervalMs?: number; maxPollAttempts?: number }
+  options?: {
+    debug?: boolean;
+    pollIntervalMs?: number;
+    maxPollAttempts?: number;
+    check?: boolean;
+  }
 ): Promise<BuildApiResult> {
   const debug = options?.debug ?? !!process.env.TINYBIRD_DEBUG;
   const pollIntervalMs = options?.pollIntervalMs ?? 1000;
@@ -149,7 +154,8 @@ export async function deployToMain(
   }
 
   // Step 1: Create deployment via /v1/deploy
-  const deployUrl = `${baseUrl}/v1/deploy`;
+  const deployUrlBase = `${baseUrl}/v1/deploy`;
+  const deployUrl = options?.check ? `${deployUrlBase}?check=true` : deployUrlBase;
 
   if (debug) {
     console.log(`[debug] POST ${deployUrl}`);
@@ -199,6 +205,27 @@ export async function deployToMain(
       success: false,
       result: "failed",
       error: formatErrors(),
+      datasourceCount: resources.datasources.length,
+      pipeCount: resources.pipes.length,
+      connectionCount: resources.connections?.length ?? 0,
+    };
+  }
+
+  if (options?.check) {
+    if (body.result === "failed") {
+      return {
+        success: false,
+        result: "failed",
+        error: formatErrors(),
+        datasourceCount: resources.datasources.length,
+        pipeCount: resources.pipes.length,
+        connectionCount: resources.connections?.length ?? 0,
+      };
+    }
+
+    return {
+      success: true,
+      result: body.result ?? "success",
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
       connectionCount: resources.connections?.length ?? 0,
