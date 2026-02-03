@@ -229,7 +229,9 @@ Create a `tinybird.json` in your project root:
 {
   "include": [
     "src/tinybird/datasources.ts",
-    "src/tinybird/pipes.ts"
+    "src/tinybird/pipes.ts",
+    "src/tinybird/legacy.datasource",
+    "src/tinybird/legacy.pipe"
   ],
   "token": "${TINYBIRD_TOKEN}",
   "baseUrl": "https://api.tinybird.co",
@@ -237,11 +239,13 @@ Create a `tinybird.json` in your project root:
 }
 ```
 
+You can mix TypeScript files with raw `.datasource` and `.pipe` files for incremental migration.
+
 ### Configuration Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `include` | `string[]` | *required* | Array of TypeScript files to scan for datasources and pipes |
+| `include` | `string[]` | *required* | Array of TypeScript files or raw `.datasource`/`.pipe` files to include |
 | `token` | `string` | *required* | API token. Supports `${ENV_VAR}` interpolation for environment variables |
 | `baseUrl` | `string` | `"https://api.tinybird.co"` | Tinybird API URL. Use `"https://api.us-east.tinybird.co"` for US region |
 | `devMode` | `"branch"` \| `"local"` | `"branch"` | Development mode. `"branch"` uses Tinybird cloud with branches, `"local"` uses local Docker container |
