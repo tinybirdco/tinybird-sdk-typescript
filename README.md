@@ -160,30 +160,65 @@ const result = await tinybird.query.topPages({
 
 ### `npx tinybird init`
 
-Initialize a new Tinybird TypeScript project.
+Initialize a new Tinybird TypeScript project. If you have existing `.datasource` and `.pipe` files in your repository, the CLI will detect them and ask if you want to include them in your configuration.
 
 ```bash
 npx tinybird init
-npx tinybird init --force  # Overwrite existing files
+npx tinybird init --force       # Overwrite existing files
+npx tinybird init --skip-login  # Skip browser login flow
 ```
 
-### `npx tinybird build`
+This enables incremental migration for existing Tinybird projects - you can keep your `.datasource` and `.pipe` files alongside TypeScript definitions.
 
-Build and push resources to Tinybird.
+### `tinybird dev`
+
+Watch for changes and sync with Tinybird automatically. Only works on feature branches (not main).
 
 ```bash
-npx tinybird build
-npx tinybird build --dry-run  # Preview without pushing
-npx tinybird build --local    # Build to local Tinybird container
+tinybird dev
+tinybird dev --local   # Sync with local Tinybird container
+tinybird dev --branch  # Explicitly use Tinybird cloud with branches
 ```
 
-### `npx tinybird dev`
+**Note:** `dev` mode is blocked on the main branch to prevent accidental production deployments. Use `tinybird deploy` for production, or switch to a feature branch.
 
-Watch for changes and sync with Tinybird automatically.
+### `tinybird build`
+
+Build and push resources to a Tinybird branch (not main).
 
 ```bash
-npx tinybird dev
-npx tinybird dev --local  # Sync with local Tinybird container
+tinybird build
+tinybird build --dry-run  # Preview without pushing
+tinybird build --local    # Build to local Tinybird container
+```
+
+**Note:** `build` is blocked on the main branch. Use `tinybird deploy` for production deployments.
+
+### `tinybird deploy`
+
+Deploy resources to the main Tinybird workspace (production). This is the only way to deploy to main.
+
+```bash
+tinybird deploy
+tinybird deploy --dry-run  # Preview without pushing
+```
+
+### `tinybird login`
+
+Authenticate with Tinybird via browser.
+
+```bash
+tinybird login
+```
+
+### `tinybird branch`
+
+Manage Tinybird branches.
+
+```bash
+tinybird branch list      # List all branches
+tinybird branch status    # Show current branch status
+tinybird branch delete <name>  # Delete a branch
 ```
 
 ## Configuration
@@ -194,7 +229,9 @@ Create a `tinybird.json` in your project root:
 {
   "include": [
     "src/tinybird/datasources.ts",
-    "src/tinybird/pipes.ts"
+    "src/tinybird/pipes.ts",
+    "src/tinybird/legacy.datasource",
+    "src/tinybird/legacy.pipe"
   ],
   "token": "${TINYBIRD_TOKEN}",
   "baseUrl": "https://api.tinybird.co",
@@ -202,11 +239,13 @@ Create a `tinybird.json` in your project root:
 }
 ```
 
+You can mix TypeScript files with raw `.datasource` and `.pipe` files for incremental migration.
+
 ### Configuration Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `include` | `string[]` | *required* | Array of TypeScript files to scan for datasources and pipes |
+| `include` | `string[]` | *required* | Array of TypeScript files or raw `.datasource`/`.pipe` files to include |
 | `token` | `string` | *required* | API token. Supports `${ENV_VAR}` interpolation for environment variables |
 | `baseUrl` | `string` | `"https://api.tinybird.co"` | Tinybird API URL. Use `"https://api.us-east.tinybird.co"` for US region |
 | `devMode` | `"branch"` \| `"local"` | `"branch"` | Development mode. `"branch"` uses Tinybird cloud with branches, `"local"` uses local Docker container |

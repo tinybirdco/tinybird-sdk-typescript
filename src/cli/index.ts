@@ -16,6 +16,7 @@ import { dirname, resolve } from "node:path";
 import { Command } from "commander";
 import { runInit } from "./commands/init.js";
 import { runBuild } from "./commands/build.js";
+import { runDeploy } from "./commands/deploy.js";
 import { runDev } from "./commands/dev.js";
 import { runLogin } from "./commands/login.js";
 import {
@@ -103,6 +104,12 @@ function createCli(): Command {
         if (result.userEmail) {
           console.log(`  User: ${result.userEmail}`);
         }
+
+        if (result.existingDatafiles && result.existingDatafiles.length > 0) {
+          console.log(
+            `\nAdded ${result.existingDatafiles.length} existing datafile(s) to tinybird.json.`
+          );
+        }
         console.log("\nDone! Next steps:");
         console.log(`  1. Edit your schema in ${clientPath}/`);
         console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
@@ -148,11 +155,10 @@ function createCli(): Command {
   // Build command
   program
     .command("build")
-    .description("Build and push resources to Tinybird")
+    .description("Build and push resources to a Tinybird branch (not main)")
     .option("--dry-run", "Generate without pushing to API")
     .option("--debug", "Show debug output including API requests/responses")
     .option("--local", "Use local Tinybird container")
-    .option("--branch", "Use Tinybird cloud with branches")
     .action(async (options) => {
       if (options.debug) {
         process.env.TINYBIRD_DEBUG = "1";
@@ -162,8 +168,6 @@ function createCli(): Command {
       let devModeOverride: DevMode | undefined;
       if (options.local) {
         devModeOverride = "local";
-      } else if (options.branch) {
-        devModeOverride = "branch";
       }
 
       const modeLabel = devModeOverride === "local" ? " (local)" : "";
@@ -207,6 +211,62 @@ function createCli(): Command {
           console.log("No changes detected - already up to date");
         } else {
           console.log(`Deployed to Tinybird successfully`);
+        }
+      }
+
+      console.log(`\n[${formatTime()}] Done in ${result.durationMs}ms`);
+    });
+
+  // Deploy command
+  program
+    .command("deploy")
+    .description("Deploy resources to main Tinybird workspace (production)")
+    .option("--dry-run", "Generate without pushing to API")
+    .option("--debug", "Show debug output including API requests/responses")
+    .action(async (options) => {
+      if (options.debug) {
+        process.env.TINYBIRD_DEBUG = "1";
+      }
+
+      console.log(`[${formatTime()}] Deploying to main workspace...\n`);
+
+      const result = await runDeploy({
+        dryRun: options.dryRun,
+      });
+
+      if (!result.success) {
+        console.error(`Error: ${result.error}`);
+        process.exit(1);
+      }
+
+      const { build, deploy } = result;
+
+      if (build) {
+        console.log(`Generated ${build.stats.datasourceCount} datasource(s), ${build.stats.pipeCount} pipe(s)`);
+      }
+
+      if (options.dryRun) {
+        console.log("\n[Dry run] Resources not deployed to API");
+
+        // Show generated content
+        if (build) {
+          console.log("\n--- Generated Datasources ---");
+          build.resources.datasources.forEach((ds) => {
+            console.log(`\n${ds.name}.datasource:`);
+            console.log(ds.content);
+          });
+
+          console.log("\n--- Generated Pipes ---");
+          build.resources.pipes.forEach((pipe) => {
+            console.log(`\n${pipe.name}.pipe:`);
+            console.log(pipe.content);
+          });
+        }
+      } else if (deploy) {
+        if (deploy.result === "no_changes") {
+          console.log("No changes detected - already up to date");
+        } else {
+          console.log(`Deployed to main workspace successfully`);
         }
       }
 

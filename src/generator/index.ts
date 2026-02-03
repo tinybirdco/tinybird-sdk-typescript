@@ -166,6 +166,9 @@ export function generateResourcesFromEntities(
  * auto-discovered entities. It loads datasources and pipes from the
  * include paths and generates Tinybird resources ready to deploy.
  *
+ * Supports both TypeScript files (processed through esbuild) and raw
+ * .datasource/.pipe files (included directly).
+ *
  * @param options - Build options with include paths
  * @returns Build result with generated resources
  *
@@ -193,8 +196,23 @@ export async function buildFromInclude(
   // Convert to format for generators
   const { datasources, pipes, connections } = entitiesToProject(entities);
 
-  // Generate resources
+  // Generate resources from TypeScript definitions
   const resources = generateResourcesFromEntities(datasources, pipes, connections);
+
+  // Merge in raw datafiles (loaded directly without processing)
+  for (const raw of entities.rawDatasources) {
+    resources.datasources.push({
+      name: raw.name,
+      content: raw.content,
+    });
+  }
+
+  for (const raw of entities.rawPipes) {
+    resources.pipes.push({
+      name: raw.name,
+      content: raw.content,
+    });
+  }
 
   return {
     resources,

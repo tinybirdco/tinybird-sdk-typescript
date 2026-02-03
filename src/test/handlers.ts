@@ -64,6 +64,59 @@ export function createNoChangesResponse() {
 }
 
 /**
+ * Create deploy success response (for /v1/deploy endpoint)
+ * This returns a deployment object, not a build object
+ */
+export function createDeploySuccessResponse(options?: {
+  deploymentId?: string;
+  status?: string;
+}) {
+  return {
+    result: "success",
+    deployment: {
+      id: options?.deploymentId ?? "deploy-123",
+      status: options?.status ?? "pending",
+    },
+  };
+}
+
+/**
+ * Create deployment status response (for /v1/deployments/:id endpoint)
+ */
+export function createDeploymentStatusResponse(options?: {
+  deploymentId?: string;
+  status?: string;
+}) {
+  return {
+    result: "success",
+    deployment: {
+      id: options?.deploymentId ?? "deploy-123",
+      status: options?.status ?? "data_ready",
+    },
+  };
+}
+
+/**
+ * Create set-live success response (for /v1/deployments/:id/set-live endpoint)
+ */
+export function createSetLiveSuccessResponse() {
+  return {
+    result: "success",
+  };
+}
+
+/**
+ * Create deployments list response (for /v1/deployments endpoint)
+ */
+export function createDeploymentsListResponse(options?: {
+  deployments?: Array<{ id: string; status: string; live: boolean }>;
+}) {
+  return {
+    deployments: options?.deployments ?? [],
+  };
+}
+
+/**
  * Default handlers for build and deploy endpoints
  */
 export const handlers = [
@@ -75,5 +128,10 @@ export const handlers = [
   // Deploy endpoint - success by default
   http.post(`${BASE_URL}/v1/deploy`, () => {
     return HttpResponse.json(createBuildSuccessResponse());
+  }),
+
+  // Deployments list endpoint - empty list by default (no stale deployments)
+  http.get(`${BASE_URL}/v1/deployments`, () => {
+    return HttpResponse.json(createDeploymentsListResponse());
   }),
 ];

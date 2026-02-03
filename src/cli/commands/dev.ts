@@ -187,9 +187,16 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
     };
   } else {
     // Branch mode: use Tinybird cloud with branches
-    // If we're on a feature branch, get or create the Tinybird branch
+    // Prevent dev mode on main branch - must use deploy command
+    if (config.isMainBranch || !config.tinybirdBranch) {
+      throw new Error(
+        `Cannot use 'dev' command on main branch. Use 'tinybird deploy' to deploy to production, or switch to a feature branch.`
+      );
+    }
+
+    // Get or create the Tinybird branch
     // Use tinybirdBranch (sanitized name) for Tinybird API, gitBranch for display
-    if (!config.isMainBranch && config.tinybirdBranch) {
+    if (config.tinybirdBranch) {
       const branchName = config.tinybirdBranch; // Sanitized name for Tinybird
 
       // Always fetch fresh from API to avoid stale cache issues
@@ -246,10 +253,10 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
     options.onBuildStart?.();
 
     try {
+      // Always use runBuild - main branch is blocked at startup
       const result = await runBuild({
         cwd: config.cwd,
         tokenOverride: effectiveToken,
-        useDeployEndpoint: devMode !== "local" && config.isMainBranch,
         devModeOverride: devMode,
       });
       options.onBuildComplete?.(result);

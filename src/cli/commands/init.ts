@@ -117,9 +117,18 @@ export { pageViews, topPages };
 /**
  * Default config content generator
  */
-function createDefaultConfig(tinybirdDir: string, devMode: DevMode) {
+function createDefaultConfig(
+  tinybirdDir: string,
+  devMode: DevMode,
+  additionalIncludes: string[] = []
+) {
+  const include = [
+    `${tinybirdDir}/datasources.ts`,
+    `${tinybirdDir}/endpoints.ts`,
+    ...additionalIncludes,
+  ];
   return {
-    include: [`${tinybirdDir}/datasources.ts`, `${tinybirdDir}/endpoints.ts`],
+    include,
     token: "${TINYBIRD_TOKEN}",
     baseUrl: "https://api.tinybird.co",
     devMode,
@@ -140,6 +149,10 @@ export interface InitOptions {
   devMode?: DevMode;
   /** Client path - if provided, skip interactive prompt */
   clientPath?: string;
+  /** Skip prompts for existing datafiles - for testing */
+  skipDatafilePrompt?: boolean;
+  /** Auto-include existing datafiles without prompting - for testing */
+  includeExistingDatafiles?: boolean;
 }
 
 /**
@@ -164,6 +177,62 @@ export interface InitResult {
   devMode?: DevMode;
   /** Selected client path */
   clientPath?: string;
+  /** Existing datafiles that were added to config */
+  existingDatafiles?: string[];
+}
+
+/**
+ * Find existing .datasource and .pipe files in the repository
+ *
+ * @param cwd - Working directory to search from
+ * @param maxDepth - Maximum directory depth to search (default: 5)
+ * @returns Array of relative file paths
+ */
+export function findExistingDatafiles(
+  cwd: string,
+  maxDepth: number = 5
+): string[] {
+  const files: string[] = [];
+
+  function searchDir(dir: string, depth: number): void {
+    if (depth > maxDepth) return;
+
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return; // Skip directories we can't read
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+
+      // Skip node_modules and hidden directories
+      if (
+        entry.isDirectory() &&
+        (entry.name === "node_modules" ||
+          entry.name.startsWith(".") ||
+          entry.name === "dist" ||
+          entry.name === "build")
+      ) {
+        continue;
+      }
+
+      if (entry.isDirectory()) {
+        searchDir(fullPath, depth + 1);
+      } else if (
+        entry.isFile() &&
+        (entry.name.endsWith(".datasource") || entry.name.endsWith(".pipe"))
+      ) {
+        // Convert to relative path
+        const relativePath = path.relative(cwd, fullPath);
+        files.push(relativePath);
+      }
+    }
+  }
+
+  searchDir(cwd, 0);
+  return files.sort();
 }
 
 /**
@@ -183,6 +252,10 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
 
   const created: string[] = [];
   const skipped: string[] = [];
+  let existingDatafiles: string[] = [];
+
+  // Check for existing .datasource and .pipe files
+  const foundDatafiles = findExistingDatafiles(cwd);
 
   // Determine devMode - prompt if not provided
   let devMode: DevMode = options.devMode ?? "branch";
@@ -245,6 +318,19 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     relativeTinybirdDir = clientPathChoice || defaultRelativePath;
   }
 
+  // Ask about existing datafiles if found
+  if (foundDatafiles.length > 0 && !options.skipDatafilePrompt) {
+    const includeDatafiles =
+      options.includeExistingDatafiles ??
+      (await promptForExistingDatafiles(foundDatafiles));
+
+    if (includeDatafiles) {
+      existingDatafiles = foundDatafiles;
+    }
+  } else if (options.includeExistingDatafiles && foundDatafiles.length > 0) {
+    existingDatafiles = foundDatafiles;
+  }
+
   const tinybirdDir = path.join(cwd, relativeTinybirdDir);
 
   // File paths
@@ -258,7 +344,11 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     skipped.push("tinybird.json");
   } else {
     try {
-      const config = createDefaultConfig(relativeTinybirdDir, devMode);
+      const config = createDefaultConfig(
+        relativeTinybirdDir,
+        devMode,
+        existingDatafiles
+      );
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
       created.push("tinybird.json");
     } catch (error) {
@@ -357,6 +447,11 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         modified = true;
       }
 
+      if (!packageJson.scripts["tinybird:deploy"]) {
+        packageJson.scripts["tinybird:deploy"] = "tinybird deploy";
+        modified = true;
+      }
+
       if (modified) {
         fs.writeFileSync(
           packageJsonPath,
@@ -384,11 +479,9 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         }
 
         // If custom base URL, update tinybird.json
-        if (
-          authResult.baseUrl &&
-          authResult.baseUrl !== "https://api.tinybird.co"
-        ) {
-          updateConfig(configPath, { baseUrl: authResult.baseUrl });
+        const baseUrl = authResult.baseUrl ?? "https://api.tinybird.co";
+        if (baseUrl !== "https://api.tinybird.co") {
+          updateConfig(configPath, { baseUrl });
         }
 
         return {
@@ -400,6 +493,8 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
           userEmail: authResult.userEmail,
           devMode,
           clientPath: relativeTinybirdDir,
+          existingDatafiles:
+            existingDatafiles.length > 0 ? existingDatafiles : undefined,
         };
       } catch (error) {
         // Login succeeded but saving credentials failed
@@ -413,6 +508,8 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
           loggedIn: false,
           devMode,
           clientPath: relativeTinybirdDir,
+          existingDatafiles:
+            existingDatafiles.length > 0 ? existingDatafiles : undefined,
         };
       }
     } else {
@@ -424,6 +521,8 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         loggedIn: false,
         devMode,
         clientPath: relativeTinybirdDir,
+        existingDatafiles:
+          existingDatafiles.length > 0 ? existingDatafiles : undefined,
       };
     }
   }
@@ -434,5 +533,38 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     skipped,
     devMode,
     clientPath: relativeTinybirdDir,
+    existingDatafiles:
+      existingDatafiles.length > 0 ? existingDatafiles : undefined,
   };
+}
+
+/**
+ * Prompt user about including existing datafiles
+ */
+async function promptForExistingDatafiles(
+  datafiles: string[]
+): Promise<boolean> {
+  const datasourceCount = datafiles.filter((f) =>
+    f.endsWith(".datasource")
+  ).length;
+  const pipeCount = datafiles.filter((f) => f.endsWith(".pipe")).length;
+
+  const parts: string[] = [];
+  if (datasourceCount > 0) {
+    parts.push(`${datasourceCount} .datasource file${datasourceCount > 1 ? "s" : ""}`);
+  }
+  if (pipeCount > 0) {
+    parts.push(`${pipeCount} .pipe file${pipeCount > 1 ? "s" : ""}`);
+  }
+
+  const confirmInclude = await p.confirm({
+    message: `Found ${parts.join(" and ")} in your project. Include them in tinybird.json?`,
+    initialValue: true,
+  });
+
+  if (p.isCancel(confirmInclude)) {
+    return false;
+  }
+
+  return confirmInclude;
 }
