@@ -3,8 +3,9 @@
  * Similar to the column type validators but for query parameters
  */
 
-// Symbol for brand typing
-const PARAM_BRAND = Symbol("tinybird.param");
+// Symbol for brand typing - use Symbol.for() for global registry
+// This ensures the same symbol is used across module instances
+const PARAM_BRAND = Symbol.for("tinybird.param");
 
 /**
  * Base interface for parameter validators

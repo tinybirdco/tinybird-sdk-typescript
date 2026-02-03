@@ -11,8 +11,9 @@ import type { TinybirdClient } from "../client/base.js";
 import type { QueryResult } from "../client/types.js";
 import type { InferRow, InferParams, InferOutputRow } from "../infer/index.js";
 
-// Symbol for brand typing
-const PROJECT_BRAND = Symbol("tinybird.project");
+// Symbol for brand typing - use Symbol.for() for global registry
+// This ensures the same symbol is used across module instances
+const PROJECT_BRAND = Symbol.for("tinybird.project");
 
 /**
  * Collection of datasource definitions

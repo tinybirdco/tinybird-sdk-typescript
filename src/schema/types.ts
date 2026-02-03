@@ -3,8 +3,9 @@
  * Similar to Convex's `v.*` pattern, but for ClickHouse types
  */
 
-// Symbol for brand typing
-const VALIDATOR_BRAND = Symbol("tinybird.validator");
+// Symbol for brand typing - use Symbol.for() for global registry
+// This ensures the same symbol is used across module instances
+const VALIDATOR_BRAND = Symbol.for("tinybird.validator");
 
 /**
  * Base interface for all type validators
