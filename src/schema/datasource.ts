@@ -7,8 +7,9 @@ import type { AnyTypeValidator } from "./types.js";
 import type { EngineConfig } from "./engines.js";
 import type { KafkaConnectionDefinition } from "./connection.js";
 
-// Symbol for brand typing
-const DATASOURCE_BRAND = Symbol("tinybird.datasource");
+// Symbol for brand typing - use Symbol.for() for global registry
+// This ensures the same symbol is used across module instances
+const DATASOURCE_BRAND = Symbol.for("tinybird.datasource");
 
 /**
  * A column can be defined as just a type validator,
