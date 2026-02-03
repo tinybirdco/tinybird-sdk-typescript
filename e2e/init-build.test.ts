@@ -390,5 +390,51 @@ describe("E2E: Init + Build Happy Path", () => {
       expect(branchCreateCalled).toBe(true);
       expect(jobPollCalled).toBe(true);
     });
+
+    it("does not create branch if it already exists", async () => {
+      let branchCreateCalled = false;
+
+      server.use(
+        // Branch already exists
+        http.get(`${BASE_URL}/v0/environments/:name`, () => {
+          return HttpResponse.json({
+            id: "branch-feature_test_branch",
+            name: "feature_test_branch",
+            token: "p.existing-branch-token",
+            created_at: new Date().toISOString(),
+          });
+        }),
+        // Create branch - should NOT be called
+        http.post(`${BASE_URL}/v1/environments`, () => {
+          branchCreateCalled = true;
+          return HttpResponse.json({
+            job: { id: "job-create-branch", status: "working" },
+          });
+        }),
+        // Build endpoint
+        http.post(`${BASE_URL}/v1/build`, () => {
+          return HttpResponse.json(
+            createBuildSuccessResponse({
+              newDatasources: ["page_views"],
+              newPipes: ["top_pages"],
+            })
+          );
+        })
+      );
+
+      // Run init
+      await runInit({
+        cwd: tempDir,
+        skipLogin: true,
+        devMode: "branch",
+        clientPath: "tinybird",
+      });
+
+      // Run build
+      const buildResult = await runBuild({ cwd: tempDir });
+
+      expect(buildResult.success).toBe(true);
+      expect(branchCreateCalled).toBe(false);
+    });
   });
 });
