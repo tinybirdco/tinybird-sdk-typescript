@@ -37,7 +37,7 @@ describe("Build API", () => {
   describe("buildToTinybird", () => {
     it("successfully builds resources", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/build?from=ts-sdk`, () => {
+        http.post(`${BASE_URL}/v1/build`, () => {
           return HttpResponse.json(
             createBuildSuccessResponse({
               buildId: "build-abc",
@@ -61,7 +61,7 @@ describe("Build API", () => {
 
     it("handles no changes response", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/build?from=ts-sdk`, () => {
+        http.post(`${BASE_URL}/v1/build`, () => {
           return HttpResponse.json(createNoChangesResponse());
         })
       );
@@ -74,7 +74,7 @@ describe("Build API", () => {
 
     it("handles build failure with single error", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/build?from=ts-sdk`, () => {
+        http.post(`${BASE_URL}/v1/build`, () => {
           return HttpResponse.json(
             createBuildFailureResponse("Invalid SQL syntax"),
             { status: 200 }
@@ -91,7 +91,7 @@ describe("Build API", () => {
 
     it("handles build failure with multiple errors", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/build?from=ts-sdk`, () => {
+        http.post(`${BASE_URL}/v1/build`, () => {
           return HttpResponse.json(
             createBuildMultipleErrorsResponse([
               { filename: "events.datasource", error: "Invalid schema" },
@@ -111,7 +111,7 @@ describe("Build API", () => {
 
     it("handles HTTP error responses", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/build?from=ts-sdk`, () => {
+        http.post(`${BASE_URL}/v1/build`, () => {
           return HttpResponse.json(
             { result: "failed", error: "Unauthorized" },
             { status: 401 }
@@ -127,7 +127,7 @@ describe("Build API", () => {
 
     it("handles malformed JSON response", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/build?from=ts-sdk`, () => {
+        http.post(`${BASE_URL}/v1/build`, () => {
           return new HttpResponse("not json", {
             status: 200,
             headers: { "Content-Type": "text/plain" },
@@ -142,7 +142,7 @@ describe("Build API", () => {
 
     it("tracks changed pipes and datasources", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/build?from=ts-sdk`, () => {
+        http.post(`${BASE_URL}/v1/build`, () => {
           return HttpResponse.json(
             createBuildSuccessResponse({
               changedPipes: ["top_events"],
@@ -166,7 +166,7 @@ describe("Build API", () => {
       let capturedAuth: string | null = null;
 
       server.use(
-        http.post(`${BASE_URL}/v1/build?from=ts-sdk`, ({ request }) => {
+        http.post(`${BASE_URL}/v1/build`, ({ request }) => {
           capturedAuth = request.headers.get("Authorization");
           return HttpResponse.json(createBuildSuccessResponse());
         })
@@ -181,7 +181,7 @@ describe("Build API", () => {
       let capturedFormData: FormData | null = null;
 
       server.use(
-        http.post(`${BASE_URL}/v1/build?from=ts-sdk`, async ({ request }) => {
+        http.post(`${BASE_URL}/v1/build`, async ({ request }) => {
           capturedFormData = await request.formData();
           return HttpResponse.json(createBuildSuccessResponse());
         })

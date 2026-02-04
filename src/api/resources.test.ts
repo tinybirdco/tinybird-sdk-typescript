@@ -16,7 +16,7 @@ const TOKEN = "test-token";
 
 const handlers = [
   // List datasources
-  http.get(`${BASE_URL}/v0/datasources?from=ts-sdk`, () => {
+  http.get(`${BASE_URL}/v0/datasources`, () => {
     return HttpResponse.json({
       datasources: [
         { name: "events", description: "Event data" },
@@ -26,7 +26,7 @@ const handlers = [
   }),
 
   // Get datasource detail - events
-  http.get(`${BASE_URL}/v0/datasources/events?from=ts-sdk`, () => {
+  http.get(`${BASE_URL}/v0/datasources/events`, () => {
     return HttpResponse.json({
       name: "events",
       description: "Event tracking data",
@@ -42,7 +42,7 @@ const handlers = [
   }),
 
   // Get datasource detail - users
-  http.get(`${BASE_URL}/v0/datasources/users?from=ts-sdk`, () => {
+  http.get(`${BASE_URL}/v0/datasources/users`, () => {
     return HttpResponse.json({
       name: "users",
       description: "User data",
@@ -57,7 +57,7 @@ const handlers = [
   }),
 
   // List pipes
-  http.get(`${BASE_URL}/v0/pipes?from=ts-sdk`, () => {
+  http.get(`${BASE_URL}/v0/pipes`, () => {
     return HttpResponse.json({
       pipes: [
         { name: "top_events", type: "endpoint" },
@@ -67,7 +67,7 @@ const handlers = [
   }),
 
   // Get pipe detail - endpoint
-  http.get(`${BASE_URL}/v0/pipes/top_events?from=ts-sdk`, () => {
+  http.get(`${BASE_URL}/v0/pipes/top_events`, () => {
     return HttpResponse.json({
       name: "top_events",
       description: "Get top events by count",
@@ -89,7 +89,7 @@ const handlers = [
   }),
 
   // Get pipe detail - materialized
-  http.get(`${BASE_URL}/v0/pipes/daily_stats_mv?from=ts-sdk`, () => {
+  http.get(`${BASE_URL}/v0/pipes/daily_stats_mv`, () => {
     return HttpResponse.json({
       name: "daily_stats_mv",
       description: "Daily aggregation",
@@ -104,7 +104,7 @@ const handlers = [
   }),
 
   // Get pipe detail - copy
-  http.get(`${BASE_URL}/v0/pipes/daily_snapshot?from=ts-sdk`, () => {
+  http.get(`${BASE_URL}/v0/pipes/daily_snapshot`, () => {
     return HttpResponse.json({
       name: "daily_snapshot",
       description: "Daily snapshot copy",
@@ -136,7 +136,7 @@ describe("listDatasources", () => {
 
   it("handles empty workspace", async () => {
     server.use(
-      http.get(`${BASE_URL}/v0/datasources?from=ts-sdk`, () => {
+      http.get(`${BASE_URL}/v0/datasources`, () => {
         return HttpResponse.json({ datasources: [] });
       })
     );
@@ -148,7 +148,7 @@ describe("listDatasources", () => {
 
   it("throws ResourceApiError on 401", async () => {
     server.use(
-      http.get(`${BASE_URL}/v0/datasources?from=ts-sdk`, () => {
+      http.get(`${BASE_URL}/v0/datasources`, () => {
         return new HttpResponse(null, { status: 401 });
       })
     );
@@ -160,7 +160,7 @@ describe("listDatasources", () => {
 
   it("throws ResourceApiError on 403", async () => {
     server.use(
-      http.get(`${BASE_URL}/v0/datasources?from=ts-sdk`, () => {
+      http.get(`${BASE_URL}/v0/datasources`, () => {
         return new HttpResponse(null, { status: 403 });
       })
     );
@@ -188,7 +188,7 @@ describe("getDatasource", () => {
 
   it("throws ResourceApiError on 404", async () => {
     server.use(
-      http.get(`${BASE_URL}/v0/datasources/nonexistent?from=ts-sdk`, () => {
+      http.get(`${BASE_URL}/v0/datasources/nonexistent`, () => {
         return new HttpResponse(null, { status: 404 });
       })
     );
@@ -273,10 +273,10 @@ describe("hasResources", () => {
 
   it("returns false for empty workspace", async () => {
     server.use(
-      http.get(`${BASE_URL}/v0/datasources?from=ts-sdk`, () => {
+      http.get(`${BASE_URL}/v0/datasources`, () => {
         return HttpResponse.json({ datasources: [] });
       }),
-      http.get(`${BASE_URL}/v0/pipes?from=ts-sdk`, () => {
+      http.get(`${BASE_URL}/v0/pipes`, () => {
         return HttpResponse.json({ pipes: [] });
       })
     );
@@ -288,7 +288,7 @@ describe("hasResources", () => {
 
   it("returns true when only datasources exist", async () => {
     server.use(
-      http.get(`${BASE_URL}/v0/pipes?from=ts-sdk`, () => {
+      http.get(`${BASE_URL}/v0/pipes`, () => {
         return HttpResponse.json({ pipes: [] });
       })
     );
@@ -300,7 +300,7 @@ describe("hasResources", () => {
 
   it("returns true when only pipes exist", async () => {
     server.use(
-      http.get(`${BASE_URL}/v0/datasources?from=ts-sdk`, () => {
+      http.get(`${BASE_URL}/v0/datasources`, () => {
         return HttpResponse.json({ datasources: [] });
       })
     );
@@ -314,7 +314,7 @@ describe("hasResources", () => {
 describe("ResourceApiError", () => {
   it("includes status and endpoint", async () => {
     server.use(
-      http.get(`${BASE_URL}/v0/datasources?from=ts-sdk`, () => {
+      http.get(`${BASE_URL}/v0/datasources`, () => {
         return new HttpResponse("Unauthorized", { status: 401 });
       })
     );

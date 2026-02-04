@@ -121,17 +121,17 @@ export function createDeploymentsListResponse(options?: {
  */
 export const handlers = [
   // Build endpoint - success by default
-  http.post(`${BASE_URL}/v1/build?from=ts-sdk`, () => {
+  http.post(`${BASE_URL}/v1/build`, () => {
     return HttpResponse.json(createBuildSuccessResponse());
   }),
 
   // Deploy endpoint - success by default
-  http.post(`${BASE_URL}/v1/deploy?from=ts-sdk`, () => {
+  http.post(`${BASE_URL}/v1/deploy`, () => {
     return HttpResponse.json(createBuildSuccessResponse());
   }),
 
   // Deployments list endpoint - empty list by default (no stale deployments)
-  http.get(`${BASE_URL}/v1/deployments?from=ts-sdk`, () => {
+  http.get(`${BASE_URL}/v1/deployments`, () => {
     return HttpResponse.json(createDeploymentsListResponse());
   }),
 ];

@@ -9,6 +9,12 @@ import {
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+function expectFromParam(url: string) {
+  const parsed = new URL(url);
+  expect(parsed.searchParams.get("from")).toBe("ts-sdk");
+  return parsed;
+}
+
 describe("Workspace API client", () => {
   const config: WorkspaceApiConfig = {
     baseUrl: "https://api.tinybird.co",
@@ -38,15 +44,15 @@ describe("Workspace API client", () => {
 
       const result = await getWorkspace(config);
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.tinybird.co/v1/workspace?from=ts-sdk",
-        {
-          method: "GET",
-          headers: {
-            Authorization: "Bearer p.test-token",
-          },
-        }
-      );
+      const [url, init] = mockFetch.mock.calls[0];
+      const parsed = expectFromParam(url);
+      expect(parsed.pathname).toBe("/v1/workspace");
+      expect(init).toEqual({
+        method: "GET",
+        headers: {
+          Authorization: "Bearer p.test-token",
+        },
+      });
       expect(result).toEqual(mockWorkspace);
     });
 
