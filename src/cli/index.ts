@@ -80,20 +80,6 @@ function createCli(): Command {
         process.exit(1);
       }
 
-      if (result.created.length > 0) {
-        console.log("Created:");
-        result.created.forEach((file) => {
-          console.log(`  - ${file}`);
-        });
-      }
-
-      if (result.skipped.length > 0) {
-        console.log("\nSkipped (already exists):");
-        result.skipped.forEach((file) => {
-          console.log(`  - ${file}`);
-        });
-      }
-
       // Detect package manager for run command
       const runCmd = detectPackageManagerRunCmd();
       const clientPath = result.clientPath ?? "tinybird";
@@ -112,18 +98,18 @@ function createCli(): Command {
             `\nAdded ${result.existingDatafiles.length} existing datafile(s) to tinybird.json.`
           );
         }
-        console.log("\nDone! Next steps:");
-        console.log(`  1. Edit your schema in ${clientPath}/`);
+        console.log("\nNext steps:");
+        console.log(`  1. Edit your schema in ${clientPath}`);
         console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
       } else if (result.loggedIn === false) {
         console.log("\nLogin was skipped or failed.");
-        console.log("\nDone! Next steps:");
+        console.log("\nNext steps:");
         console.log("  1. Run 'npx tinybird login' to authenticate");
-        console.log(`  2. Edit your schema in ${clientPath}/`);
+        console.log(`  2. Edit your schema in ${clientPath}`);
         console.log(`  3. Run '${runCmd} tinybird:dev' to start development`);
       } else {
-        console.log("\nDone! Next steps:");
-        console.log(`  1. Edit your schema in ${clientPath}/`);
+        console.log("\nNext steps:");
+        console.log(`  1. Edit your schema in ${clientPath}`);
         console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
       }
     });

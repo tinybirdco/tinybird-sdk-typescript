@@ -36,9 +36,9 @@ export function generateDatasourceCode(ds: DatasourceInfo): string {
     lines.push(`  description: "${escapeString(ds.description)}",`);
   }
 
-  // Add jsonpath: false if no columns use jsonpath
+  // Add jsonPaths: false if no columns use jsonpath
   if (!hasJsonpath) {
-    lines.push("  jsonpath: false,");
+    lines.push("  jsonPaths: false,");
   }
 
   // Schema
