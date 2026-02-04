@@ -53,6 +53,11 @@ export function generateDatasourceCode(ds: DatasourceInfo): string {
   const engineCode = generateEngineCode(ds.engine);
   lines.push(`  engine: ${engineCode},`);
 
+  if (ds.forward_query) {
+    const formattedQuery = formatSqlForTemplate(ds.forward_query);
+    lines.push(`  forwardQuery: \`${formattedQuery}\`,`);
+  }
+
   lines.push("});");
   lines.push("");
   lines.push(`export type ${typeName}Row = InferRow<typeof ${varName}>;`);
