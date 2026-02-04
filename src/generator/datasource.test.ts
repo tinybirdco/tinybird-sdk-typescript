@@ -81,6 +81,19 @@ describe('Datasource Generator', () => {
       const result = generateDatasource(ds);
       expect(result.content).toContain('ENGINE_TTL "timestamp + INTERVAL 90 DAY"');
     });
+
+    it('includes forward query when provided', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          id: t.string(),
+        },
+        forwardQuery: 'SELECT id',
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('FORWARD_QUERY >');
+      expect(result.content).toContain('    SELECT id');
+    });
   });
 
   describe('Column formatting', () => {

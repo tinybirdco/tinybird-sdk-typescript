@@ -74,6 +74,18 @@ describe("generateDatasourceCode", () => {
     expect(code).toContain(" * Event tracking data");
     expect(code).toContain(" */");
   });
+
+  it("includes forward query when present", () => {
+    const ds: DatasourceInfo = {
+      name: "events",
+      columns: [{ name: "id", type: "String" }],
+      engine: { type: "MergeTree", sorting_key: "id" },
+      forward_query: "SELECT id",
+    };
+
+    const code = generateDatasourceCode(ds);
+    expect(code).toContain("forwardQuery: `SELECT id`");
+  });
 });
 
 describe("generatePipeCode", () => {
