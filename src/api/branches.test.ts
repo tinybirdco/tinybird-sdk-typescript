@@ -64,7 +64,7 @@ describe("Branch API client", () => {
       expect(mockFetch).toHaveBeenCalledTimes(3);
       expect(mockFetch).toHaveBeenNthCalledWith(
         1,
-        "https://api.tinybird.co/v1/environments?name=my-feature",
+        "https://api.tinybird.co/v1/environments?name=my-feature&from=ts-sdk",
         {
           method: "POST",
           headers: {
@@ -74,7 +74,7 @@ describe("Branch API client", () => {
       );
       expect(mockFetch).toHaveBeenNthCalledWith(
         2,
-        "https://api.tinybird.co/v0/jobs/job-123",
+        "https://api.tinybird.co/v0/jobs/job-123?from=ts-sdk",
         {
           method: "GET",
           headers: {
@@ -84,7 +84,7 @@ describe("Branch API client", () => {
       );
       expect(mockFetch).toHaveBeenNthCalledWith(
         3,
-        "https://api.tinybird.co/v0/environments/my-feature?with_token=true",
+        "https://api.tinybird.co/v0/environments/my-feature?with_token=true&from=ts-sdk",
         {
           method: "GET",
           headers: {
@@ -197,7 +197,7 @@ describe("Branch API client", () => {
       const result = await listBranches(config);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.tinybird.co/v1/environments",
+        "https://api.tinybird.co/v1/environments?from=ts-sdk",
         {
           method: "GET",
           headers: {
@@ -236,7 +236,7 @@ describe("Branch API client", () => {
       const result = await getBranch(config, "my-feature");
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.tinybird.co/v0/environments/my-feature?with_token=true",
+        "https://api.tinybird.co/v0/environments/my-feature?with_token=true&from=ts-sdk",
         {
           method: "GET",
           headers: {
@@ -270,7 +270,7 @@ describe("Branch API client", () => {
       await deleteBranch(config, "my-feature");
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.tinybird.co/v1/environments/my-feature",
+        "https://api.tinybird.co/v1/environments/my-feature?from=ts-sdk",
         {
           method: "DELETE",
           headers: {

@@ -5,6 +5,7 @@
 
 import * as crypto from "crypto";
 import { LOCAL_BASE_URL } from "../cli/config.js";
+import { tinybirdFetch } from "./fetcher.js";
 
 /**
  * Tokens returned by the local /tokens endpoint
@@ -76,7 +77,7 @@ export class LocalApiError extends Error {
  */
 export async function isLocalRunning(): Promise<boolean> {
   try {
-    const response = await fetch(`${LOCAL_BASE_URL}/tokens`, {
+    const response = await tinybirdFetch(`${LOCAL_BASE_URL}/tokens`, {
       method: "GET",
       signal: AbortSignal.timeout(5000),
     });
@@ -94,7 +95,7 @@ export async function isLocalRunning(): Promise<boolean> {
  */
 export async function getLocalTokens(): Promise<LocalTokens> {
   try {
-    const response = await fetch(`${LOCAL_BASE_URL}/tokens`, {
+    const response = await tinybirdFetch(`${LOCAL_BASE_URL}/tokens`, {
       method: "GET",
       signal: AbortSignal.timeout(5000),
     });
@@ -136,7 +137,7 @@ export async function listLocalWorkspaces(
 ): Promise<{ workspaces: LocalWorkspace[]; organizationId?: string }> {
   const url = `${LOCAL_BASE_URL}/v1/user/workspaces?with_organization=true&token=${adminToken}`;
 
-  const response = await fetch(url, {
+  const response = await tinybirdFetch(url, {
     method: "GET",
   });
 
@@ -182,7 +183,7 @@ export async function createLocalWorkspace(
     formData.append("assign_to_organization_id", organizationId);
   }
 
-  const response = await fetch(url, {
+  const response = await tinybirdFetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${userToken}`,

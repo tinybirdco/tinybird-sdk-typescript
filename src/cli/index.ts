@@ -62,7 +62,9 @@ function createCli(): Command {
     .action(async (options) => {
       // Validate mode if provided
       if (options.mode && !["branch", "local"].includes(options.mode)) {
-        console.error(`Error: Invalid mode '${options.mode}'. Use 'branch' or 'local'.`);
+        console.error(
+          `Error: Invalid mode '${options.mode}'. Use 'branch' or 'local'.`
+        );
         process.exit(1);
       }
 
@@ -186,7 +188,9 @@ function createCli(): Command {
       const { build, deploy } = result;
 
       if (build) {
-        console.log(`Generated ${build.stats.datasourceCount} datasource(s), ${build.stats.pipeCount} pipe(s)`);
+        console.log(
+          `Generated ${build.stats.datasourceCount} datasource(s), ${build.stats.pipeCount} pipe(s)`
+        );
       }
 
       if (options.dryRun) {
@@ -244,7 +248,9 @@ function createCli(): Command {
       const { build, deploy } = result;
 
       if (build) {
-        console.log(`Generated ${build.stats.datasourceCount} datasource(s), ${build.stats.pipeCount} pipe(s)`);
+        console.log(
+          `Generated ${build.stats.datasourceCount} datasource(s), ${build.stats.pipeCount} pipe(s)`
+        );
       }
 
       if (options.dryRun) {
@@ -318,7 +324,9 @@ function createCli(): Command {
                 console.log("Workspace created.\n");
               } else {
                 console.log(`Using local Tinybird container`);
-                console.log(`Using existing local workspace '${workspaceName}'\n`);
+                console.log(
+                  `Using existing local workspace '${workspaceName}'\n`
+                );
               }
             } else if (info.isMainBranch) {
               console.log("On main branch - deploying to workspace\n");
@@ -330,7 +338,9 @@ function createCli(): Command {
                 console.log("Branch created and token cached.\n");
               } else {
                 console.log(`Detected git branch: ${info.gitBranch}`);
-                console.log(`Using existing Tinybird branch '${tinybirdName}'\n`);
+                console.log(
+                  `Using existing Tinybird branch '${tinybirdName}'\n`
+                );
               }
             } else {
               console.log("Not in a git repository - deploying to workspace\n");
@@ -351,7 +361,9 @@ function createCli(): Command {
               if (deploy.result === "no_changes") {
                 console.log(`[${formatTime()}] No changes detected`);
               } else {
-                console.log(`[${formatTime()}] Built in ${result.durationMs}ms`);
+                console.log(
+                  `[${formatTime()}] Built in ${result.durationMs}ms`
+                );
 
                 // Show datasource changes
                 if (deploy.datasources) {
@@ -386,7 +398,9 @@ function createCli(): Command {
               console.log(`[${formatTime()}] Schema validation:`);
               for (const issue of validation.issues) {
                 if (issue.type === "error") {
-                  console.error(`  ERROR [${issue.pipeName}]: ${issue.message}`);
+                  console.error(
+                    `  ERROR [${issue.pipeName}]: ${issue.message}`
+                  );
                 } else {
                   console.warn(`  WARN [${issue.pipeName}]: ${issue.message}`);
                 }
@@ -419,8 +433,9 @@ function createCli(): Command {
     });
 
   // Branch command
-  const branchCommand = new Command("branch")
-    .description("Manage Tinybird branches");
+  const branchCommand = new Command("branch").description(
+    "Manage Tinybird branches"
+  );
 
   branchCommand
     .command("list")
@@ -457,8 +472,13 @@ function createCli(): Command {
 
       console.log("Branch Status:");
       console.log(`  Git branch: ${result.gitBranch ?? "(not in git repo)"}`);
-      if (result.tinybirdBranchName && result.tinybirdBranchName !== result.gitBranch) {
-        console.log(`  Tinybird branch name: ${result.tinybirdBranchName} (sanitized)`);
+      if (
+        result.tinybirdBranchName &&
+        result.tinybirdBranchName !== result.gitBranch
+      ) {
+        console.log(
+          `  Tinybird branch name: ${result.tinybirdBranchName} (sanitized)`
+        );
       }
       console.log(`  Main branch: ${result.isMainBranch ? "yes" : "no"}`);
 

@@ -5,6 +5,7 @@
 
 import type { GeneratedResources } from "../generator/index.js";
 import type { BuildConfig, BuildApiResult } from "./build.js";
+import { tinybirdFetch } from "./fetcher.js";
 
 /**
  * Deployment object returned by the /v1/deploy endpoint
@@ -122,7 +123,7 @@ export async function deployToMain(
   // Step 0: Clean up any stale non-live deployments that might block the new deployment
   try {
     const deploymentsUrl = `${baseUrl}/v1/deployments`;
-    const deploymentsResponse = await fetch(deploymentsUrl, {
+    const deploymentsResponse = await tinybirdFetch(deploymentsUrl, {
       headers: {
         Authorization: `Bearer ${config.token}`,
       },
@@ -138,7 +139,7 @@ export async function deployToMain(
         if (debug) {
           console.log(`[debug] Cleaning up stale deployment: ${stale.id} (status: ${stale.status})`);
         }
-        await fetch(`${baseUrl}/v1/deployments/${stale.id}`, {
+        await tinybirdFetch(`${baseUrl}/v1/deployments/${stale.id}`, {
           method: "DELETE",
           headers: {
             Authorization: `Bearer ${config.token}`,
@@ -161,7 +162,7 @@ export async function deployToMain(
     console.log(`[debug] POST ${deployUrl}`);
   }
 
-  const response = await fetch(deployUrl, {
+  const response = await tinybirdFetch(deployUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.token}`,
@@ -263,7 +264,7 @@ export async function deployToMain(
     }
 
     const statusUrl = `${baseUrl}/v1/deployments/${deploymentId}`;
-    const statusResponse = await fetch(statusUrl, {
+    const statusResponse = await tinybirdFetch(statusUrl, {
       headers: {
         Authorization: `Bearer ${config.token}`,
       },
@@ -321,7 +322,7 @@ export async function deployToMain(
     console.log(`[debug] POST ${setLiveUrl}`);
   }
 
-  const setLiveResponse = await fetch(setLiveUrl, {
+  const setLiveResponse = await tinybirdFetch(setLiveUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.token}`,

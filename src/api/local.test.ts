@@ -23,7 +23,7 @@ describe("Local API", () => {
   describe("isLocalRunning", () => {
     it("returns true when local container is running", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/tokens`, () => {
+        http.get(`${LOCAL_BASE_URL}/tokens?from=ts-sdk`, () => {
           return HttpResponse.json({
             user_token: "user-token",
             admin_token: "admin-token",
@@ -38,7 +38,7 @@ describe("Local API", () => {
 
     it("returns false when local container is not running", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/tokens`, () => {
+        http.get(`${LOCAL_BASE_URL}/tokens?from=ts-sdk`, () => {
           return HttpResponse.error();
         })
       );
@@ -51,7 +51,7 @@ describe("Local API", () => {
   describe("getLocalTokens", () => {
     it("returns tokens from local container", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/tokens`, () => {
+        http.get(`${LOCAL_BASE_URL}/tokens?from=ts-sdk`, () => {
           return HttpResponse.json({
             user_token: "user-token-123",
             admin_token: "admin-token-456",
@@ -69,7 +69,7 @@ describe("Local API", () => {
 
     it("throws LocalNotRunningError when container is not running", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/tokens`, () => {
+        http.get(`${LOCAL_BASE_URL}/tokens?from=ts-sdk`, () => {
           return HttpResponse.error();
         })
       );
@@ -79,7 +79,7 @@ describe("Local API", () => {
 
     it("throws LocalApiError when response is invalid", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/tokens`, () => {
+        http.get(`${LOCAL_BASE_URL}/tokens?from=ts-sdk`, () => {
           return HttpResponse.json({
             // Missing required fields
             user_token: "user-token",
@@ -94,15 +94,18 @@ describe("Local API", () => {
   describe("listLocalWorkspaces", () => {
     it("returns list of workspaces", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
-          return HttpResponse.json({
-            organization_id: "org-123",
-            workspaces: [
-              { id: "ws-1", name: "Workspace1", token: "token-1" },
-              { id: "ws-2", name: "Workspace2", token: "token-2" },
-            ],
-          });
-        })
+        http.get(
+          `${LOCAL_BASE_URL}/v1/user/workspaces?with_organization=true&token=admin-token&from=ts-sdk`,
+          () => {
+            return HttpResponse.json({
+              organization_id: "org-123",
+              workspaces: [
+                { id: "ws-1", name: "Workspace1", token: "token-1" },
+                { id: "ws-2", name: "Workspace2", token: "token-2" },
+              ],
+            });
+          }
+        )
       );
 
       const result = await listLocalWorkspaces("admin-token");
@@ -118,9 +121,12 @@ describe("Local API", () => {
 
     it("throws LocalApiError on failure", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
-          return new HttpResponse("Not found", { status: 404 });
-        })
+        http.get(
+          `${LOCAL_BASE_URL}/v1/user/workspaces?with_organization=true&token=admin-token&from=ts-sdk`,
+          () => {
+            return new HttpResponse("Not found", { status: 404 });
+          }
+        )
       );
 
       await expect(listLocalWorkspaces("admin-token")).rejects.toThrow(LocalApiError);
@@ -130,7 +136,7 @@ describe("Local API", () => {
   describe("createLocalWorkspace", () => {
     it("creates a new workspace", async () => {
       server.use(
-        http.post(`${LOCAL_BASE_URL}/v1/workspaces`, async ({ request }) => {
+        http.post(`${LOCAL_BASE_URL}/v1/workspaces?from=ts-sdk`, async ({ request }) => {
           const formData = await request.text();
           const params = new URLSearchParams(formData);
           return HttpResponse.json({
@@ -150,7 +156,7 @@ describe("Local API", () => {
 
     it("throws LocalApiError on failure", async () => {
       server.use(
-        http.post(`${LOCAL_BASE_URL}/v1/workspaces`, () => {
+        http.post(`${LOCAL_BASE_URL}/v1/workspaces?from=ts-sdk`, () => {
           return new HttpResponse("Server error", { status: 500 });
         })
       );
@@ -170,14 +176,17 @@ describe("Local API", () => {
 
     it("returns existing workspace if found", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
-          return HttpResponse.json({
-            organization_id: "org-123",
-            workspaces: [
-              { id: "existing-ws", name: "MyWorkspace", token: "existing-token" },
-            ],
-          });
-        })
+        http.get(
+          `${LOCAL_BASE_URL}/v1/user/workspaces?with_organization=true&token=admin-token&from=ts-sdk`,
+          () => {
+            return HttpResponse.json({
+              organization_id: "org-123",
+              workspaces: [
+                { id: "existing-ws", name: "MyWorkspace", token: "existing-token" },
+              ],
+            });
+          }
+        )
       );
 
       const result = await getOrCreateLocalWorkspace(tokens, "MyWorkspace");
@@ -191,22 +200,25 @@ describe("Local API", () => {
       let createCalled = false;
 
       server.use(
-        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
-          // Return different response based on whether create was called
-          if (createCalled) {
+        http.get(
+          `${LOCAL_BASE_URL}/v1/user/workspaces?with_organization=true&token=admin-token&from=ts-sdk`,
+          () => {
+            // Return different response based on whether create was called
+            if (createCalled) {
+              return HttpResponse.json({
+                organization_id: "org-123",
+                workspaces: [
+                  { id: "new-ws", name: "NewWorkspace", token: "new-token" },
+                ],
+              });
+            }
             return HttpResponse.json({
               organization_id: "org-123",
-              workspaces: [
-                { id: "new-ws", name: "NewWorkspace", token: "new-token" },
-              ],
+              workspaces: [], // Empty initially
             });
           }
-          return HttpResponse.json({
-            organization_id: "org-123",
-            workspaces: [], // Empty initially
-          });
-        }),
-        http.post(`${LOCAL_BASE_URL}/v1/workspaces`, () => {
+        ),
+        http.post(`${LOCAL_BASE_URL}/v1/workspaces?from=ts-sdk`, () => {
           createCalled = true;
           return HttpResponse.json({
             id: "new-ws",

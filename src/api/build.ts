@@ -4,6 +4,7 @@
  */
 
 import type { GeneratedResources } from "../generator/index.js";
+import { tinybirdFetch } from "./fetcher.js";
 
 /**
  * Configuration for building/deploying to Tinybird
@@ -190,7 +191,7 @@ export async function buildToTinybird(
     console.log(`[debug] POST ${url}`);
   }
 
-  const response = await fetch(url, {
+  const response = await tinybirdFetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.token}`,

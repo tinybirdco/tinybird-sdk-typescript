@@ -39,7 +39,7 @@ describe("Workspace API client", () => {
       const result = await getWorkspace(config);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.tinybird.co/v1/workspace",
+        "https://api.tinybird.co/v1/workspace?from=ts-sdk",
         {
           method: "GET",
           headers: {

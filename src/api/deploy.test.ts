@@ -20,7 +20,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 beforeEach(() => {
   // Set up default handler for deployments list (used by stale deployment cleanup)
   server.use(
-    http.get(`${BASE_URL}/v1/deployments`, () => {
+    http.get(`${BASE_URL}/v1/deployments?from=ts-sdk`, () => {
       return HttpResponse.json(createDeploymentsListResponse());
     })
   );
@@ -47,17 +47,17 @@ describe("Deploy API", () => {
   // Helper to set up successful deploy flow
   function setupSuccessfulDeployFlow(deploymentId = "deploy-abc") {
     server.use(
-      http.post(`${BASE_URL}/v1/deploy`, () => {
+      http.post(`${BASE_URL}/v1/deploy?from=ts-sdk`, () => {
         return HttpResponse.json(
           createDeploySuccessResponse({ deploymentId, status: "pending" })
         );
       }),
-      http.get(`${BASE_URL}/v1/deployments/${deploymentId}`, () => {
+      http.get(`${BASE_URL}/v1/deployments/${deploymentId}?from=ts-sdk`, () => {
         return HttpResponse.json(
           createDeploymentStatusResponse({ deploymentId, status: "data_ready" })
         );
       }),
-      http.post(`${BASE_URL}/v1/deployments/${deploymentId}/set-live`, () => {
+      http.post(`${BASE_URL}/v1/deployments/${deploymentId}/set-live?from=ts-sdk`, () => {
         return HttpResponse.json(createSetLiveSuccessResponse());
       })
     );
@@ -80,12 +80,12 @@ describe("Deploy API", () => {
       let pollCount = 0;
 
       server.use(
-        http.post(`${BASE_URL}/v1/deploy`, () => {
+        http.post(`${BASE_URL}/v1/deploy?from=ts-sdk`, () => {
           return HttpResponse.json(
             createDeploySuccessResponse({ deploymentId: "deploy-poll", status: "pending" })
           );
         }),
-        http.get(`${BASE_URL}/v1/deployments/deploy-poll`, () => {
+        http.get(`${BASE_URL}/v1/deployments/deploy-poll?from=ts-sdk`, () => {
           pollCount++;
           // Return pending for first 2 polls, then data_ready
           const status = pollCount < 3 ? "pending" : "data_ready";
@@ -93,7 +93,7 @@ describe("Deploy API", () => {
             createDeploymentStatusResponse({ deploymentId: "deploy-poll", status })
           );
         }),
-        http.post(`${BASE_URL}/v1/deployments/deploy-poll/set-live`, () => {
+        http.post(`${BASE_URL}/v1/deployments/deploy-poll/set-live?from=ts-sdk`, () => {
           return HttpResponse.json(createSetLiveSuccessResponse());
         })
       );
@@ -106,7 +106,7 @@ describe("Deploy API", () => {
 
     it("handles deploy failure with single error", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/deploy`, () => {
+        http.post(`${BASE_URL}/v1/deploy?from=ts-sdk`, () => {
           return HttpResponse.json(
             createBuildFailureResponse("Permission denied"),
             { status: 200 }
@@ -123,7 +123,7 @@ describe("Deploy API", () => {
 
     it("handles deploy failure with multiple errors", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/deploy`, () => {
+        http.post(`${BASE_URL}/v1/deploy?from=ts-sdk`, () => {
           return HttpResponse.json(
             createBuildMultipleErrorsResponse([
               { filename: "events.datasource", error: "Schema mismatch" },
@@ -143,7 +143,7 @@ describe("Deploy API", () => {
 
     it("handles HTTP error responses", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/deploy`, () => {
+        http.post(`${BASE_URL}/v1/deploy?from=ts-sdk`, () => {
           return HttpResponse.json(
             { result: "failed", error: "Forbidden" },
             { status: 403 }
@@ -159,7 +159,7 @@ describe("Deploy API", () => {
 
     it("handles malformed JSON response", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/deploy`, () => {
+        http.post(`${BASE_URL}/v1/deploy?from=ts-sdk`, () => {
           return new HttpResponse("invalid json {", {
             status: 200,
             headers: { "Content-Type": "text/plain" },
@@ -176,35 +176,35 @@ describe("Deploy API", () => {
       let capturedUrl: string | null = null;
 
       server.use(
-        http.post(`${BASE_URL}/v1/deploy`, ({ request }) => {
+        http.post(`${BASE_URL}/v1/deploy?from=ts-sdk`, ({ request }) => {
           capturedUrl = request.url;
           return HttpResponse.json(
             createDeploySuccessResponse({ deploymentId: "deploy-url-test" })
           );
         }),
-        http.get(`${BASE_URL}/v1/deployments/deploy-url-test`, () => {
+        http.get(`${BASE_URL}/v1/deployments/deploy-url-test?from=ts-sdk`, () => {
           return HttpResponse.json(
             createDeploymentStatusResponse({ deploymentId: "deploy-url-test", status: "data_ready" })
           );
         }),
-        http.post(`${BASE_URL}/v1/deployments/deploy-url-test/set-live`, () => {
+        http.post(`${BASE_URL}/v1/deployments/deploy-url-test/set-live?from=ts-sdk`, () => {
           return HttpResponse.json(createSetLiveSuccessResponse());
         })
       );
 
       await deployToMain(config, resources, { pollIntervalMs: 1 });
 
-      expect(capturedUrl).toBe(`${BASE_URL}/v1/deploy`);
+      expect(capturedUrl).toBe(`${BASE_URL}/v1/deploy?from=ts-sdk`);
     });
 
     it("handles failed deployment status", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/deploy`, () => {
+        http.post(`${BASE_URL}/v1/deploy?from=ts-sdk`, () => {
           return HttpResponse.json(
             createDeploySuccessResponse({ deploymentId: "deploy-fail", status: "pending" })
           );
         }),
-        http.get(`${BASE_URL}/v1/deployments/deploy-fail`, () => {
+        http.get(`${BASE_URL}/v1/deployments/deploy-fail?from=ts-sdk`, () => {
           return HttpResponse.json(
             createDeploymentStatusResponse({ deploymentId: "deploy-fail", status: "failed" })
           );
@@ -219,17 +219,17 @@ describe("Deploy API", () => {
 
     it("handles set-live failure", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/deploy`, () => {
+        http.post(`${BASE_URL}/v1/deploy?from=ts-sdk`, () => {
           return HttpResponse.json(
             createDeploySuccessResponse({ deploymentId: "deploy-setlive-fail" })
           );
         }),
-        http.get(`${BASE_URL}/v1/deployments/deploy-setlive-fail`, () => {
+        http.get(`${BASE_URL}/v1/deployments/deploy-setlive-fail?from=ts-sdk`, () => {
           return HttpResponse.json(
             createDeploymentStatusResponse({ deploymentId: "deploy-setlive-fail", status: "data_ready" })
           );
         }),
-        http.post(`${BASE_URL}/v1/deployments/deploy-setlive-fail/set-live`, () => {
+        http.post(`${BASE_URL}/v1/deployments/deploy-setlive-fail/set-live?from=ts-sdk`, () => {
           return HttpResponse.json({ error: "Set live failed" }, { status: 500 });
         })
       );
@@ -244,18 +244,18 @@ describe("Deploy API", () => {
       let capturedUrl: string | null = null;
 
       server.use(
-        http.post(`${BASE_URL}/v1/deploy`, ({ request }) => {
+        http.post(`${BASE_URL}/v1/deploy?from=ts-sdk`, ({ request }) => {
           capturedUrl = request.url;
           return HttpResponse.json(
             createDeploySuccessResponse({ deploymentId: "deploy-slash" })
           );
         }),
-        http.get(`${BASE_URL}/v1/deployments/deploy-slash`, () => {
+        http.get(`${BASE_URL}/v1/deployments/deploy-slash?from=ts-sdk`, () => {
           return HttpResponse.json(
             createDeploymentStatusResponse({ deploymentId: "deploy-slash", status: "data_ready" })
           );
         }),
-        http.post(`${BASE_URL}/v1/deployments/deploy-slash/set-live`, () => {
+        http.post(`${BASE_URL}/v1/deployments/deploy-slash/set-live?from=ts-sdk`, () => {
           return HttpResponse.json(createSetLiveSuccessResponse());
         })
       );
@@ -266,17 +266,17 @@ describe("Deploy API", () => {
         { pollIntervalMs: 1 }
       );
 
-      expect(capturedUrl).toBe(`${BASE_URL}/v1/deploy`);
+      expect(capturedUrl).toBe(`${BASE_URL}/v1/deploy?from=ts-sdk`);
     });
 
     it("times out when deployment never becomes ready", async () => {
       server.use(
-        http.post(`${BASE_URL}/v1/deploy`, () => {
+        http.post(`${BASE_URL}/v1/deploy?from=ts-sdk`, () => {
           return HttpResponse.json(
             createDeploySuccessResponse({ deploymentId: "deploy-timeout", status: "pending" })
           );
         }),
-        http.get(`${BASE_URL}/v1/deployments/deploy-timeout`, () => {
+        http.get(`${BASE_URL}/v1/deployments/deploy-timeout?from=ts-sdk`, () => {
           return HttpResponse.json(
             createDeploymentStatusResponse({ deploymentId: "deploy-timeout", status: "pending" })
           );
