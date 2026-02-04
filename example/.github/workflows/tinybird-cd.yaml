@@ -1,0 +1,27 @@
+name: Tinybird CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "tinybird.json"
+      - "src/tinybird/**"
+      - "tinybird/**"
+      - "**/*.datasource"
+      - "**/*.pipe"
+
+jobs:
+  tinybird:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run tinybird:deploy
+        env:
+          TINYBIRD_TOKEN: ${{ secrets.TINYBIRD_TOKEN }}
