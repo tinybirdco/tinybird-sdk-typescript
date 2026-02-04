@@ -164,6 +164,23 @@ function generateKafkaConfig(kafka: KafkaConfig): string {
 }
 
 /**
+ * Generate forward query section
+ */
+function generateForwardQuery(forwardQuery?: string): string | null {
+  if (!forwardQuery) {
+    return null;
+  }
+
+  const trimmed = forwardQuery.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const lines = trimmed.split(/\r?\n/);
+  return ["FORWARD_QUERY >", ...lines.map((line) => `    ${line}`)].join("\n");
+}
+
+/**
  * Generate a .datasource file content from a DatasourceDefinition
  *
  * @param datasource - The datasource definition
@@ -222,6 +239,13 @@ export function generateDatasource(
   if (datasource.options.kafka) {
     parts.push("");
     parts.push(generateKafkaConfig(datasource.options.kafka));
+  }
+
+  // Add forward query if present
+  const forwardQuery = generateForwardQuery(datasource.options.forwardQuery);
+  if (forwardQuery) {
+    parts.push("");
+    parts.push(forwardQuery);
   }
 
   return {

@@ -75,6 +75,8 @@ export interface DatasourceInfo {
   columns: DatasourceColumn[];
   /** Engine configuration */
   engine: DatasourceEngine;
+  /** Forward query for schema evolution */
+  forward_query?: string;
 }
 
 /**
@@ -135,6 +137,7 @@ interface DatasourceDetailResponse {
   partition_key?: string;
   primary_key?: string;
   ttl?: string;
+  forward_query?: string;
 }
 
 // ============ Pipe Types ============
@@ -376,6 +379,7 @@ export async function getDatasource(
       version: engineObj?.engine_version,
       summing_columns: engineObj?.engine_summing_columns,
     },
+    forward_query: data.forward_query,
   };
 }
 

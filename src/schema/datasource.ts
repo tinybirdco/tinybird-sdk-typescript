@@ -71,6 +71,11 @@ export interface DatasourceOptions<TSchema extends SchemaDefinition> {
    * Defaults to true.
    */
   jsonPaths?: boolean;
+  /**
+   * Forward query used to evolve a datasource with incompatible schema changes.
+   * This should be the SELECT clause only (no FROM/WHERE).
+   */
+  forwardQuery?: string;
   /** Kafka ingestion configuration */
   kafka?: KafkaConfig;
 }
