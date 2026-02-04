@@ -18,15 +18,33 @@ import { browserLogin } from "../auth.js";
 import { saveTinybirdToken } from "../env.js";
 import { getGitRoot } from "../git.js";
 import { fetchAllResources } from "../../api/resources.js";
-import {
-  generateDatasourcesFile,
-  generatePipesFile,
-} from "../../codegen/index.js";
+import { generateCombinedFile } from "../../codegen/index.js";
 
 /**
- * Default starter content for datasources.ts
+ * Default starter content for tinybird.ts (single file with everything)
  */
-const DATASOURCES_CONTENT = `import { defineDatasource, t, engine, type InferRow } from "@tinybirdco/sdk";
+const TINYBIRD_CONTENT = `/**
+ * Tinybird Definitions
+ *
+ * Define your datasources, endpoints, and client here.
+ */
+
+import {
+  defineDatasource,
+  defineEndpoint,
+  createTinybirdClient,
+  node,
+  t,
+  p,
+  engine,
+  type InferRow,
+  type InferParams,
+  type InferOutputRow,
+} from "@tinybirdco/sdk";
+
+// ============================================================================
+// Datasources
+// ============================================================================
 
 /**
  * Page views datasource - tracks page view events
@@ -44,14 +62,11 @@ export const pageViews = defineDatasource("page_views", {
   }),
 });
 
-// Row type - use this for ingesting data
 export type PageViewsRow = InferRow<typeof pageViews>;
-`;
 
-/**
- * Default starter content for endpoints.ts
- */
-const ENDPOINTS_CONTENT = `import { defineEndpoint, node, t, p, type InferParams, type InferOutputRow } from "@tinybirdco/sdk";
+// ============================================================================
+// Endpoints
+// ============================================================================
 
 /**
  * Top pages endpoint - get the most visited pages
@@ -85,40 +100,17 @@ export const topPages = defineEndpoint("top_pages", {
   },
 });
 
-// Endpoint types - use these for calling the API
 export type TopPagesParams = InferParams<typeof topPages>;
 export type TopPagesOutput = InferOutputRow<typeof topPages>;
-`;
 
-/**
- * Default starter content for client.ts
- */
-const CLIENT_CONTENT = `/**
- * Tinybird Client
- *
- * This file defines the typed Tinybird client for your project.
- * Add your datasources and endpoints here as you create them.
- */
+// ============================================================================
+// Client
+// ============================================================================
 
-import { createTinybirdClient } from "@tinybirdco/sdk";
-
-// Import datasources and their row types
-import { pageViews, type PageViewsRow } from "./datasources";
-
-// Import endpoints and their types
-import { topPages, type TopPagesParams, type TopPagesOutput } from "./endpoints";
-
-// Create the typed Tinybird client
 export const tinybird = createTinybirdClient({
   datasources: { pageViews },
   pipes: { topPages },
 });
-
-// Re-export types for convenience
-export type { PageViewsRow, TopPagesParams, TopPagesOutput };
-
-// Re-export entities
-export { pageViews, topPages };
 `;
 
 const TINYBIRD_CI_WORKFLOW = `name: Tinybird CI
@@ -228,15 +220,11 @@ tinybird_cd:
  * Default config content generator
  */
 function createDefaultConfig(
-  tinybirdDir: string,
+  tinybirdFilePath: string,
   devMode: DevMode,
   additionalIncludes: string[] = []
 ) {
-  const include = [
-    `${tinybirdDir}/datasources.ts`,
-    `${tinybirdDir}/endpoints.ts`,
-    ...additionalIncludes,
-  ];
+  const include = [tinybirdFilePath, ...additionalIncludes];
   return {
     include,
     token: "${TINYBIRD_TOKEN}",
@@ -429,7 +417,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   if (!options.clientPath && !options.devMode) {
     // Ask user to confirm or change the client path
     const clientPathChoice = await p.text({
-      message: "Where should we create initial .ts files?",
+      message: "Where should we create initial tinybird.ts file?",
       placeholder: defaultRelativePath,
       defaultValue: defaultRelativePath,
     });
@@ -556,12 +544,9 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     }
   }
 
-  const tinybirdDir = path.join(cwd, relativeTinybirdDir);
-
-  // File paths
-  const datasourcesPath = path.join(tinybirdDir, "datasources.ts");
-  const endpointsPath = path.join(tinybirdDir, "endpoints.ts");
-  const clientPath = path.join(tinybirdDir, "client.ts");
+  // relativeTinybirdDir is now a file path like "src/lib/tinybird.ts"
+  const tinybirdFilePath = path.join(cwd, relativeTinybirdDir);
+  const tinybirdDir = path.dirname(tinybirdFilePath);
 
   // Create config file (tinybird.json)
   const configPath = getConfigPath(cwd);
@@ -586,7 +571,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     }
   }
 
-  // Create tinybird directory
+  // Create lib directory
   try {
     fs.mkdirSync(tinybirdDir, { recursive: true });
   } catch (error) {
@@ -594,64 +579,30 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
       success: false,
       created,
       skipped,
-      error: `Failed to create ${relativeTinybirdDir} folder: ${
+      error: `Failed to create ${path.dirname(relativeTinybirdDir)} folder: ${
         (error as Error).message
       }`,
     };
   }
 
-  // Create datasources.ts (skip if codegen will generate it)
+  // Create tinybird.ts (skip if codegen will generate it)
   if (datafileAction !== "codegen") {
-    if (fs.existsSync(datasourcesPath) && !force) {
-      skipped.push(`${relativeTinybirdDir}/datasources.ts`);
+    if (fs.existsSync(tinybirdFilePath) && !force) {
+      skipped.push(relativeTinybirdDir);
     } else {
       try {
-        fs.writeFileSync(datasourcesPath, DATASOURCES_CONTENT);
-        created.push(`${relativeTinybirdDir}/datasources.ts`);
+        fs.writeFileSync(tinybirdFilePath, TINYBIRD_CONTENT);
+        created.push(relativeTinybirdDir);
       } catch (error) {
         return {
           success: false,
           created,
           skipped,
-          error: `Failed to create datasources.ts: ${(error as Error).message}`,
+          error: `Failed to create ${relativeTinybirdDir}: ${
+            (error as Error).message
+          }`,
         };
       }
-    }
-  }
-
-  // Create endpoints.ts (skip if codegen will generate it)
-  if (datafileAction !== "codegen") {
-    if (fs.existsSync(endpointsPath) && !force) {
-      skipped.push(`${relativeTinybirdDir}/endpoints.ts`);
-    } else {
-      try {
-        fs.writeFileSync(endpointsPath, ENDPOINTS_CONTENT);
-        created.push(`${relativeTinybirdDir}/endpoints.ts`);
-      } catch (error) {
-        return {
-          success: false,
-          created,
-          skipped,
-          error: `Failed to create endpoints.ts: ${(error as Error).message}`,
-        };
-      }
-    }
-  }
-
-  // Create client.ts
-  if (fs.existsSync(clientPath) && !force) {
-    skipped.push(`${relativeTinybirdDir}/client.ts`);
-  } else {
-    try {
-      fs.writeFileSync(clientPath, CLIENT_CONTENT);
-      created.push(`${relativeTinybirdDir}/client.ts`);
-    } catch (error) {
-      return {
-        success: false,
-        created,
-        skipped,
-        error: `Failed to create client.ts: ${(error as Error).message}`,
-      };
     }
   }
 
@@ -940,8 +891,8 @@ type DatafileAction = "include" | "codegen" | "skip";
 async function runCodegen(
   baseUrl: string,
   token: string,
-  tinybirdDir: string,
-  relativeTinybirdDir: string,
+  tinybirdFilePath: string,
+  relativeTinybirdPath: string,
   created: string[],
   localDatafiles: string[]
 ): Promise<void> {
@@ -969,25 +920,21 @@ async function runCodegen(
     );
 
     if (matchedDatasources.length > 0 || matchedPipes.length > 0) {
-      // Generate and write datasources.ts
-      if (matchedDatasources.length > 0) {
-        const datasourcesContent = generateDatasourcesFile(matchedDatasources);
-        const datasourcesPath = path.join(tinybirdDir, "datasources.ts");
-        fs.writeFileSync(datasourcesPath, datasourcesContent);
-        created.push(`${relativeTinybirdDir}/datasources.ts (generated)`);
+      // Generate combined tinybird.ts file
+      const content = generateCombinedFile(matchedDatasources, matchedPipes);
+      // Ensure directory exists
+      const dir = path.dirname(tinybirdFilePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
       }
-
-      // Generate and write endpoints.ts
-      if (matchedPipes.length > 0) {
-        const pipesContent = generatePipesFile(matchedPipes, matchedDatasources);
-        const endpointsPath = path.join(tinybirdDir, "endpoints.ts");
-        fs.writeFileSync(endpointsPath, pipesContent);
-        created.push(`${relativeTinybirdDir}/endpoints.ts (generated)`);
-      }
+      fs.writeFileSync(tinybirdFilePath, content);
+      created.push(`${relativeTinybirdPath} (generated)`);
     }
   } catch (error) {
     console.error(
-      `Warning: Failed to generate TypeScript from workspace: ${(error as Error).message}`
+      `Warning: Failed to generate TypeScript from workspace: ${
+        (error as Error).message
+      }`
     );
   }
 }
@@ -1023,8 +970,8 @@ async function promptForExistingDatafiles(
       },
       {
         value: "codegen",
-        label: "Create .ts definitions",
-        hint: "Generate TypeScript from existing resources",
+        label: "Define resources in TypeScript",
+        hint: "Generate TypeScript definitions from existing resources",
       },
       {
         value: "skip",

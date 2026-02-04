@@ -73,34 +73,27 @@ describe("E2E: Init + Build Happy Path", () => {
         cwd: tempDir,
         skipLogin: true,
         devMode: "branch",
-        clientPath: "tinybird",
+        clientPath: "lib/tinybird.ts",
       });
 
       // Verify init succeeded
       expect(initResult.success).toBe(true);
       expect(initResult.devMode).toBe("branch");
-      expect(initResult.clientPath).toBe("tinybird");
+      expect(initResult.clientPath).toBe("lib/tinybird.ts");
 
       // Verify files created
       expect(initResult.created).toContain("tinybird.json");
-      expect(initResult.created).toContain("tinybird/datasources.ts");
-      expect(initResult.created).toContain("tinybird/endpoints.ts");
-      expect(initResult.created).toContain("tinybird/client.ts");
+      expect(initResult.created).toContain("lib/tinybird.ts");
 
       // Verify files exist on disk
       expect(fs.existsSync(path.join(tempDir, "tinybird.json"))).toBe(true);
-      expect(fs.existsSync(path.join(tempDir, "tinybird/datasources.ts"))).toBe(true);
-      expect(fs.existsSync(path.join(tempDir, "tinybird/endpoints.ts"))).toBe(true);
-      expect(fs.existsSync(path.join(tempDir, "tinybird/client.ts"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, "lib/tinybird.ts"))).toBe(true);
 
       // Verify tinybird.json content
       const config = JSON.parse(
         fs.readFileSync(path.join(tempDir, "tinybird.json"), "utf-8")
       );
-      expect(config.include).toEqual([
-        "tinybird/datasources.ts",
-        "tinybird/endpoints.ts",
-      ]);
+      expect(config.include).toEqual(["lib/tinybird.ts"]);
       expect(config.token).toBe("${TINYBIRD_TOKEN}");
       expect(config.baseUrl).toBe("https://api.tinybird.co");
       expect(config.devMode).toBe("branch");
@@ -140,7 +133,7 @@ describe("E2E: Init + Build Happy Path", () => {
         cwd: tempDir,
         skipLogin: true,
         devMode: "branch",
-        clientPath: "tinybird",
+        clientPath: "lib/tinybird.ts",
       });
       expect(initResult.success).toBe(true);
 
@@ -170,45 +163,28 @@ describe("E2E: Init + Build Happy Path", () => {
       expect(formDataEntries.length).toBe(2); // 1 datasource + 1 pipe
     });
 
-    it("generated TypeScript files are valid", async () => {
+    it("generated TypeScript file is valid", async () => {
       // Run init
       await runInit({
         cwd: tempDir,
         skipLogin: true,
         devMode: "branch",
-        clientPath: "tinybird",
+        clientPath: "lib/tinybird.ts",
       });
 
-      // Read generated files
-      const datasourcesContent = fs.readFileSync(
-        path.join(tempDir, "tinybird/datasources.ts"),
-        "utf-8"
-      );
-      const endpointsContent = fs.readFileSync(
-        path.join(tempDir, "tinybird/endpoints.ts"),
-        "utf-8"
-      );
-      const clientContent = fs.readFileSync(
-        path.join(tempDir, "tinybird/client.ts"),
+      // Read generated file
+      const content = fs.readFileSync(
+        path.join(tempDir, "lib/tinybird.ts"),
         "utf-8"
       );
 
-      // Verify datasources.ts has expected exports
-      expect(datasourcesContent).toContain("export const pageViews");
-      expect(datasourcesContent).toContain("defineDatasource");
-      expect(datasourcesContent).toContain("export type PageViewsRow");
-
-      // Verify endpoints.ts has expected exports
-      expect(endpointsContent).toContain("export const topPages");
-      expect(endpointsContent).toContain("defineEndpoint");
-      expect(endpointsContent).toContain("export type TopPagesParams");
-      expect(endpointsContent).toContain("export type TopPagesOutput");
-
-      // Verify client.ts imports and exports correctly
-      expect(clientContent).toContain("createTinybirdClient");
-      expect(clientContent).toContain("export const tinybird");
-      expect(clientContent).toContain('from "./datasources"');
-      expect(clientContent).toContain('from "./endpoints"');
+      // Verify file has expected exports
+      expect(content).toContain("export const pageViews");
+      expect(content).toContain("defineDatasource");
+      expect(content).toContain("export const topPages");
+      expect(content).toContain("defineEndpoint");
+      expect(content).toContain("createTinybirdClient");
+      expect(content).toContain("export const tinybird");
     });
 
     it("build with dry run does not call API", async () => {
@@ -226,7 +202,7 @@ describe("E2E: Init + Build Happy Path", () => {
         cwd: tempDir,
         skipLogin: true,
         devMode: "branch",
-        clientPath: "tinybird",
+        clientPath: "lib/tinybird.ts",
       });
 
       // Run build with dry run
@@ -260,7 +236,7 @@ describe("E2E: Init + Build Happy Path", () => {
         cwd: tempDir,
         skipLogin: true,
         devMode: "branch",
-        clientPath: "tinybird",
+        clientPath: "lib/tinybird.ts",
       });
 
       expect(initResult.success).toBe(true);
@@ -278,7 +254,7 @@ describe("E2E: Init + Build Happy Path", () => {
   });
 
   describe("project with src folder", () => {
-    it("init creates files in src/tinybird when src exists", async () => {
+    it("init creates file in src/lib when src exists", async () => {
       // Create src folder
       fs.mkdirSync(path.join(tempDir, "src"));
 
@@ -287,25 +263,20 @@ describe("E2E: Init + Build Happy Path", () => {
         cwd: tempDir,
         skipLogin: true,
         devMode: "branch",
-        clientPath: "src/tinybird",
+        clientPath: "src/lib/tinybird.ts",
       });
 
       expect(initResult.success).toBe(true);
-      expect(initResult.created).toContain("src/tinybird/datasources.ts");
-      expect(initResult.created).toContain("src/tinybird/endpoints.ts");
-      expect(initResult.created).toContain("src/tinybird/client.ts");
+      expect(initResult.created).toContain("src/lib/tinybird.ts");
 
       // Verify config has correct paths
       const config = JSON.parse(
         fs.readFileSync(path.join(tempDir, "tinybird.json"), "utf-8")
       );
-      expect(config.include).toEqual([
-        "src/tinybird/datasources.ts",
-        "src/tinybird/endpoints.ts",
-      ]);
+      expect(config.include).toEqual(["src/lib/tinybird.ts"]);
     });
 
-    it("init + build works with src/tinybird structure", async () => {
+    it("init + build works with src/lib/tinybird.ts structure", async () => {
       // Create src folder
       fs.mkdirSync(path.join(tempDir, "src"));
 
@@ -314,7 +285,7 @@ describe("E2E: Init + Build Happy Path", () => {
         cwd: tempDir,
         skipLogin: true,
         devMode: "branch",
-        clientPath: "src/tinybird",
+        clientPath: "src/lib/tinybird.ts",
       });
       expect(initResult.success).toBe(true);
 
@@ -380,7 +351,7 @@ describe("E2E: Init + Build Happy Path", () => {
         cwd: tempDir,
         skipLogin: true,
         devMode: "branch",
-        clientPath: "tinybird",
+        clientPath: "lib/tinybird.ts",
       });
 
       // Run build
@@ -427,7 +398,7 @@ describe("E2E: Init + Build Happy Path", () => {
         cwd: tempDir,
         skipLogin: true,
         devMode: "branch",
-        clientPath: "tinybird",
+        clientPath: "lib/tinybird.ts",
       });
 
       // Run build
@@ -450,7 +421,7 @@ describe("E2E: Init + Build Happy Path", () => {
     it("fails when include file does not exist", async () => {
       // Create config pointing to non-existent file
       const config = {
-        include: ["tinybird/datasources.ts", "tinybird/endpoints.ts"],
+        include: ["lib/tinybird.ts"],
         token: "${TINYBIRD_TOKEN}",
         baseUrl: "https://api.tinybird.co",
         devMode: "branch",
@@ -485,7 +456,7 @@ describe("E2E: Init + Build Happy Path", () => {
         cwd: tempDir,
         skipLogin: true,
         devMode: "branch",
-        clientPath: "tinybird",
+        clientPath: "lib/tinybird.ts",
       });
 
       const buildResult = await runBuild({ cwd: tempDir });
@@ -514,7 +485,7 @@ describe("E2E: Init + Build Happy Path", () => {
         cwd: tempDir,
         skipLogin: true,
         devMode: "branch",
-        clientPath: "tinybird",
+        clientPath: "lib/tinybird.ts",
       });
 
       const buildResult = await runBuild({ cwd: tempDir });
@@ -551,7 +522,7 @@ describe("E2E: Init + Build Happy Path", () => {
         cwd: tempDir,
         skipLogin: true,
         devMode: "branch",
-        clientPath: "tinybird",
+        clientPath: "lib/tinybird.ts",
       });
 
       const buildResult = await runBuild({ cwd: tempDir });
@@ -585,7 +556,7 @@ describe("E2E: Init + Build Happy Path", () => {
         cwd: tempDir,
         skipLogin: true,
         devMode: "branch",
-        clientPath: "tinybird",
+        clientPath: "lib/tinybird.ts",
       });
 
       const buildResult = await runBuild({ cwd: tempDir });

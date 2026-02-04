@@ -20,6 +20,9 @@ export function generateDatasourceCode(ds: DatasourceInfo): string {
   const typeName = toPascalCase(ds.name);
   const lines: string[] = [];
 
+  // Check if any columns have jsonpath set
+  const hasJsonpath = ds.columns.some((col) => col.jsonpath);
+
   // JSDoc comment
   if (ds.description) {
     lines.push("/**");
@@ -31,6 +34,11 @@ export function generateDatasourceCode(ds: DatasourceInfo): string {
 
   if (ds.description) {
     lines.push(`  description: "${escapeString(ds.description)}",`);
+  }
+
+  // Add jsonpath: false if no columns use jsonpath
+  if (!hasJsonpath) {
+    lines.push("  jsonpath: false,");
   }
 
   // Schema
@@ -376,4 +384,111 @@ export function generateAllFiles(
     datasourceCount: datasources.length,
     pipeCount: pipes.length,
   };
+}
+
+/**
+ * Generate a single combined tinybird.ts file with all definitions
+ */
+export function generateCombinedFile(
+  datasources: DatasourceInfo[],
+  pipes: PipeInfo[]
+): string {
+  const lines: string[] = [
+    "/**",
+    " * Tinybird Definitions",
+    " *",
+    " * This file contains all datasource and endpoint definitions.",
+    " * Generated from existing workspace resources.",
+    " */",
+    "",
+  ];
+
+  // Build imports
+  const sdkImports: string[] = ["createTinybirdClient", "t"];
+
+  if (datasources.length > 0) {
+    sdkImports.push("defineDatasource", "engine", "type InferRow");
+  }
+
+  const hasMaterialized = pipes.some((p) => p.type === "materialized");
+  const hasCopy = pipes.some((p) => p.type === "copy");
+  const hasEndpoint = pipes.some((p) => p.type === "endpoint");
+  const hasPlainPipe = pipes.some((p) => p.type === "pipe");
+  const hasParams = pipes.some(
+    (p) => p.params.length > 0 && p.type !== "materialized" && p.type !== "copy"
+  );
+
+  if (pipes.length > 0) {
+    sdkImports.push("node");
+  }
+  if (hasParams) {
+    sdkImports.push("p");
+  }
+  if (hasEndpoint) {
+    sdkImports.push("defineEndpoint", "type InferParams", "type InferOutputRow");
+  }
+  if (hasMaterialized) {
+    sdkImports.push("defineMaterializedView");
+  }
+  if (hasCopy) {
+    sdkImports.push("defineCopyPipe");
+  }
+  if (hasPlainPipe) {
+    sdkImports.push("definePipe");
+  }
+
+  lines.push(`import {`);
+  lines.push(`  ${sdkImports.join(",\n  ")},`);
+  lines.push(`} from "@tinybirdco/sdk";`);
+  lines.push("");
+
+  // Datasources section
+  if (datasources.length > 0) {
+    lines.push("// ============================================================================");
+    lines.push("// Datasources");
+    lines.push("// ============================================================================");
+    lines.push("");
+
+    for (const ds of datasources) {
+      lines.push(generateDatasourceCode(ds));
+      lines.push("");
+    }
+  }
+
+  // Pipes/Endpoints section
+  if (pipes.length > 0) {
+    lines.push("// ============================================================================");
+    lines.push("// Endpoints");
+    lines.push("// ============================================================================");
+    lines.push("");
+
+    for (const pipe of pipes) {
+      lines.push(generatePipeCode(pipe));
+      lines.push("");
+    }
+  }
+
+  // Client section
+  lines.push("// ============================================================================");
+  lines.push("// Client");
+  lines.push("// ============================================================================");
+  lines.push("");
+
+  const dsNames =
+    datasources.length > 0
+      ? datasources.map((ds) => toCamelCase(ds.name)).join(", ")
+      : "";
+  const endpoints = pipes.filter((p) => p.type === "endpoint");
+  const pipeNames =
+    endpoints.length > 0
+      ? endpoints.map((p) => toCamelCase(p.name)).join(", ")
+      : "";
+
+  lines.push("export const tinybird = createTinybirdClient({");
+  lines.push(`  datasources: { ${dsNames} },`);
+  lines.push(`  pipes: { ${pipeNames} },`);
+  lines.push("});");
+  lines.push("");
+
+  return lines.join("\n");
 }
