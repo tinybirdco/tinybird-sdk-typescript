@@ -194,7 +194,9 @@ describe("Deploy API", () => {
 
       await deployToMain(config, resources, { pollIntervalMs: 1 });
 
-      expect(capturedUrl).toBe(`${BASE_URL}/v1/deploy`);
+      const parsed = new URL(capturedUrl ?? "");
+      expect(parsed.pathname).toBe("/v1/deploy");
+      expect(parsed.searchParams.get("from")).toBe("ts-sdk");
     });
 
     it("handles failed deployment status", async () => {
@@ -266,7 +268,9 @@ describe("Deploy API", () => {
         { pollIntervalMs: 1 }
       );
 
-      expect(capturedUrl).toBe(`${BASE_URL}/v1/deploy`);
+      const parsed = new URL(capturedUrl ?? "");
+      expect(parsed.pathname).toBe("/v1/deploy");
+      expect(parsed.searchParams.get("from")).toBe("ts-sdk");
     });
 
     it("times out when deployment never becomes ready", async () => {

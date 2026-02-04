@@ -114,6 +114,64 @@ export type { PageViewsRow, TopPagesParams, TopPagesOutput };
 export { pageViews, topPages };
 `;
 
+const TINYBIRD_CI_WORKFLOW = `name: Tinybird CI
+
+on:
+  pull_request:
+    paths:
+      - "tinybird.json"
+      - "src/tinybird/**"
+      - "tinybird/**"
+      - "**/*.datasource"
+      - "**/*.pipe"
+
+jobs:
+  tinybird:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run tinybird:deploy -- --check
+        env:
+          TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
+`;
+
+const TINYBIRD_CD_WORKFLOW = `name: Tinybird CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "tinybird.json"
+      - "src/tinybird/**"
+      - "tinybird/**"
+      - "**/*.datasource"
+      - "**/*.pipe"
+
+jobs:
+  tinybird:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run tinybird:deploy
+        env:
+          TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
+`;
+
+const TINYBIRD_GITLAB_CI = `stages:\n  - tinybird\n\ntinybird_ci:\n  stage: tinybird\n  image: node:20\n  rules:\n    - changes:\n        - tinybird.json\n        - src/tinybird/**\n        - tinybird/**\n        - **/*.datasource\n        - **/*.pipe\n  script:\n    - corepack enable\n    - pnpm install --frozen-lockfile\n    - pnpm run tinybird:deploy -- --check\n  variables:\n    TINYBIRD_TOKEN: \${TINYBIRD_TOKEN}\n\ntinybird_cd:\n  stage: tinybird\n  image: node:20\n  rules:\n    - if: '$CI_COMMIT_BRANCH == \"main\"'\n      changes:\n        - tinybird.json\n        - src/tinybird/**\n        - tinybird/**\n        - **/*.datasource\n        - **/*.pipe\n  script:\n    - corepack enable\n    - pnpm install --frozen-lockfile\n    - pnpm run tinybird:deploy\n  variables:\n    TINYBIRD_TOKEN: \${TINYBIRD_TOKEN}\n`;
+
 /**
  * Default config content generator
  */
@@ -153,6 +211,14 @@ export interface InitOptions {
   skipDatafilePrompt?: boolean;
   /** Auto-include existing datafiles without prompting - for testing */
   includeExistingDatafiles?: boolean;
+  /** Skip GitHub Actions workflow prompts */
+  skipWorkflowPrompt?: boolean;
+  /** Include Tinybird CI workflow */
+  includeCiWorkflow?: boolean;
+  /** Include Tinybird CD workflow */
+  includeCdWorkflow?: boolean;
+  /** Git provider for workflow templates */
+  workflowProvider?: "github" | "gitlab";
 }
 
 /**
@@ -179,6 +245,12 @@ export interface InitResult {
   clientPath?: string;
   /** Existing datafiles that were added to config */
   existingDatafiles?: string[];
+  /** Whether a Tinybird CI workflow was created */
+  ciWorkflowCreated?: boolean;
+  /** Whether a Tinybird CD workflow was created */
+  cdWorkflowCreated?: boolean;
+  /** Git provider used for workflow templates */
+  workflowProvider?: "github" | "gitlab";
 }
 
 /**
@@ -252,7 +324,11 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
 
   const created: string[] = [];
   const skipped: string[] = [];
+  let didPrompt = false;
   let existingDatafiles: string[] = [];
+  let ciWorkflowCreated = false;
+  let cdWorkflowCreated = false;
+  let workflowProvider = options.workflowProvider;
 
   // Check for existing .datasource and .pipe files
   const foundDatafiles = findExistingDatafiles(cwd);
@@ -281,7 +357,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     });
 
     if (p.isCancel(workflowChoice)) {
-      p.cancel("Init cancelled.");
+      p.cancel("Operation cancelled");
       return {
         success: false,
         created: [],
@@ -290,6 +366,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
       };
     }
 
+    didPrompt = true;
     devMode = workflowChoice as DevMode;
   }
 
@@ -300,13 +377,13 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   if (!options.clientPath && !options.devMode) {
     // Ask user to confirm or change the client path
     const clientPathChoice = await p.text({
-      message: "Where should we generate the Tinybird client?",
+      message: "Where should we create Tinybird definitions?",
       placeholder: defaultRelativePath,
       defaultValue: defaultRelativePath,
     });
 
     if (p.isCancel(clientPathChoice)) {
-      p.cancel("Init cancelled.");
+      p.cancel("Operation cancelled");
       return {
         success: false,
         created: [],
@@ -315,20 +392,144 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
       };
     }
 
+    didPrompt = true;
     relativeTinybirdDir = clientPathChoice || defaultRelativePath;
+  }
+
+  const skipWorkflowPrompt =
+    options.skipWorkflowPrompt ??
+    (options.devMode !== undefined || options.clientPath !== undefined);
+  let includeCiWorkflow = options.includeCiWorkflow ?? false;
+  let includeCdWorkflow = options.includeCdWorkflow ?? false;
+  const shouldPromptWorkflows =
+    !skipWorkflowPrompt && options.includeCiWorkflow === undefined;
+  const shouldPromptProvider = !skipWorkflowPrompt && !workflowProvider;
+
+  if (shouldPromptProvider && shouldPromptWorkflows) {
+    const providerChoice = await p.select({
+      message: "Which git provider are you using?",
+      options: [
+        { value: "github", label: "GitHub" },
+        { value: "gitlab", label: "GitLab" },
+      ],
+    });
+
+    if (p.isCancel(providerChoice)) {
+      p.cancel("Operation cancelled");
+      return {
+        success: false,
+        created: [],
+        skipped: [],
+        error: "Cancelled by user",
+      };
+    }
+
+    didPrompt = true;
+    workflowProvider = providerChoice as "github" | "gitlab";
+  }
+
+  if (shouldPromptWorkflows) {
+    const confirmWorkflows = await p.confirm({
+      message: "Create CI/CD workflows for Tinybird?",
+      initialValue: true,
+    });
+
+    if (p.isCancel(confirmWorkflows)) {
+      p.cancel("Operation cancelled");
+      return {
+        success: false,
+        created: [],
+        skipped: [],
+        error: "Cancelled by user",
+      };
+    }
+
+    didPrompt = true;
+    includeCiWorkflow = confirmWorkflows;
+    includeCdWorkflow = confirmWorkflows;
+  }
+
+  if (shouldPromptProvider && !shouldPromptWorkflows && !workflowProvider) {
+    const providerChoice = await p.select({
+      message: "Which git provider are you using?",
+      options: [
+        { value: "github", label: "GitHub" },
+        { value: "gitlab", label: "GitLab" },
+      ],
+    });
+
+    if (p.isCancel(providerChoice)) {
+      p.cancel("Operation cancelled");
+      return {
+        success: false,
+        created: [],
+        skipped: [],
+        error: "Cancelled by user",
+      };
+    }
+
+    didPrompt = true;
+    workflowProvider = providerChoice as "github" | "gitlab";
+  }
+  if ((includeCiWorkflow || includeCdWorkflow) && !workflowProvider) {
+    workflowProvider = "github";
   }
 
   // Ask about existing datafiles if found
   if (foundDatafiles.length > 0 && !options.skipDatafilePrompt) {
     const includeDatafiles =
       options.includeExistingDatafiles ??
-      (await promptForExistingDatafiles(foundDatafiles));
+      (await (async () => {
+        didPrompt = true;
+        return promptForExistingDatafiles(foundDatafiles);
+      })());
 
     if (includeDatafiles) {
       existingDatafiles = foundDatafiles;
     }
   } else if (options.includeExistingDatafiles && foundDatafiles.length > 0) {
     existingDatafiles = foundDatafiles;
+  }
+
+  if (didPrompt) {
+    const devModeLabel = devMode === "local" ? "Tinybird Local" : "Branches";
+    const datafileSummary =
+      foundDatafiles.length > 0
+        ? existingDatafiles.length > 0
+          ? `${existingDatafiles.length} included`
+          : "none included"
+        : "none found";
+    let workflowSummary = "none";
+    if (includeCiWorkflow || includeCdWorkflow) {
+      workflowSummary =
+        workflowProvider === "gitlab"
+          ? "GitLab (.gitlab-ci.yml)"
+          : "GitHub Actions (tinybird-ci.yaml, tinybird-cd.yaml)";
+    }
+
+    const summaryLines = [
+      `Mode: ${devModeLabel}`,
+      `Definitions: ${relativeTinybirdDir}/`,
+      `Existing datafiles: ${datafileSummary}`,
+      `Workflows: ${workflowSummary}`,
+    ];
+
+    p.note(summaryLines.join("\n"), "Installation Summary");
+
+    const confirmInit = await p.confirm({
+      message: "Proceed with initialization?",
+      initialValue: true,
+    });
+
+    if (p.isCancel(confirmInit) || !confirmInit) {
+      p.cancel("Init cancelled.");
+      return {
+        success: false,
+        created: [],
+        skipped: [],
+        error: "Cancelled by user",
+      };
+    }
   }
 
   const tinybirdDir = path.join(cwd, relativeTinybirdDir);
@@ -464,6 +665,94 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     }
   }
 
+  const workflowsDir = path.join(cwd, ".github", "workflows");
+  const ciWorkflowPath = path.join(workflowsDir, "tinybird-ci.yaml");
+  const cdWorkflowPath = path.join(workflowsDir, "tinybird-cd.yaml");
+  const gitlabWorkflowPath = path.join(cwd, ".gitlab-ci.yml");
+
+  if (includeCiWorkflow || includeCdWorkflow) {
+    if (workflowProvider === "github") {
+      try {
+        fs.mkdirSync(workflowsDir, { recursive: true });
+      } catch (error) {
+        return {
+          success: false,
+          created,
+          skipped,
+          error: `Failed to create .github/workflows folder: ${
+            (error as Error).message
+          }`,
+        };
+      }
+    }
+
+    if (workflowProvider === "gitlab") {
+      if (fs.existsSync(gitlabWorkflowPath) && !force) {
+        skipped.push(".gitlab-ci.yml");
+      } else {
+        try {
+          fs.writeFileSync(gitlabWorkflowPath, TINYBIRD_GITLAB_CI);
+          created.push(".gitlab-ci.yml");
+          ciWorkflowCreated = includeCiWorkflow;
+          cdWorkflowCreated = includeCdWorkflow;
+        } catch (error) {
+          return {
+            success: false,
+            created,
+            skipped,
+            error: `Failed to create .gitlab-ci.yml: ${
+              (error as Error).message
+            }`,
+          };
+        }
+      }
+    }
+  }
+
+  if (workflowProvider === "github") {
+    if (includeCiWorkflow) {
+      if (fs.existsSync(ciWorkflowPath) && !force) {
+        skipped.push(".github/workflows/tinybird-ci.yaml");
+      } else {
+        try {
+          fs.writeFileSync(ciWorkflowPath, TINYBIRD_CI_WORKFLOW);
+          created.push(".github/workflows/tinybird-ci.yaml");
+          ciWorkflowCreated = true;
+        } catch (error) {
+          return {
+            success: false,
+            created,
+            skipped,
+            error: `Failed to create tinybird-ci.yaml: ${
+              (error as Error).message
+            }`,
+          };
+        }
+      }
+    }
+
+    if (includeCdWorkflow) {
+      if (fs.existsSync(cdWorkflowPath) && !force) {
+        skipped.push(".github/workflows/tinybird-cd.yaml");
+      } else {
+        try {
+          fs.writeFileSync(cdWorkflowPath, TINYBIRD_CD_WORKFLOW);
+          created.push(".github/workflows/tinybird-cd.yaml");
+          cdWorkflowCreated = true;
+        } catch (error) {
+          return {
+            success: false,
+            created,
+            skipped,
+            error: `Failed to create tinybird-cd.yaml: ${
+              (error as Error).message
+            }`,
+          };
+        }
+      }
+    }
+  }
+
   // Check if login is needed
   if (!skipLogin && !hasValidToken(cwd)) {
     console.log("\nNo authentication found. Starting login flow...\n");
@@ -495,6 +784,9 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
           clientPath: relativeTinybirdDir,
           existingDatafiles:
             existingDatafiles.length > 0 ? existingDatafiles : undefined,
+          ciWorkflowCreated,
+          cdWorkflowCreated,
+          workflowProvider,
         };
       } catch (error) {
         // Login succeeded but saving credentials failed
@@ -510,6 +802,9 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
           clientPath: relativeTinybirdDir,
           existingDatafiles:
             existingDatafiles.length > 0 ? existingDatafiles : undefined,
+          ciWorkflowCreated,
+          cdWorkflowCreated,
+          workflowProvider,
         };
       }
     } else {
@@ -523,6 +818,9 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         clientPath: relativeTinybirdDir,
         existingDatafiles:
           existingDatafiles.length > 0 ? existingDatafiles : undefined,
+        ciWorkflowCreated,
+        cdWorkflowCreated,
+        workflowProvider,
       };
     }
   }
@@ -535,6 +833,9 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     clientPath: relativeTinybirdDir,
     existingDatafiles:
       existingDatafiles.length > 0 ? existingDatafiles : undefined,
+    ciWorkflowCreated,
+    cdWorkflowCreated,
+    workflowProvider,
   };
 }
 
@@ -551,14 +852,18 @@ async function promptForExistingDatafiles(
 
   const parts: string[] = [];
   if (datasourceCount > 0) {
-    parts.push(`${datasourceCount} .datasource file${datasourceCount > 1 ? "s" : ""}`);
+    parts.push(
+      `${datasourceCount} .datasource file${datasourceCount > 1 ? "s" : ""}`
+    );
   }
   if (pipeCount > 0) {
     parts.push(`${pipeCount} .pipe file${pipeCount > 1 ? "s" : ""}`);
   }
 
   const confirmInclude = await p.confirm({
-    message: `Found ${parts.join(" and ")} in your project. Include them in tinybird.json?`,
+    message: `Found ${parts.join(
+      " and "
+    )} in your project. Include them in tinybird.json?`,
     initialValue: true,
   });
 

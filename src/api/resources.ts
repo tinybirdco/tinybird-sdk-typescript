@@ -4,6 +4,7 @@
  */
 
 import type { WorkspaceApiConfig } from "./workspaces.js";
+import { tinybirdFetch } from "./fetcher.js";
 
 /**
  * Error thrown by resource API operations
@@ -299,7 +300,7 @@ export async function listDatasources(
 ): Promise<string[]> {
   const url = new URL("/v0/datasources", config.baseUrl);
 
-  const response = await fetch(url.toString(), {
+  const response = await tinybirdFetch(url.toString(), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${config.token}`,
@@ -327,7 +328,7 @@ export async function getDatasource(
 ): Promise<DatasourceInfo> {
   const url = new URL(`/v0/datasources/${encodeURIComponent(name)}`, config.baseUrl);
 
-  const response = await fetch(url.toString(), {
+  const response = await tinybirdFetch(url.toString(), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${config.token}`,
@@ -404,7 +405,7 @@ export async function listPipes(
 ): Promise<string[]> {
   const url = new URL("/v0/pipes", config.baseUrl);
 
-  const response = await fetch(url.toString(), {
+  const response = await tinybirdFetch(url.toString(), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${config.token}`,
@@ -432,7 +433,7 @@ export async function getPipe(
 ): Promise<PipeInfo> {
   const url = new URL(`/v0/pipes/${encodeURIComponent(name)}`, config.baseUrl);
 
-  const response = await fetch(url.toString(), {
+  const response = await tinybirdFetch(url.toString(), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${config.token}`,

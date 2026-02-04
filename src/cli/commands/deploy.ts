@@ -15,6 +15,8 @@ export interface DeployCommandOptions {
   cwd?: string;
   /** Skip pushing to API (just generate) */
   dryRun?: boolean;
+  /** Validate deploy with Tinybird API without applying */
+  check?: boolean;
 }
 
 /**
@@ -96,7 +98,10 @@ export async function runDeploy(options: DeployCommandOptions = {}): Promise<Dep
         baseUrl: config.baseUrl,
         token: config.token,
       },
-      buildResult.resources
+      buildResult.resources,
+      {
+        check: options.check,
+      }
     );
   } catch (error) {
     return {

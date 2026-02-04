@@ -94,15 +94,18 @@ describe("Local API", () => {
   describe("listLocalWorkspaces", () => {
     it("returns list of workspaces", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
-          return HttpResponse.json({
-            organization_id: "org-123",
-            workspaces: [
-              { id: "ws-1", name: "Workspace1", token: "token-1" },
-              { id: "ws-2", name: "Workspace2", token: "token-2" },
-            ],
-          });
-        })
+        http.get(
+          `${LOCAL_BASE_URL}/v1/user/workspaces`,
+          () => {
+            return HttpResponse.json({
+              organization_id: "org-123",
+              workspaces: [
+                { id: "ws-1", name: "Workspace1", token: "token-1" },
+                { id: "ws-2", name: "Workspace2", token: "token-2" },
+              ],
+            });
+          }
+        )
       );
 
       const result = await listLocalWorkspaces("admin-token");
@@ -118,9 +121,12 @@ describe("Local API", () => {
 
     it("throws LocalApiError on failure", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
-          return new HttpResponse("Not found", { status: 404 });
-        })
+        http.get(
+          `${LOCAL_BASE_URL}/v1/user/workspaces`,
+          () => {
+            return new HttpResponse("Not found", { status: 404 });
+          }
+        )
       );
 
       await expect(listLocalWorkspaces("admin-token")).rejects.toThrow(LocalApiError);
@@ -170,14 +176,17 @@ describe("Local API", () => {
 
     it("returns existing workspace if found", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
-          return HttpResponse.json({
-            organization_id: "org-123",
-            workspaces: [
-              { id: "existing-ws", name: "MyWorkspace", token: "existing-token" },
-            ],
-          });
-        })
+        http.get(
+          `${LOCAL_BASE_URL}/v1/user/workspaces`,
+          () => {
+            return HttpResponse.json({
+              organization_id: "org-123",
+              workspaces: [
+                { id: "existing-ws", name: "MyWorkspace", token: "existing-token" },
+              ],
+            });
+          }
+        )
       );
 
       const result = await getOrCreateLocalWorkspace(tokens, "MyWorkspace");
@@ -191,21 +200,24 @@ describe("Local API", () => {
       let createCalled = false;
 
       server.use(
-        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
-          // Return different response based on whether create was called
-          if (createCalled) {
+        http.get(
+          `${LOCAL_BASE_URL}/v1/user/workspaces`,
+          () => {
+            // Return different response based on whether create was called
+            if (createCalled) {
+              return HttpResponse.json({
+                organization_id: "org-123",
+                workspaces: [
+                  { id: "new-ws", name: "NewWorkspace", token: "new-token" },
+                ],
+              });
+            }
             return HttpResponse.json({
               organization_id: "org-123",
-              workspaces: [
-                { id: "new-ws", name: "NewWorkspace", token: "new-token" },
-              ],
+              workspaces: [], // Empty initially
             });
           }
-          return HttpResponse.json({
-            organization_id: "org-123",
-            workspaces: [], // Empty initially
-          });
-        }),
+        ),
         http.post(`${LOCAL_BASE_URL}/v1/workspaces`, () => {
           createCalled = true;
           return HttpResponse.json({
