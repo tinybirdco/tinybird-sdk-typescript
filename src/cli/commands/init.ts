@@ -136,7 +136,7 @@ jobs:
           node-version: "20"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec tinybird deploy --check
+      - run: pnpm run tinybird:deploy -- --check
         env:
           TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
 `;
@@ -165,7 +165,7 @@ jobs:
           node-version: "20"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec tinybird deploy
+      - run: pnpm run tinybird:deploy
         env:
           TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
 `;
