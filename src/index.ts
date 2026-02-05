@@ -105,6 +105,8 @@ export type {
   SchemaDefinition,
   ColumnDefinition,
   TokenConfig,
+  InlineTokenConfig,
+  DatasourceTokenReference,
   ExtractSchema,
   KafkaConfig,
 } from "./schema/datasource.js";
@@ -118,6 +120,14 @@ export type {
   KafkaSecurityProtocol,
   KafkaSaslMechanism,
 } from "./schema/connection.js";
+
+// ============ Token ============
+export { defineToken, isTokenDefinition } from "./schema/token.js";
+export type {
+  TokenDefinition,
+  DatasourceTokenScope,
+  PipeTokenScope,
+} from "./schema/token.js";
 
 // ============ Pipe ============
 export {
@@ -151,6 +161,8 @@ export type {
   MaterializedConfig,
   MaterializedViewOptions,
   PipeTokenConfig,
+  InlinePipeTokenConfig,
+  PipeTokenReference,
   ExtractParams,
   ExtractOutput,
 } from "./schema/pipe.js";
