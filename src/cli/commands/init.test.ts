@@ -84,8 +84,12 @@ describe("Init Command", () => {
       expect(config.baseUrl).toBe("https://api.tinybird.co");
     });
 
-    it("skips tinybird.json if it already exists", async () => {
-      const existingConfig = { schema: "custom.ts", token: "existing" };
+    it("updates tinybird.json if it already exists", async () => {
+      const existingConfig = {
+        include: ["custom.ts"],
+        token: "existing",
+        devMode: "local",
+      };
       fs.writeFileSync(
         path.join(tempDir, "tinybird.json"),
         JSON.stringify(existingConfig)
@@ -94,13 +98,15 @@ describe("Init Command", () => {
       const result = await runInit({ cwd: tempDir, skipLogin: true, devMode: "branch", clientPath: "lib/tinybird.ts" });
 
       expect(result.success).toBe(true);
-      expect(result.skipped).toContain("tinybird.json");
+      expect(result.created).toContain("tinybird.json (updated)");
 
-      // Verify it wasn't overwritten
+      // Verify include/devMode updated but token preserved
       const config = JSON.parse(
         fs.readFileSync(path.join(tempDir, "tinybird.json"), "utf-8")
       );
-      expect(config.schema).toBe("custom.ts");
+      expect(config.include).toEqual(["lib/tinybird.ts"]);
+      expect(config.devMode).toBe("branch");
+      expect(config.token).toBe("existing");
     });
 
     it("overwrites tinybird.json with force option", async () => {

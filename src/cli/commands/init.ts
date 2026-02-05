@@ -551,7 +551,25 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   // Create config file (tinybird.json)
   const configPath = getConfigPath(cwd);
   if (fs.existsSync(configPath) && !force) {
-    skipped.push("tinybird.json");
+    try {
+      const config = createDefaultConfig(
+        relativeTinybirdDir,
+        devMode,
+        existingDatafiles
+      );
+      updateConfig(configPath, {
+        include: config.include,
+        devMode: config.devMode,
+      });
+      created.push("tinybird.json (updated)");
+    } catch (error) {
+      return {
+        success: false,
+        created,
+        skipped,
+        error: `Failed to update tinybird.json: ${(error as Error).message}`,
+      };
+    }
   } else {
     try {
       const config = createDefaultConfig(
