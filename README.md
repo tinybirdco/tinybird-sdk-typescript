@@ -440,6 +440,41 @@ export const manualReport = defineCopyPipe("manual_report", {
 });
 ```
 
+### Static Tokens
+
+Define reusable tokens for resource access control:
+
+```typescript
+import { defineToken, defineDatasource, defineEndpoint, t, node } from "@tinybirdco/sdk";
+
+// Define a token once
+const appToken = defineToken("app_read");
+const ingestToken = defineToken("ingest_token");
+
+// Use in datasources with READ or APPEND scope
+export const events = defineDatasource("events", {
+  schema: {
+    timestamp: t.dateTime(),
+    event_name: t.string(),
+  },
+  tokens: [
+    { token: appToken, scope: "READ" },
+    { token: ingestToken, scope: "APPEND" },
+  ],
+});
+
+// Use in endpoints with READ scope
+export const topEvents = defineEndpoint("top_events", {
+  nodes: [node({ name: "endpoint", sql: "SELECT * FROM events LIMIT 10" })],
+  output: { timestamp: t.dateTime(), event_name: t.string() },
+  tokens: [{ token: appToken, scope: "READ" }],
+});
+```
+
+TypeScript provides autocomplete for the correct scopes:
+- **Datasources**: `READ` (query access) or `APPEND` (ingest access)
+- **Pipes**: `READ` only
+
 ## Type Validators
 
 Use `t.*` to define column types with full TypeScript inference:

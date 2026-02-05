@@ -9,6 +9,7 @@ import type {
   EndpointConfig,
   MaterializedConfig,
   CopyConfig,
+  PipeTokenConfig,
 } from "../schema/pipe.js";
 import { getEndpointConfig, getMaterializedConfig, getCopyConfig } from "../schema/pipe.js";
 
@@ -114,6 +115,24 @@ function generateCopy(config: CopyConfig): string {
 }
 
 /**
+ * Generate TOKEN lines for a pipe
+ */
+function generateTokens(tokens?: readonly PipeTokenConfig[]): string[] {
+  if (!tokens || tokens.length === 0) {
+    return [];
+  }
+
+  return tokens.map((token) => {
+    if ("token" in token) {
+      // TokenReference
+      return `TOKEN ${token.token._name} ${token.scope}`;
+    }
+    // Inline config - pipes default to READ
+    return `TOKEN ${token.name} READ`;
+  });
+}
+
+/**
  * Generate a .pipe file content from a PipeDefinition
  *
  * @param pipe - The pipe definition
@@ -199,6 +218,13 @@ export function generatePipe(pipe: PipeDefinition): GeneratedPipe {
   if (copyConfig) {
     parts.push("");
     parts.push(generateCopy(copyConfig));
+  }
+
+  // Add tokens if present
+  const tokenLines = generateTokens(pipe.options.tokens);
+  if (tokenLines.length > 0) {
+    parts.push("");
+    parts.push(tokenLines.join("\n"));
   }
 
   return {
