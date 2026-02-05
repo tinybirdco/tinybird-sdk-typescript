@@ -23,10 +23,10 @@ export interface GeneratedPipe {
 }
 
 /**
- * Check if SQL contains template parameters like {{...}}
+ * Check if SQL contains Jinja template syntax like {{...}} or {%...%}
  */
 function hasDynamicParameters(sql: string): boolean {
-  return /\{\{[^}]+\}\}/.test(sql);
+  return /\{\{[^}]+\}\}/.test(sql) || /\{%[^%]+%\}/.test(sql);
 }
 
 /**
