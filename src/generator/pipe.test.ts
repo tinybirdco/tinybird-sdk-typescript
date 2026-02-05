@@ -130,6 +130,38 @@ describe('Pipe Generator', () => {
       const result = generatePipe(pipe);
       expect(result.content).not.toContain('%');
     });
+
+    it('adds % for SQL with Jinja block syntax {%...%}', () => {
+      const pipe = definePipe('test_pipe', {
+        nodes: [
+          node({
+            name: 'endpoint',
+            sql: `SELECT * FROM table {% if defined(filter) %} WHERE id = {{Int32(filter)}} {% end %}`,
+          }),
+        ],
+        output: simpleOutput,
+        endpoint: true,
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain('SQL >\n    %\n    SELECT');
+    });
+
+    it('adds % for SQL with only Jinja block syntax (no {{...}})', () => {
+      const pipe = definePipe('test_pipe', {
+        nodes: [
+          node({
+            name: 'endpoint',
+            sql: `SELECT * FROM table {% if true %} LIMIT 10 {% end %}`,
+          }),
+        ],
+        output: simpleOutput,
+        endpoint: true,
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain('    %\n');
+    });
   });
 
   describe('Multiple nodes', () => {
