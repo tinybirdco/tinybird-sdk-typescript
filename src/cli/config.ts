@@ -69,9 +69,9 @@ export const LOCAL_BASE_URL = "http://localhost:7181";
 const CONFIG_FILE = "tinybird.json";
 
 /**
- * Tinybird folder name
+ * Tinybird file path within lib folder
  */
-const TINYBIRD_FOLDER = "tinybird";
+const TINYBIRD_FILE = "lib/tinybird.ts";
 
 /**
  * Detect if project has a src folder
@@ -82,18 +82,20 @@ export function hasSrcFolder(cwd: string): boolean {
 }
 
 /**
- * Get the tinybird directory path based on project structure
- * Returns 'src/tinybird' if project has src folder, otherwise 'tinybird'
+ * Get the tinybird file path based on project structure
+ * Returns 'src/lib/tinybird.ts' if project has src folder, otherwise 'lib/tinybird.ts'
  */
 export function getTinybirdDir(cwd: string): string {
-  return hasSrcFolder(cwd) ? path.join(cwd, "src", TINYBIRD_FOLDER) : path.join(cwd, TINYBIRD_FOLDER);
+  return hasSrcFolder(cwd)
+    ? path.join(cwd, "src", "lib")
+    : path.join(cwd, "lib");
 }
 
 /**
- * Get the relative tinybird directory path based on project structure
+ * Get the relative tinybird file path based on project structure
  */
 export function getRelativeTinybirdDir(cwd: string): string {
-  return hasSrcFolder(cwd) ? `src/${TINYBIRD_FOLDER}` : TINYBIRD_FOLDER;
+  return hasSrcFolder(cwd) ? `src/${TINYBIRD_FILE}` : TINYBIRD_FILE;
 }
 
 /**
@@ -117,22 +119,6 @@ export function getClientPath(cwd: string): string {
   return path.join(getTinybirdDir(cwd), "client.ts");
 }
 
-// Legacy exports for backwards compatibility
-export function getLibDir(cwd: string): string {
-  return getTinybirdDir(cwd);
-}
-
-export function getRelativeLibDir(cwd: string): string {
-  return getRelativeTinybirdDir(cwd);
-}
-
-export function getTinybirdSchemaPath(cwd: string): string {
-  return getDatasourcesPath(cwd);
-}
-
-export function getRelativeSchemaPath(cwd: string): string {
-  return `${getRelativeTinybirdDir(cwd)}/datasources.ts`;
-}
 
 /**
  * Interpolate environment variables in a string

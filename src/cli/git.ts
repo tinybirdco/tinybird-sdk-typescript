@@ -98,6 +98,21 @@ export function isGitRepo(): boolean {
 }
 
 /**
+ * Get the root directory of the git repository
+ * Returns null if not in a git repo
+ */
+export function getGitRoot(): string | null {
+  try {
+    return execSync("git rev-parse --show-toplevel", {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Sanitize a git branch name for use as a Tinybird branch name
  * Tinybird only accepts alphanumeric characters and underscores
  * All other characters are replaced with underscores
