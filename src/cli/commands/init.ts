@@ -113,25 +113,35 @@ export const tinybird = createTinybirdClient({
 });
 `;
 
-const TINYBIRD_CI_WORKFLOW = `name: Tinybird CI
+/**
+ * Generate GitHub CI workflow content
+ * @param workingDirectory - Optional subdirectory where the project lives
+ */
+function generateGithubCiWorkflow(workingDirectory?: string): string {
+  const pathPrefix = workingDirectory ? `${workingDirectory}/` : "";
+  const workDir = workingDirectory ?? ".";
+  const cachePathOption = workingDirectory
+    ? `
+          cache-dependency-path: ${workingDirectory}/pnpm-lock.yaml`
+    : "";
+
+  return `name: Tinybird CI
 
 on:
   pull_request:
     paths:
-      - "tinybird.json"
-      - "src/tinybird/**"
-      - "tinybird/**"
-      - "**/*.datasource"
-      - "**/*.pipe"
+      - "${pathPrefix}tinybird.json"
+      - "${pathPrefix}**/*.ts"
+
+env:
+  TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
 
 jobs:
   tinybird:
     runs-on: ubuntu-latest
-    outputs:
-      branch_name: \${{ steps.preview.outputs.branch_name }}
-      branch_id: \${{ steps.preview.outputs.branch_id }}
-      branch_token: \${{ steps.preview.outputs.branch_token }}
-      branch_url: \${{ steps.preview.outputs.branch_url }}
+    defaults:
+      run:
+        working-directory: "${workDir}"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -140,39 +150,44 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "pnpm"
+          cache: "pnpm"${cachePathOption}
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run tinybird:build
       - name: Create preview branch
-        id: preview
-        run: |
-          result=$(pnpm run tinybird:preview --json 2>&1)
-          echo "$result" | jq -r '"branch_name=" + .branch.name' >> $GITHUB_OUTPUT
-          echo "$result" | jq -r '"branch_id=" + .branch.id' >> $GITHUB_OUTPUT
-          token=$(echo "$result" | jq -r '.branch.token')
-          echo "::add-mask::$token"
-          echo "branch_token=$token" >> $GITHUB_OUTPUT
-          echo "$result" | jq -r '"branch_url=" + .branch.url' >> $GITHUB_OUTPUT
-        env:
-          TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
+        run: pnpm run tinybird:preview
 `;
+}
 
-const TINYBIRD_CD_WORKFLOW = `name: Tinybird CD
+/**
+ * Generate GitHub CD workflow content
+ * @param workingDirectory - Optional subdirectory where the project lives
+ */
+function generateGithubCdWorkflow(workingDirectory?: string): string {
+  const pathPrefix = workingDirectory ? `${workingDirectory}/` : "";
+  const workDir = workingDirectory ?? ".";
+  const cachePathOption = workingDirectory
+    ? `
+          cache-dependency-path: ${workingDirectory}/pnpm-lock.yaml`
+    : "";
+
+  return `name: Tinybird CD
 
 on:
   push:
     branches:
       - main
     paths:
-      - "tinybird.json"
-      - "src/tinybird/**"
-      - "tinybird/**"
-      - "**/*.datasource"
-      - "**/*.pipe"
+      - "${pathPrefix}tinybird.json"
+      - "${pathPrefix}**/*.ts"
+
+env:
+  TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
 
 jobs:
   tinybird:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "${workDir}"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -181,66 +196,66 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "pnpm"
+          cache: "pnpm"${cachePathOption}
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run tinybird:build
       - run: pnpm run tinybird:deploy
-        env:
-          TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
 `;
+}
 
-const TINYBIRD_GITLAB_CI_WORKFLOW = `stages:
+/**
+ * Generate GitLab CI workflow content
+ * @param workingDirectory - Optional subdirectory where the project lives
+ */
+function generateGitlabCiWorkflow(workingDirectory?: string): string {
+  const pathPrefix = workingDirectory ? `${workingDirectory}/` : "";
+  const cdCommand = workingDirectory ? `cd ${workingDirectory} && ` : "";
+
+  return `stages:
   - tinybird
 
 tinybird_ci:
   stage: tinybird
-  image: node:20
+  image: node:22
   rules:
     - changes:
-        - tinybird.json
-        - src/tinybird/**
-        - tinybird/**
-        - "**/*.datasource"
-        - "**/*.pipe"
+        - ${pathPrefix}tinybird.json
+        - ${pathPrefix}**/*.ts
   script:
     - corepack enable
-    - pnpm install --frozen-lockfile
-    - pnpm run tinybird:build
-    - |
-      result=$(pnpm run tinybird:preview --json 2>&1)
-      echo "TINYBIRD_BRANCH_NAME=$(echo "$result" | jq -r '.branch.name')" >> tinybird.env
-      echo "TINYBIRD_BRANCH_ID=$(echo "$result" | jq -r '.branch.id')" >> tinybird.env
-      echo "TINYBIRD_BRANCH_TOKEN=$(echo "$result" | jq -r '.branch.token')" >> tinybird.env
-      echo "TINYBIRD_BRANCH_URL=$(echo "$result" | jq -r '.branch.url')" >> tinybird.env
-  artifacts:
-    reports:
-      dotenv: tinybird.env
+    - ${cdCommand}pnpm install --frozen-lockfile
+    - ${cdCommand}pnpm run tinybird:preview
   variables:
     TINYBIRD_TOKEN: \${TINYBIRD_TOKEN}
 `;
+}
 
-const TINYBIRD_GITLAB_CD_WORKFLOW = `stages:
+/**
+ * Generate GitLab CD workflow content
+ * @param workingDirectory - Optional subdirectory where the project lives
+ */
+function generateGitlabCdWorkflow(workingDirectory?: string): string {
+  const pathPrefix = workingDirectory ? `${workingDirectory}/` : "";
+  const cdCommand = workingDirectory ? `cd ${workingDirectory} && ` : "";
+
+  return `stages:
   - tinybird
 
 tinybird_cd:
   stage: tinybird
-  image: node:20
+  image: node:22
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       changes:
-        - tinybird.json
-        - src/tinybird/**
-        - tinybird/**
-        - "**/*.datasource"
-        - "**/*.pipe"
+        - ${pathPrefix}tinybird.json
+        - ${pathPrefix}**/*.ts
   script:
     - corepack enable
-    - pnpm install --frozen-lockfile
-    - pnpm run tinybird:build
-    - pnpm run tinybird:deploy
+    - ${cdCommand}pnpm install --frozen-lockfile
+    - ${cdCommand}pnpm run tinybird:deploy
   variables:
     TINYBIRD_TOKEN: \${TINYBIRD_TOKEN}
 `;
+}
 
 /**
  * Default config content generator
@@ -676,6 +691,11 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         modified = true;
       }
 
+      if (!packageJson.scripts["tinybird:preview"]) {
+        packageJson.scripts["tinybird:preview"] = "tinybird preview";
+        modified = true;
+      }
+
       if (modified) {
         fs.writeFileSync(
           packageJsonPath,
@@ -696,6 +716,11 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   const githubCdPath = path.join(githubWorkflowsDir, "tinybird-cd.yaml");
   const gitlabCiPath = path.join(gitlabWorkflowsDir, "tinybird-ci.yaml");
   const gitlabCdPath = path.join(gitlabWorkflowsDir, "tinybird-cd.yaml");
+
+  // Calculate working directory relative to git root (for monorepo support)
+  const gitRoot = getGitRoot();
+  const workingDirectory =
+    gitRoot && cwd !== gitRoot ? path.relative(gitRoot, cwd) : undefined;
 
   if (includeCiWorkflow || includeCdWorkflow) {
     const workflowsDir =
@@ -720,7 +745,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         skipped.push(".github/workflows/tinybird-ci.yaml");
       } else {
         try {
-          fs.writeFileSync(githubCiPath, TINYBIRD_CI_WORKFLOW);
+          fs.writeFileSync(githubCiPath, generateGithubCiWorkflow(workingDirectory));
           created.push(".github/workflows/tinybird-ci.yaml");
           ciWorkflowCreated = true;
         } catch (error) {
@@ -741,7 +766,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         skipped.push(".github/workflows/tinybird-cd.yaml");
       } else {
         try {
-          fs.writeFileSync(githubCdPath, TINYBIRD_CD_WORKFLOW);
+          fs.writeFileSync(githubCdPath, generateGithubCdWorkflow(workingDirectory));
           created.push(".github/workflows/tinybird-cd.yaml");
           cdWorkflowCreated = true;
         } catch (error) {
@@ -764,7 +789,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         skipped.push(".gitlab/tinybird-ci.yaml");
       } else {
         try {
-          fs.writeFileSync(gitlabCiPath, TINYBIRD_GITLAB_CI_WORKFLOW);
+          fs.writeFileSync(gitlabCiPath, generateGitlabCiWorkflow(workingDirectory));
           created.push(".gitlab/tinybird-ci.yaml");
           ciWorkflowCreated = true;
         } catch (error) {
@@ -785,7 +810,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         skipped.push(".gitlab/tinybird-cd.yaml");
       } else {
         try {
-          fs.writeFileSync(gitlabCdPath, TINYBIRD_GITLAB_CD_WORKFLOW);
+          fs.writeFileSync(gitlabCdPath, generateGitlabCdWorkflow(workingDirectory));
           created.push(".gitlab/tinybird-cd.yaml");
           cdWorkflowCreated = true;
         } catch (error) {
