@@ -264,7 +264,10 @@ export async function getBranch(
 
 /**
  * Delete a branch
- * DELETE /v1/environments/{name}
+ * DELETE /v0/environments/{id}
+ *
+ * Note: The API requires the branch ID, not name. This function first
+ * fetches the branch to get its ID, then deletes it.
  *
  * @param config - API configuration
  * @param name - Branch name to delete
@@ -273,7 +276,10 @@ export async function deleteBranch(
   config: BranchApiConfig,
   name: string
 ): Promise<void> {
-  const url = new URL(`/v1/environments/${encodeURIComponent(name)}`, config.baseUrl);
+  // First get the branch to find its ID
+  const branch = await getBranch(config, name);
+
+  const url = new URL(`/v0/environments/${branch.id}`, config.baseUrl);
 
   const response = await tinybirdFetch(url.toString(), {
     method: "DELETE",

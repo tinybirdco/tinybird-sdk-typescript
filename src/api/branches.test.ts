@@ -272,16 +272,39 @@ describe("Branch API client", () => {
 
   describe("deleteBranch", () => {
     it("deletes a branch successfully", async () => {
+      const mockBranch = {
+        id: "branch-123",
+        name: "my-feature",
+        token: "p.branch-token",
+        created_at: "2024-01-01T00:00:00Z",
+      };
+
+      // 1. getBranch to get the ID
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockBranch),
+      });
+
+      // 2. DELETE the branch by ID
       mockFetch.mockResolvedValueOnce({
         ok: true,
       });
 
       await deleteBranch(config, "my-feature");
 
-      const [url, init] = mockFetch.mock.calls[0];
-      const parsed = expectFromParam(url);
-      expect(parsed.pathname).toBe("/v1/environments/my-feature");
-      expect(init).toEqual({
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      // First call: get branch
+      const [getUrl, getInit] = mockFetch.mock.calls[0];
+      const getParsed = expectFromParam(getUrl);
+      expect(getParsed.pathname).toBe("/v0/environments/my-feature");
+      expect(getInit.method).toBe("GET");
+
+      // Second call: delete branch by ID
+      const [deleteUrl, deleteInit] = mockFetch.mock.calls[1];
+      const deleteParsed = expectFromParam(deleteUrl);
+      expect(deleteParsed.pathname).toBe("/v0/environments/branch-123");
+      expect(deleteInit).toEqual({
         method: "DELETE",
         headers: {
           Authorization: "Bearer p.test-token",
@@ -386,6 +409,13 @@ describe("Branch API client", () => {
 
   describe("clearBranch", () => {
     it("clears a branch by deleting and recreating it", async () => {
+      const existingBranch = {
+        id: "branch-old",
+        name: "my-feature",
+        token: "p.old-token",
+        created_at: "2024-01-01T00:00:00Z",
+      };
+
       const newBranch = {
         id: "branch-new",
         name: "my-feature",
@@ -393,12 +423,18 @@ describe("Branch API client", () => {
         created_at: "2024-01-02T00:00:00Z",
       };
 
-      // 1. DELETE branch
+      // 1. GET branch to get ID (for delete)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(existingBranch),
+      });
+
+      // 2. DELETE branch by ID
       mockFetch.mockResolvedValueOnce({
         ok: true,
       });
 
-      // 2. POST to /v1/environments returns a job
+      // 3. POST to /v1/environments returns a job
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
@@ -407,13 +443,13 @@ describe("Branch API client", () => {
         }),
       });
 
-      // 3. Poll job - done
+      // 4. Poll job - done
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ id: "job-789", status: "done" }),
       });
 
-      // 4. Get branch with token
+      // 5. Get branch with token (after create)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(newBranch),
@@ -421,16 +457,22 @@ describe("Branch API client", () => {
 
       const result = await clearBranch(config, "my-feature");
 
-      expect(mockFetch).toHaveBeenCalledTimes(4);
+      expect(mockFetch).toHaveBeenCalledTimes(5);
 
-      // Verify delete was called
-      const [deleteUrl, deleteInit] = mockFetch.mock.calls[0];
+      // Verify get was called first
+      const [getUrl, getInit] = mockFetch.mock.calls[0];
+      const getParsed = expectFromParam(getUrl);
+      expect(getParsed.pathname).toBe("/v0/environments/my-feature");
+      expect(getInit.method).toBe("GET");
+
+      // Verify delete was called with ID
+      const [deleteUrl, deleteInit] = mockFetch.mock.calls[1];
       const deleteParsed = expectFromParam(deleteUrl);
-      expect(deleteParsed.pathname).toBe("/v1/environments/my-feature");
+      expect(deleteParsed.pathname).toBe("/v0/environments/branch-old");
       expect(deleteInit.method).toBe("DELETE");
 
       // Verify create was called
-      const [createUrl, createInit] = mockFetch.mock.calls[1];
+      const [createUrl, createInit] = mockFetch.mock.calls[2];
       const createParsed = expectFromParam(createUrl);
       expect(createParsed.pathname).toBe("/v1/environments");
       expect(createParsed.searchParams.get("name")).toBe("my-feature");
