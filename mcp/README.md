@@ -188,6 +188,29 @@ Get the full datafile content of a specific resource.
 </details>
 
 <details>
+<summary><code>list_branches</code></summary>
+
+List all branches (environments) in your Tinybird workspace.
+
+**When to use:**
+- See available branches before querying resources from a specific branch
+- Check which development branches exist
+- Find branch names to use with the `environment` parameter
+
+**Input:**
+- None
+
+**Output:**
+- JSON array with each branch's id, name, and created_at timestamp
+
+**Example prompts:**
+- "Tinybird, list all my branches"
+- "Tinybird, what branches do I have?"
+- "Tinybird, show me available environments"
+
+</details>
+
+<details>
 <summary><code>list_kafka_topics</code></summary>
 
 List available Kafka topics for a connection.
@@ -197,7 +220,7 @@ List available Kafka topics for a connection.
 - Verify Kafka connection is working
 
 **Input:**
-- `connection_id` (required) - The ID of the Kafka connection (get from `list_connections`)
+- `connection_id` (required) - The ID of the Kafka connection (get from `list_resources` with type `connection`)
 
 **Output:**
 - JSON array of available Kafka topics

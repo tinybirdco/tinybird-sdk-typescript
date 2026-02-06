@@ -10,6 +10,7 @@ import { registerListKafkaTopicsTool } from "./tools/list-kafka-topics.js";
 import { registerPreviewKafkaTopicTool } from "./tools/preview-kafka-topic.js";
 import { registerListResourcesTool } from "./tools/list-resources.js";
 import { registerGetResourceTool } from "./tools/get-resource.js";
+import { registerListBranchesTool } from "./tools/list-branches.js";
 
 /**
  * Create and configure the MCP server
@@ -31,6 +32,7 @@ export function createMcpServer(): McpServer {
   registerExecuteQueryTool(server, config);
   registerListResourcesTool(server, config);
   registerGetResourceTool(server, config);
+  registerListBranchesTool(server, config);
   registerListKafkaTopicsTool(server, config);
   registerPreviewKafkaTopicTool(server, config);
 
