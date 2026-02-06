@@ -1,0 +1,144 @@
+/**
+ * Tests for CLI output utilities
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  formatDuration,
+  showResourceChange,
+  showBuildErrors,
+  showBuildSuccess,
+  showBuildFailure,
+  showNoChanges,
+} from "./output.js";
+
+describe("output utilities", () => {
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleLogSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
+  describe("formatDuration", () => {
+    it("formats milliseconds for durations under 1 second", () => {
+      expect(formatDuration(500)).toBe("500ms");
+      expect(formatDuration(0)).toBe("0ms");
+      expect(formatDuration(999)).toBe("999ms");
+    });
+
+    it("formats seconds for durations 1 second or more", () => {
+      expect(formatDuration(1000)).toBe("1.0s");
+      expect(formatDuration(1500)).toBe("1.5s");
+      expect(formatDuration(2345)).toBe("2.3s");
+      expect(formatDuration(10000)).toBe("10.0s");
+    });
+  });
+
+  describe("showResourceChange", () => {
+    it("shows created resource", () => {
+      showResourceChange("events.datasource", "created");
+      expect(consoleLogSpy).toHaveBeenCalledWith("✓ events.datasource created");
+    });
+
+    it("shows changed resource", () => {
+      showResourceChange("top_pages.pipe", "changed");
+      expect(consoleLogSpy).toHaveBeenCalledWith("✓ top_pages.pipe changed");
+    });
+
+    it("shows deleted resource", () => {
+      showResourceChange("old_data.datasource", "deleted");
+      expect(consoleLogSpy).toHaveBeenCalledWith("✓ old_data.datasource deleted");
+    });
+  });
+
+  describe("showBuildErrors", () => {
+    it("shows errors with filename", () => {
+      showBuildErrors([
+        { filename: "events.datasource", error: "Invalid column type" },
+      ]);
+      expect(consoleErrorSpy).toHaveBeenCalledWith("events.datasource");
+      expect(consoleErrorSpy).toHaveBeenCalledWith("  Invalid column type");
+    });
+
+    it("shows errors without filename", () => {
+      showBuildErrors([{ error: "General build error" }]);
+      expect(consoleErrorSpy).toHaveBeenCalledWith("General build error");
+    });
+
+    it("shows multiple errors", () => {
+      showBuildErrors([
+        { filename: "a.datasource", error: "Error A" },
+        { filename: "b.pipe", error: "Error B" },
+      ]);
+      expect(consoleErrorSpy).toHaveBeenCalledWith("a.datasource");
+      expect(consoleErrorSpy).toHaveBeenCalledWith("  Error A");
+      expect(consoleErrorSpy).toHaveBeenCalledWith("b.pipe");
+      expect(consoleErrorSpy).toHaveBeenCalledWith("  Error B");
+    });
+
+    it("handles multi-line errors", () => {
+      showBuildErrors([
+        { filename: "test.pipe", error: "Line 1\nLine 2\nLine 3" },
+      ]);
+      expect(consoleErrorSpy).toHaveBeenCalledWith("test.pipe");
+      expect(consoleErrorSpy).toHaveBeenCalledWith("  Line 1");
+      expect(consoleErrorSpy).toHaveBeenCalledWith("  Line 2");
+      expect(consoleErrorSpy).toHaveBeenCalledWith("  Line 3");
+    });
+  });
+
+  describe("showBuildSuccess", () => {
+    it("shows build success with duration in ms", () => {
+      showBuildSuccess(500);
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("✓");
+      expect(call).toContain("Build completed in 500ms");
+    });
+
+    it("shows build success with duration in seconds", () => {
+      showBuildSuccess(2500);
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("Build completed in 2.5s");
+    });
+
+    it("shows rebuild success when isRebuild is true", () => {
+      showBuildSuccess(1000, true);
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("Rebuild completed in 1.0s");
+    });
+  });
+
+  describe("showBuildFailure", () => {
+    it("shows build failure", () => {
+      showBuildFailure();
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      const call = consoleErrorSpy.mock.calls[0][0];
+      expect(call).toContain("✗");
+      expect(call).toContain("Build failed");
+    });
+
+    it("shows rebuild failure when isRebuild is true", () => {
+      showBuildFailure(true);
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      const call = consoleErrorSpy.mock.calls[0][0];
+      expect(call).toContain("Rebuild failed");
+    });
+  });
+
+  describe("showNoChanges", () => {
+    it("shows no changes message", () => {
+      showNoChanges();
+      expect(consoleLogSpy).toHaveBeenCalledWith("No changes. Build skipped.");
+    });
+  });
+});

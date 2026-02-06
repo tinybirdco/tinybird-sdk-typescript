@@ -83,8 +83,10 @@ export interface BuildApiResult {
   success: boolean;
   /** Result status from API */
   result: "success" | "failed" | "no_changes";
-  /** Error message if failed */
+  /** Error message if failed (formatted for display) */
   error?: string;
+  /** Detailed errors array from the API */
+  errors?: BuildError[];
   /** Number of datasources deployed */
   datasourceCount: number;
   /** Number of pipes deployed */
@@ -233,6 +235,7 @@ export async function buildToTinybird(
       success: false,
       result: "failed",
       error: formatErrors(),
+      errors: body.errors,
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
       connectionCount: resources.connections?.length ?? 0,
@@ -245,6 +248,7 @@ export async function buildToTinybird(
       success: false,
       result: "failed",
       error: formatErrors(),
+      errors: body.errors,
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
       connectionCount: resources.connections?.length ?? 0,
