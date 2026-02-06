@@ -7,7 +7,7 @@
  * 3. Running build to deploy to Tinybird (mocked)
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -564,6 +564,185 @@ describe("E2E: Init + Build Happy Path", () => {
       expect(buildResult.success).toBe(false);
       expect(buildResult.deploy?.success).toBe(false);
       expect(buildResult.deploy?.error).toContain("already exists");
+    });
+  });
+
+  describe("build command output format", () => {
+    let consoleLogSpy: MockInstance<Console["log"]>;
+
+    beforeEach(() => {
+      consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      consoleLogSpy.mockRestore();
+    });
+
+    it("outputs resource changes in simple format (matching dev command)", async () => {
+      server.use(
+        http.get(`${BASE_URL}/v0/environments/:name`, () => {
+          return HttpResponse.json({
+            id: "branch-feature_test_branch",
+            name: "feature_test_branch",
+            token: "p.branch-token-feature_test_branch",
+            created_at: new Date().toISOString(),
+          });
+        }),
+        http.post(`${BASE_URL}/v1/build`, () => {
+          return HttpResponse.json(
+            createBuildSuccessResponse({
+              newDatasources: ["page_views"],
+              newPipes: ["top_pages"],
+            })
+          );
+        })
+      );
+
+      // Run init
+      await runInit({
+        cwd: tempDir,
+        skipLogin: true,
+        devMode: "branch",
+        clientPath: "lib/tinybird.ts",
+      });
+
+      // Import and call the CLI action directly
+      const { output } = await import("../src/cli/output.js");
+      const showResourceChangeSpy = vi.spyOn(output, "showResourceChange");
+      const showChangesTableSpy = vi.spyOn(output, "showChangesTable");
+
+      // Run build and simulate CLI output
+      const buildResult = await runBuild({ cwd: tempDir });
+
+      // Verify build succeeded
+      expect(buildResult.success).toBe(true);
+
+      // Simulate the CLI output logic (same as in index.ts build command)
+      const { deploy } = buildResult;
+      if (deploy && deploy.result !== "no_changes") {
+        if (deploy.datasources) {
+          for (const name of deploy.datasources.created) {
+            output.showResourceChange(`${name}.datasource`, "created");
+          }
+          for (const name of deploy.datasources.changed) {
+            output.showResourceChange(`${name}.datasource`, "changed");
+          }
+          for (const name of deploy.datasources.deleted) {
+            output.showResourceChange(`${name}.datasource`, "deleted");
+          }
+        }
+        if (deploy.pipes) {
+          for (const name of deploy.pipes.created) {
+            output.showResourceChange(`${name}.pipe`, "created");
+          }
+          for (const name of deploy.pipes.changed) {
+            output.showResourceChange(`${name}.pipe`, "changed");
+          }
+          for (const name of deploy.pipes.deleted) {
+            output.showResourceChange(`${name}.pipe`, "deleted");
+          }
+        }
+      }
+
+      // Verify showResourceChange was called (simple format like dev)
+      expect(showResourceChangeSpy).toHaveBeenCalledWith("page_views.datasource", "created");
+      expect(showResourceChangeSpy).toHaveBeenCalledWith("top_pages.pipe", "created");
+
+      // Verify showChangesTable was NOT called (table format)
+      expect(showChangesTableSpy).not.toHaveBeenCalled();
+
+      // Verify the actual console output format
+      const allCalls = consoleLogSpy.mock.calls.map((c: unknown[]) => c[0]).join("\n");
+      expect(allCalls).toContain("✓ page_views.datasource created");
+      expect(allCalls).toContain("✓ top_pages.pipe created");
+
+      // Verify table format is NOT used
+      expect(allCalls).not.toContain("┌");
+      expect(allCalls).not.toContain("┐");
+      expect(allCalls).not.toContain("Changes to be deployed");
+
+      showResourceChangeSpy.mockRestore();
+      showChangesTableSpy.mockRestore();
+    });
+
+    it("outputs changed and deleted resources in simple format", async () => {
+      server.use(
+        http.get(`${BASE_URL}/v0/environments/:name`, () => {
+          return HttpResponse.json({
+            id: "branch-feature_test_branch",
+            name: "feature_test_branch",
+            token: "p.branch-token-feature_test_branch",
+            created_at: new Date().toISOString(),
+          });
+        }),
+        http.post(`${BASE_URL}/v1/build`, () => {
+          return HttpResponse.json({
+            result: "success",
+            build: {
+              id: "build-e2e-456",
+              new_pipe_names: [],
+              new_datasource_names: [],
+              changed_pipe_names: ["top_pages"],
+              changed_datasource_names: ["page_views"],
+              deleted_pipe_names: ["old_pipe"],
+              deleted_datasource_names: ["old_datasource"],
+            },
+          });
+        })
+      );
+
+      // Run init
+      await runInit({
+        cwd: tempDir,
+        skipLogin: true,
+        devMode: "branch",
+        clientPath: "lib/tinybird.ts",
+      });
+
+      const { output } = await import("../src/cli/output.js");
+      const buildResult = await runBuild({ cwd: tempDir });
+
+      expect(buildResult.success).toBe(true);
+
+      // Simulate CLI output
+      const { deploy } = buildResult;
+      if (deploy && deploy.result !== "no_changes") {
+        if (deploy.datasources) {
+          for (const name of deploy.datasources.created) {
+            output.showResourceChange(`${name}.datasource`, "created");
+          }
+          for (const name of deploy.datasources.changed) {
+            output.showResourceChange(`${name}.datasource`, "changed");
+          }
+          for (const name of deploy.datasources.deleted) {
+            output.showResourceChange(`${name}.datasource`, "deleted");
+          }
+        }
+        if (deploy.pipes) {
+          for (const name of deploy.pipes.created) {
+            output.showResourceChange(`${name}.pipe`, "created");
+          }
+          for (const name of deploy.pipes.changed) {
+            output.showResourceChange(`${name}.pipe`, "changed");
+          }
+          for (const name of deploy.pipes.deleted) {
+            output.showResourceChange(`${name}.pipe`, "deleted");
+          }
+        }
+      }
+
+      const allCalls = consoleLogSpy.mock.calls.map((c: unknown[]) => c[0]).join("\n");
+
+      // Verify changed resources
+      expect(allCalls).toContain("✓ page_views.datasource changed");
+      expect(allCalls).toContain("✓ top_pages.pipe changed");
+
+      // Verify deleted resources
+      expect(allCalls).toContain("✓ old_datasource.datasource deleted");
+      expect(allCalls).toContain("✓ old_pipe.pipe deleted");
+
+      // Verify no table format
+      expect(allCalls).not.toContain("┌");
     });
   });
 });

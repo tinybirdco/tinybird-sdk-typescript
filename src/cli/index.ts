@@ -231,34 +231,32 @@ function createCli(): Command {
         if (deploy.result === "no_changes") {
           output.showNoChanges();
         } else {
-          // Collect all changes for table display
-          const changes: ResourceChange[] = [];
-
+          // Show datasource changes
           if (deploy.datasources) {
             for (const name of deploy.datasources.created) {
-              changes.push({ status: "new", name, type: "datasource" });
+              output.showResourceChange(`${name}.datasource`, "created");
             }
             for (const name of deploy.datasources.changed) {
-              changes.push({ status: "modified", name, type: "datasource" });
+              output.showResourceChange(`${name}.datasource`, "changed");
             }
             for (const name of deploy.datasources.deleted) {
-              changes.push({ status: "deleted", name, type: "datasource" });
+              output.showResourceChange(`${name}.datasource`, "deleted");
             }
           }
 
+          // Show pipe changes
           if (deploy.pipes) {
             for (const name of deploy.pipes.created) {
-              changes.push({ status: "new", name, type: "pipe" });
+              output.showResourceChange(`${name}.pipe`, "created");
             }
             for (const name of deploy.pipes.changed) {
-              changes.push({ status: "modified", name, type: "pipe" });
+              output.showResourceChange(`${name}.pipe`, "changed");
             }
             for (const name of deploy.pipes.deleted) {
-              changes.push({ status: "deleted", name, type: "pipe" });
+              output.showResourceChange(`${name}.pipe`, "deleted");
             }
           }
 
-          output.showChangesTable(changes);
           output.showBuildSuccess(result.durationMs);
         }
       }
