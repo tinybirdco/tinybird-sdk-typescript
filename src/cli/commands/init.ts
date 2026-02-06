@@ -127,6 +127,11 @@ on:
 jobs:
   tinybird:
     runs-on: ubuntu-latest
+    outputs:
+      branch_name: \${{ steps.preview.outputs.branch_name }}
+      branch_id: \${{ steps.preview.outputs.branch_id }}
+      branch_token: \${{ steps.preview.outputs.branch_token }}
+      branch_url: \${{ steps.preview.outputs.branch_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -136,7 +141,16 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - run: pnpm run tinybird:build
-      - run: pnpm run tinybird:deploy -- --check
+      - name: Create preview branch
+        id: preview
+        run: |
+          result=$(pnpm run tinybird:preview --json 2>&1)
+          echo "$result" | jq -r '"branch_name=" + .branch.name' >> $GITHUB_OUTPUT
+          echo "$result" | jq -r '"branch_id=" + .branch.id' >> $GITHUB_OUTPUT
+          token=$(echo "$result" | jq -r '.branch.token')
+          echo "::add-mask::$token"
+          echo "branch_token=$token" >> $GITHUB_OUTPUT
+          echo "$result" | jq -r '"branch_url=" + .branch.url' >> $GITHUB_OUTPUT
         env:
           TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
 `;
@@ -188,7 +202,15 @@ tinybird_ci:
     - corepack enable
     - pnpm install --frozen-lockfile
     - pnpm run tinybird:build
-    - pnpm run tinybird:deploy -- --check
+    - |
+      result=$(pnpm run tinybird:preview --json 2>&1)
+      echo "TINYBIRD_BRANCH_NAME=$(echo "$result" | jq -r '.branch.name')" >> tinybird.env
+      echo "TINYBIRD_BRANCH_ID=$(echo "$result" | jq -r '.branch.id')" >> tinybird.env
+      echo "TINYBIRD_BRANCH_TOKEN=$(echo "$result" | jq -r '.branch.token')" >> tinybird.env
+      echo "TINYBIRD_BRANCH_URL=$(echo "$result" | jq -r '.branch.url')" >> tinybird.env
+  artifacts:
+    reports:
+      dotenv: tinybird.env
   variables:
     TINYBIRD_TOKEN: \${TINYBIRD_TOKEN}
 `;

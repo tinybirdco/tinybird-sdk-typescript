@@ -8,6 +8,15 @@ import type { BuildConfig, BuildApiResult } from "./build.js";
 import { tinybirdFetch } from "./fetcher.js";
 
 /**
+ * Feedback item from deployment response
+ */
+export interface DeploymentFeedback {
+  resource: string;
+  level: "ERROR" | "WARNING" | "INFO";
+  message: string;
+}
+
+/**
  * Deployment object returned by the /v1/deploy endpoint
  */
 export interface Deployment {
@@ -16,6 +25,7 @@ export interface Deployment {
   live?: boolean;
   created_at?: string;
   updated_at?: string;
+  feedback?: DeploymentFeedback[];
 }
 
 /**
@@ -81,6 +91,7 @@ export async function deployToMain(
     pollIntervalMs?: number;
     maxPollAttempts?: number;
     check?: boolean;
+    allowDestructiveOperations?: boolean;
   }
 ): Promise<BuildApiResult> {
   const debug = options?.debug ?? !!process.env.TINYBIRD_DEBUG;
@@ -156,7 +167,15 @@ export async function deployToMain(
 
   // Step 1: Create deployment via /v1/deploy
   const deployUrlBase = `${baseUrl}/v1/deploy`;
-  const deployUrl = options?.check ? `${deployUrlBase}?check=true` : deployUrlBase;
+  const urlParams = new URLSearchParams();
+  if (options?.check) {
+    urlParams.set("check", "true");
+  }
+  if (options?.allowDestructiveOperations) {
+    urlParams.set("allow_destructive_operations", "true");
+  }
+  const queryString = urlParams.toString();
+  const deployUrl = queryString ? `${deployUrlBase}?${queryString}` : deployUrlBase;
 
   if (debug) {
     console.log(`[debug] POST ${deployUrl}`);
@@ -187,8 +206,26 @@ export async function deployToMain(
     );
   }
 
+  // Helper to format feedback from deployment
+  const formatFeedback = (feedback: DeploymentFeedback[]): string => {
+    return feedback
+      .map((f) => {
+        // Extract just the filename from "Datasource events.datasource" format
+        const resourceName = f.resource.split(" ").pop() ?? f.resource;
+        return `${resourceName}: ${f.message}`;
+      })
+      .join("\n");
+  };
+
   // Helper to format errors
   const formatErrors = (): string => {
+    // Check for feedback in deployment (most detailed error info)
+    if (body.deployment?.feedback && body.deployment.feedback.length > 0) {
+      const errors = body.deployment.feedback.filter((f) => f.level === "ERROR");
+      if (errors.length > 0) {
+        return formatFeedback(errors);
+      }
+    }
     if (body.errors && body.errors.length > 0) {
       return body.errors
         .map((e) => {
@@ -197,7 +234,11 @@ export async function deployToMain(
         })
         .join("\n");
     }
-    return body.error || `HTTP ${response.status}: ${response.statusText}`;
+    if (body.error) {
+      return body.error;
+    }
+    // Include raw response body for debugging when no structured error is available
+    return `HTTP ${response.status}: ${response.statusText}\nResponse: ${rawBody}`;
   };
 
   // Handle non-OK responses

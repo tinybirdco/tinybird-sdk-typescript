@@ -13,7 +13,8 @@
     "tinybird:build": "node ../bin/tinybird.js build",
     "tinybird:init": "node ../bin/tinybird.js init",
     "tinybird:pull": "node ../bin/tinybird.js pull",
-    "tinybird:deploy": "tinybird deploy"
+    "tinybird:deploy": "tinybird deploy",
+    "tinybird:preview": "node ../bin/tinybird.js preview"
   },
   "dependencies": {
     "@tinybirdco/sdk": "workspace:*",

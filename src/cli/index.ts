@@ -14,9 +14,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { Command } from "commander";
+import pc from "picocolors";
 import { runInit } from "./commands/init.js";
 import { runBuild } from "./commands/build.js";
 import { runDeploy } from "./commands/deploy.js";
+import { runPreview } from "./commands/preview.js";
 import { runDev } from "./commands/dev.js";
 import { runLogin } from "./commands/login.js";
 import {
@@ -300,6 +302,95 @@ function createCli(): Command {
       }
 
       console.log(`\n[${formatTime()}] Done in ${result.durationMs}ms`);
+    });
+
+  // Preview command
+  program
+    .command("preview")
+    .description("Create a preview branch and deploy resources (for CI/testing)")
+    .option("--dry-run", "Generate without creating branch or deploying")
+    .option("--check", "Validate deploy with Tinybird API without applying")
+    .option("--debug", "Show debug output including API requests/responses")
+    .option("--json", "Output JSON instead of human-readable format")
+    .option("-n, --name <name>", "Override preview branch name")
+    .option("--local", "Use local Tinybird container")
+    .action(async (options) => {
+      if (options.debug) {
+        process.env.TINYBIRD_DEBUG = "1";
+      }
+
+      // Determine devMode override
+      let devModeOverride: DevMode | undefined;
+      if (options.local) {
+        devModeOverride = "local";
+      }
+
+      if (!options.json) {
+        const modeLabel = devModeOverride === "local" ? " (local)" : "";
+        console.log(`Creating preview branch${modeLabel}...\n`);
+      }
+
+      const result = await runPreview({
+        dryRun: options.dryRun,
+        check: options.check,
+        name: options.name,
+        devModeOverride,
+      });
+
+      // JSON output mode
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+        if (!result.success) {
+          process.exit(1);
+        }
+        return;
+      }
+
+      // Human-readable output mode
+      if (!result.success) {
+        // Parse error message for individual errors (one per line)
+        const errorLines = result.error?.split("\n") ?? ["Unknown error"];
+        for (const line of errorLines) {
+          console.log(pc.red(`- ${line}`));
+        }
+        console.log("");
+        console.log(pc.red(`✗ Preview failed`));
+        process.exit(1);
+      }
+
+      // Success output
+      const durationSec = (result.durationMs / 1000).toFixed(1);
+      if (result.branch) {
+        if (options.dryRun) {
+          console.log(pc.green(`✓ Preview branch: ${result.branch.name}`));
+          console.log(pc.dim("  (dry run - branch not created)"));
+        } else {
+          console.log(pc.green(`✓ Preview branch: ${result.branch.name}`));
+          console.log(pc.dim(`  ID: ${result.branch.id}`));
+          console.log(pc.dim(`  (use --json to get branch token)`));
+        }
+      }
+
+      if (result.build) {
+        console.log(
+          pc.green(`✓ Generated ${result.build.datasourceCount} datasource(s), ${result.build.pipeCount} pipe(s)`)
+        );
+      }
+
+      if (options.dryRun) {
+        console.log(pc.dim("\n[Dry run] Resources not deployed to API"));
+      } else if (options.check) {
+        console.log(pc.green("\n✓ Resources validated with Tinybird API"));
+      } else if (result.deploy) {
+        if (result.deploy.result === "no_changes") {
+          console.log(pc.green("✓ No changes detected - already up to date"));
+        } else {
+          console.log(pc.green("✓ Deployed to preview branch"));
+        }
+      }
+
+      console.log("");
+      console.log(pc.green(`✓ Preview completed in ${durationSec}s`));
     });
 
   // Dev command
