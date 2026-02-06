@@ -9,6 +9,7 @@ import { registerExecuteQueryTool } from "./tools/execute-query.js";
 import { registerListConnectionsTool } from "./tools/list-connections.js";
 import { registerListKafkaTopicsTool } from "./tools/list-kafka-topics.js";
 import { registerPreviewKafkaTopicTool } from "./tools/preview-kafka-topic.js";
+import { registerListResourcesTool } from "./tools/list-resources.js";
 
 /**
  * Create and configure the MCP server
@@ -31,6 +32,7 @@ export function createMcpServer(): McpServer {
   registerListConnectionsTool(server, config);
   registerListKafkaTopicsTool(server, config);
   registerPreviewKafkaTopicTool(server, config);
+  registerListResourcesTool(server, config);
 
   return server;
 }
