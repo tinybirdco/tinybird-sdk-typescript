@@ -6,6 +6,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ResolvedConfig } from "../config.js";
+import { resolveEnvironmentConfig } from "../config.js";
 
 type ResourceType = "datasource" | "pipe" | "connection";
 
@@ -58,8 +59,15 @@ export function registerListResourcesTool(
         .enum(["datasource", "pipe", "connection"])
         .optional()
         .describe("Filter by resource type: 'datasource', 'pipe', or 'connection'"),
+      environment: z
+        .string()
+        .optional()
+        .describe("Environment to query: 'cloud' (default), 'local', or a branch name"),
     },
-    async ({ type }) => {
+    async ({ type, environment }) => {
+      // Resolve the effective config based on environment
+      const effectiveConfig = await resolveEnvironmentConfig(config, environment);
+
       const resources: Resource[] = [];
       const types: ResourceType[] = type
         ? [type]
@@ -67,11 +75,11 @@ export function registerListResourcesTool(
 
       // Fetch datasources
       if (types.includes("datasource")) {
-        const url = `${config.baseUrl}/v0/datasources`;
+        const url = `${effectiveConfig.baseUrl}/v0/datasources`;
         const response = await fetch(url, {
           method: "GET",
           headers: {
-            Authorization: `Bearer ${config.token}`,
+            Authorization: `Bearer ${effectiveConfig.token}`,
           },
         });
 
@@ -90,11 +98,11 @@ export function registerListResourcesTool(
 
       // Fetch pipes
       if (types.includes("pipe")) {
-        const url = `${config.baseUrl}/v0/pipes`;
+        const url = `${effectiveConfig.baseUrl}/v0/pipes`;
         const response = await fetch(url, {
           method: "GET",
           headers: {
-            Authorization: `Bearer ${config.token}`,
+            Authorization: `Bearer ${effectiveConfig.token}`,
           },
         });
 
@@ -113,11 +121,11 @@ export function registerListResourcesTool(
 
       // Fetch connections
       if (types.includes("connection")) {
-        const url = `${config.baseUrl}/v0/connectors`;
+        const url = `${effectiveConfig.baseUrl}/v0/connectors`;
         const response = await fetch(url, {
           method: "GET",
           headers: {
-            Authorization: `Bearer ${config.token}`,
+            Authorization: `Bearer ${effectiveConfig.token}`,
           },
         });
 

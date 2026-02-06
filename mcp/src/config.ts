@@ -39,9 +39,22 @@ export interface ResolvedConfig {
 }
 
 /**
+ * Environment type for selecting which Tinybird instance to use
+ * - "cloud": Main workspace (default)
+ * - "local": Local container at localhost:7181
+ * - string: Branch name - fetches branch token from API
+ */
+export type Environment = "cloud" | "local" | string;
+
+/**
  * Default base URL (EU region)
  */
 const DEFAULT_BASE_URL = "https://api.tinybird.co";
+
+/**
+ * Local container base URL
+ */
+const LOCAL_BASE_URL = "http://localhost:7181";
 
 /**
  * Config file names in order of priority
@@ -193,4 +206,136 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
   } else {
     return loadTinybConfigFile(configResult.path);
   }
+}
+
+/**
+ * Branch information from Tinybird API
+ */
+interface BranchResponse {
+  id: string;
+  name: string;
+  token?: string;
+}
+
+/**
+ * Local workspace response
+ */
+interface LocalWorkspaceResponse {
+  name: string;
+  token: string;
+}
+
+/**
+ * Get the local workspace name based on current directory
+ */
+function getLocalWorkspaceName(): string {
+  const cwd = process.cwd();
+  const dirName = path.basename(cwd);
+  // Sanitize: replace non-alphanumeric with underscore
+  return dirName.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
+}
+
+/**
+ * Get or create local workspace and return its token
+ */
+async function getLocalWorkspaceToken(): Promise<string> {
+  const workspaceName = getLocalWorkspaceName();
+  const url = `${LOCAL_BASE_URL}/v0/workspaces`;
+
+  // First, try to get existing workspace
+  const listResponse = await fetch(url, {
+    method: "GET",
+  });
+
+  if (listResponse.ok) {
+    const data = (await listResponse.json()) as { workspaces: LocalWorkspaceResponse[] };
+    const existing = data.workspaces?.find((w) => w.name === workspaceName);
+    if (existing?.token) {
+      return existing.token;
+    }
+  }
+
+  // Create new workspace
+  const createResponse = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: workspaceName }),
+  });
+
+  if (!createResponse.ok) {
+    const errorText = await createResponse.text();
+    throw new Error(`Failed to create local workspace: ${createResponse.status} ${errorText}`);
+  }
+
+  const workspace = (await createResponse.json()) as LocalWorkspaceResponse;
+  if (!workspace.token) {
+    throw new Error("Local workspace created but no token returned");
+  }
+
+  return workspace.token;
+}
+
+/**
+ * Get branch token from Tinybird API
+ */
+async function getBranchToken(config: ResolvedConfig, branchName: string): Promise<string> {
+  const url = new URL(`/v0/environments/${encodeURIComponent(branchName)}`, config.baseUrl);
+  url.searchParams.set("with_token", "true");
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    if (response.status === 404) {
+      throw new Error(`Branch '${branchName}' not found. Create it first with 'npx @tinybirdco/sdk dev'.`);
+    }
+    throw new Error(`Failed to get branch '${branchName}': ${response.status} ${errorText}`);
+  }
+
+  const branch = (await response.json()) as BranchResponse;
+  if (!branch.token) {
+    throw new Error(`Branch '${branchName}' exists but no token returned`);
+  }
+
+  return branch.token;
+}
+
+/**
+ * Resolve configuration for a specific environment
+ *
+ * @param baseConfig - Base configuration from tinybird.json or .tinyb
+ * @param environment - Environment to use: "cloud" (default), "local", or branch name
+ * @returns Resolved configuration with appropriate token and baseUrl
+ */
+export async function resolveEnvironmentConfig(
+  baseConfig: ResolvedConfig,
+  environment?: Environment
+): Promise<ResolvedConfig> {
+  // Default to cloud
+  if (!environment || environment === "cloud") {
+    return baseConfig;
+  }
+
+  // Local container
+  if (environment === "local") {
+    const token = await getLocalWorkspaceToken();
+    return {
+      token,
+      baseUrl: LOCAL_BASE_URL,
+    };
+  }
+
+  // Branch name - fetch token from API
+  const branchToken = await getBranchToken(baseConfig, environment);
+  return {
+    token: branchToken,
+    baseUrl: baseConfig.baseUrl,
+  };
 }

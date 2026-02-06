@@ -6,6 +6,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ResolvedConfig } from "../config.js";
+import { resolveEnvironmentConfig } from "../config.js";
 
 type ResourceType = "datasource" | "pipe" | "connection";
 
@@ -43,14 +44,21 @@ export function registerGetResourceTool(
       type: z
         .enum(["datasource", "pipe", "connection"])
         .describe("The type of resource: 'datasource', 'pipe', or 'connection'"),
+      environment: z
+        .string()
+        .optional()
+        .describe("Environment to query: 'cloud' (default), 'local', or a branch name"),
     },
-    async ({ name, type }) => {
-      const url = buildResourceUrl(config.baseUrl, type, name);
+    async ({ name, type, environment }) => {
+      // Resolve the effective config based on environment
+      const effectiveConfig = await resolveEnvironmentConfig(config, environment);
+
+      const url = buildResourceUrl(effectiveConfig.baseUrl, type, name);
 
       const response = await fetch(url, {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${config.token}`,
+          Authorization: `Bearer ${effectiveConfig.token}`,
         },
       });
 

@@ -147,6 +147,7 @@ List all resources in your Tinybird workspace.
 
 **Input:**
 - `type` (optional) - Filter by resource type: `'datasource'`, `'pipe'`, or `'connection'`
+- `environment` (optional) - Environment to query: `'cloud'` (default), `'local'`, or a branch name
 
 **Output:**
 - JSON array with each resource's id, name, type, and description
@@ -155,6 +156,8 @@ List all resources in your Tinybird workspace.
 - "Tinybird, show me all resources in my workspace"
 - "Tinybird, list all my datasources"
 - "Tinybird, what pipes do I have?"
+- "Tinybird, list resources in my feature_branch"
+- "Tinybird, show me datasources in local"
 
 </details>
 
@@ -171,6 +174,7 @@ Get the full datafile content of a specific resource.
 **Input:**
 - `name` (required) - The name of the resource to fetch
 - `type` (required) - The resource type: `'datasource'`, `'pipe'`, or `'connection'`
+- `environment` (optional) - Environment to query: `'cloud'` (default), `'local'`, or a branch name
 
 **Output:**
 - Raw datafile content as text
@@ -179,6 +183,7 @@ Get the full datafile content of a specific resource.
 - "Tinybird, show me the definition of my events datasource"
 - "Tinybird, get the full content of the analytics_api pipe"
 - "Tinybird, what's the schema of my users datasource?"
+- "Tinybird, get the events datasource from my feature_branch"
 
 </details>
 
