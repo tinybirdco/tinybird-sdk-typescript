@@ -3,7 +3,7 @@
  * Converts DatasourceDefinition to native .datasource file format
  */
 
-import type { DatasourceDefinition, SchemaDefinition, ColumnDefinition, KafkaConfig } from "../schema/datasource.js";
+import type { DatasourceDefinition, SchemaDefinition, ColumnDefinition, KafkaConfig, TokenConfig } from "../schema/datasource.js";
 import type { AnyTypeValidator, TypeModifiers } from "../schema/types.js";
 import { getColumnType, getColumnJsonPath } from "../schema/datasource.js";
 import { getEngineClause, type EngineConfig } from "../schema/engines.js";
@@ -164,6 +164,48 @@ function generateKafkaConfig(kafka: KafkaConfig): string {
 }
 
 /**
+ * Generate forward query section
+ */
+function generateForwardQuery(forwardQuery?: string): string | null {
+  if (!forwardQuery) {
+    return null;
+  }
+
+  const trimmed = forwardQuery.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const lines = trimmed.split(/\r?\n/);
+  return ["FORWARD_QUERY >", ...lines.map((line) => `    ${line}`)].join("\n");
+}
+
+/**
+ * Generate TOKEN lines for a datasource
+ */
+function generateTokens(tokens?: readonly TokenConfig[]): string[] {
+  if (!tokens || tokens.length === 0) {
+    return [];
+  }
+
+  const lines: string[] = [];
+
+  for (const token of tokens) {
+    if ("token" in token) {
+      // TokenReference - single scope
+      lines.push(`TOKEN ${token.token._name} ${token.scope}`);
+    } else {
+      // Inline config - multiple permissions
+      for (const permission of token.permissions) {
+        lines.push(`TOKEN ${token.name} ${permission}`);
+      }
+    }
+  }
+
+  return lines;
+}
+
+/**
  * Generate a .datasource file content from a DatasourceDefinition
  *
  * @param datasource - The datasource definition
@@ -222,6 +264,20 @@ export function generateDatasource(
   if (datasource.options.kafka) {
     parts.push("");
     parts.push(generateKafkaConfig(datasource.options.kafka));
+  }
+
+  // Add forward query if present
+  const forwardQuery = generateForwardQuery(datasource.options.forwardQuery);
+  if (forwardQuery) {
+    parts.push("");
+    parts.push(forwardQuery);
+  }
+
+  // Add tokens if present
+  const tokenLines = generateTokens(datasource.options.tokens);
+  if (tokenLines.length > 0) {
+    parts.push("");
+    parts.push(tokenLines.join("\n"));
   }
 
   return {

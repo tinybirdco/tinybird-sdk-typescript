@@ -86,35 +86,64 @@ ENGINE_SORTING_KEY "timestamp"
 
 ### API Layer (`src/api/`)
 
-Sends generated resources to Tinybird's API.
+Sends generated resources to Tinybird's API and fetches existing resources.
 
 **Files:**
-- `build.ts` - `buildToTinybird()` deploys resources via `/v1/build`
-- `deploy.ts` - Legacy deployment utilities
+- `build.ts` - `buildToTinybird()` deploys resources to branches via `/v1/build`
+- `deploy.ts` - `deployToMain()` deploys resources to main workspace via `/v1/deploy`
 - `branches.ts` - Branch management API
 - `workspaces.ts` - Workspace discovery
+- `resources.ts` - Fetch existing datasources and pipes from workspace
+- `local.ts` - Local Tinybird container integration
 
 **Key Patterns:**
 - Resources sent as multipart form data
 - File extensions indicate resource type (`.datasource`, `.pipe`, `.connection`)
 - Form field `data_project://` signals Tinybird to process the file
+- `/v1/build` for branches, `/v1/deploy` for main workspace
+
+### Codegen Layer (`src/codegen/`)
+
+Converts Tinybird API responses to TypeScript SDK code.
+
+**Files:**
+- `index.ts` - Main code generators (`generateDatasourceCode()`, `generatePipeCode()`, etc.)
+- `type-mapper.ts` - Maps ClickHouse types to `t.*` validators
+- `utils.ts` - Helpers for case conversion, escaping, engine code generation
+
+**Key Patterns:**
+- Maps ClickHouse types (String, DateTime, Nullable, LowCardinality, etc.) to SDK validators
+- Generates proper import statements based on used types
+- Handles all pipe types: endpoint, materialized, copy, regular
 
 ### CLI Layer (`src/cli/`)
 
 User-facing commands for development workflow.
 
 **Commands:**
-- `tinybird dev` - Watch mode with hot reload
-- `tinybird build` - Build and deploy resources
-- `tinybird init` - Initialize a new project
+- `tinybird init` - Initialize a new project (detects existing `.datasource`/`.pipe` files)
+- `tinybird dev` - Watch mode with hot reload (feature branches only)
+- `tinybird build` - Build and deploy to branches (not main)
+- `tinybird deploy` - Deploy to main workspace (production)
 - `tinybird login` - Authenticate with Tinybird
+- `tinybird branch` - Branch management (list, status, delete)
 
 **Key Files:**
 - `index.ts` - Command definitions and entry point
-- `commands/` - Individual command implementations
+- `commands/init.ts` - Project initialization with datafile detection
+- `commands/build.ts` - Build to branches
+- `commands/deploy.ts` - Deploy to main
+- `commands/dev.ts` - Watch mode
+- `commands/login.ts` - Authentication
+- `commands/branch.ts` - Branch management
 - `config.ts` - Configuration file management
 - `env.ts` - Environment variable loading
 - `git.ts` - Git integration for branch detection
+
+**Safety Features:**
+- `build` and `dev` commands are blocked on main branch in cloud mode
+- Only `deploy` command can push to production
+- Prevents accidental production deployments during development
 
 ### Client Layer (`src/client/`)
 

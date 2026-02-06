@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { generateDatasource, generateAllDatasources } from './datasource.js';
 import { defineDatasource } from '../schema/datasource.js';
 import { createKafkaConnection } from '../schema/connection.js';
+import { defineToken } from '../schema/token.js';
 import { t } from '../schema/types.js';
 import { engine } from '../schema/engines.js';
 
@@ -80,6 +81,19 @@ describe('Datasource Generator', () => {
 
       const result = generateDatasource(ds);
       expect(result.content).toContain('ENGINE_TTL "timestamp + INTERVAL 90 DAY"');
+    });
+
+    it('includes forward query when provided', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          id: t.string(),
+        },
+        forwardQuery: 'SELECT id',
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('FORWARD_QUERY >');
+      expect(result.content).toContain('    SELECT id');
     });
   });
 
@@ -400,6 +414,82 @@ describe('Datasource Generator', () => {
       expect(result.content).toContain('KAFKA_TOPIC events');
       expect(result.content).toContain('KAFKA_GROUP_ID my-consumer-group');
       expect(result.content).toContain('KAFKA_AUTO_OFFSET_RESET earliest');
+    });
+  });
+
+  describe('Token generation', () => {
+    it('generates TOKEN lines with inline config', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: { id: t.string() },
+        tokens: [{ name: 'app_read', permissions: ['READ'] }],
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('TOKEN app_read READ');
+    });
+
+    it('generates TOKEN lines with multiple permissions', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: { id: t.string() },
+        tokens: [{ name: 'app_token', permissions: ['READ', 'APPEND'] }],
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('TOKEN app_token READ');
+      expect(result.content).toContain('TOKEN app_token APPEND');
+    });
+
+    it('generates TOKEN lines with token reference', () => {
+      const appToken = defineToken('my_token');
+      const ds = defineDatasource('test_ds', {
+        schema: { id: t.string() },
+        tokens: [{ token: appToken, scope: 'READ' }],
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('TOKEN my_token READ');
+    });
+
+    it('generates TOKEN lines with token reference and APPEND scope', () => {
+      const appendToken = defineToken('append_token');
+      const ds = defineDatasource('test_ds', {
+        schema: { id: t.string() },
+        tokens: [{ token: appendToken, scope: 'APPEND' }],
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('TOKEN append_token APPEND');
+    });
+
+    it('generates multiple TOKEN lines for multiple tokens', () => {
+      const readToken = defineToken('read_token');
+      const appendToken = defineToken('append_token');
+      const ds = defineDatasource('test_ds', {
+        schema: { id: t.string() },
+        tokens: [
+          { token: readToken, scope: 'READ' },
+          { token: appendToken, scope: 'APPEND' },
+        ],
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('TOKEN read_token READ');
+      expect(result.content).toContain('TOKEN append_token APPEND');
+    });
+
+    it('generates mixed inline and reference tokens', () => {
+      const refToken = defineToken('ref_token');
+      const ds = defineDatasource('test_ds', {
+        schema: { id: t.string() },
+        tokens: [
+          { name: 'inline_token', permissions: ['READ'] },
+          { token: refToken, scope: 'APPEND' },
+        ],
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('TOKEN inline_token READ');
+      expect(result.content).toContain('TOKEN ref_token APPEND');
     });
   });
 });

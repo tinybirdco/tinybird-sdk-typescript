@@ -7,12 +7,19 @@ import {
   deleteBranch,
   branchExists,
   getOrCreateBranch,
+  clearBranch,
   type BranchApiConfig,
 } from "./branches.js";
 
 // Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
+
+function expectFromParam(url: string) {
+  const parsed = new URL(url);
+  expect(parsed.searchParams.get("from")).toBe("ts-sdk");
+  return parsed;
+}
 
 describe("Branch API client", () => {
   const config: BranchApiConfig = {
@@ -62,36 +69,37 @@ describe("Branch API client", () => {
       const result = await createBranch(config, "my-feature");
 
       expect(mockFetch).toHaveBeenCalledTimes(3);
-      expect(mockFetch).toHaveBeenNthCalledWith(
-        1,
-        "https://api.tinybird.co/v1/environments?name=my-feature",
-        {
-          method: "POST",
-          headers: {
-            Authorization: "Bearer p.test-token",
-          },
-        }
-      );
-      expect(mockFetch).toHaveBeenNthCalledWith(
-        2,
-        "https://api.tinybird.co/v0/jobs/job-123",
-        {
-          method: "GET",
-          headers: {
-            Authorization: "Bearer p.test-token",
-          },
-        }
-      );
-      expect(mockFetch).toHaveBeenNthCalledWith(
-        3,
-        "https://api.tinybird.co/v0/environments/my-feature?with_token=true",
-        {
-          method: "GET",
-          headers: {
-            Authorization: "Bearer p.test-token",
-          },
-        }
-      );
+      const [createUrl, createInit] = mockFetch.mock.calls[0];
+      const createParsed = expectFromParam(createUrl);
+      expect(createParsed.pathname).toBe("/v1/environments");
+      expect(createParsed.searchParams.get("name")).toBe("my-feature");
+      expect(createInit).toEqual({
+        method: "POST",
+        headers: {
+          Authorization: "Bearer p.test-token",
+        },
+      });
+
+      const [jobUrl, jobInit] = mockFetch.mock.calls[1];
+      const jobParsed = expectFromParam(jobUrl);
+      expect(jobParsed.pathname).toBe("/v0/jobs/job-123");
+      expect(jobInit).toEqual({
+        method: "GET",
+        headers: {
+          Authorization: "Bearer p.test-token",
+        },
+      });
+
+      const [branchUrl, branchInit] = mockFetch.mock.calls[2];
+      const branchParsed = expectFromParam(branchUrl);
+      expect(branchParsed.pathname).toBe("/v0/environments/my-feature");
+      expect(branchParsed.searchParams.get("with_token")).toBe("true");
+      expect(branchInit).toEqual({
+        method: "GET",
+        headers: {
+          Authorization: "Bearer p.test-token",
+        },
+      });
       expect(result).toEqual(mockBranch);
     });
 
@@ -196,15 +204,15 @@ describe("Branch API client", () => {
 
       const result = await listBranches(config);
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.tinybird.co/v1/environments",
-        {
-          method: "GET",
-          headers: {
-            Authorization: "Bearer p.test-token",
-          },
-        }
-      );
+      const [url, init] = mockFetch.mock.calls[0];
+      const parsed = expectFromParam(url);
+      expect(parsed.pathname).toBe("/v1/environments");
+      expect(init).toEqual({
+        method: "GET",
+        headers: {
+          Authorization: "Bearer p.test-token",
+        },
+      });
       expect(result).toEqual(mockBranches);
     });
 
@@ -235,15 +243,16 @@ describe("Branch API client", () => {
 
       const result = await getBranch(config, "my-feature");
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.tinybird.co/v0/environments/my-feature?with_token=true",
-        {
-          method: "GET",
-          headers: {
-            Authorization: "Bearer p.test-token",
-          },
-        }
-      );
+      const [url, init] = mockFetch.mock.calls[0];
+      const parsed = expectFromParam(url);
+      expect(parsed.pathname).toBe("/v0/environments/my-feature");
+      expect(parsed.searchParams.get("with_token")).toBe("true");
+      expect(init).toEqual({
+        method: "GET",
+        headers: {
+          Authorization: "Bearer p.test-token",
+        },
+      });
       expect(result).toEqual(mockBranch);
     });
 
@@ -263,21 +272,44 @@ describe("Branch API client", () => {
 
   describe("deleteBranch", () => {
     it("deletes a branch successfully", async () => {
+      const mockBranch = {
+        id: "branch-123",
+        name: "my-feature",
+        token: "p.branch-token",
+        created_at: "2024-01-01T00:00:00Z",
+      };
+
+      // 1. getBranch to get the ID
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockBranch),
+      });
+
+      // 2. DELETE the branch by ID
       mockFetch.mockResolvedValueOnce({
         ok: true,
       });
 
       await deleteBranch(config, "my-feature");
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.tinybird.co/v1/environments/my-feature",
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: "Bearer p.test-token",
-          },
-        }
-      );
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      // First call: get branch
+      const [getUrl, getInit] = mockFetch.mock.calls[0];
+      const getParsed = expectFromParam(getUrl);
+      expect(getParsed.pathname).toBe("/v0/environments/my-feature");
+      expect(getInit.method).toBe("GET");
+
+      // Second call: delete branch by ID
+      const [deleteUrl, deleteInit] = mockFetch.mock.calls[1];
+      const deleteParsed = expectFromParam(deleteUrl);
+      expect(deleteParsed.pathname).toBe("/v0/environments/branch-123");
+      expect(deleteInit).toEqual({
+        method: "DELETE",
+        headers: {
+          Authorization: "Bearer p.test-token",
+        },
+      });
     });
   });
 
@@ -372,6 +404,94 @@ describe("Branch API client", () => {
       const result = await getOrCreateBranch(config, "new-feature");
       expect(result).toEqual({ ...newBranch, wasCreated: true });
       expect(mockFetch).toHaveBeenCalledTimes(4);
+    });
+  });
+
+  describe("clearBranch", () => {
+    it("clears a branch by deleting and recreating it", async () => {
+      const existingBranch = {
+        id: "branch-old",
+        name: "my-feature",
+        token: "p.old-token",
+        created_at: "2024-01-01T00:00:00Z",
+      };
+
+      const newBranch = {
+        id: "branch-new",
+        name: "my-feature",
+        token: "p.new-token",
+        created_at: "2024-01-02T00:00:00Z",
+      };
+
+      // 1. GET branch to get ID (for delete)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(existingBranch),
+      });
+
+      // 2. DELETE branch by ID
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+      });
+
+      // 3. POST to /v1/environments returns a job
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          job: { id: "job-789", status: "waiting" },
+          workspace: { id: "ws-789" },
+        }),
+      });
+
+      // 4. Poll job - done
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: "job-789", status: "done" }),
+      });
+
+      // 5. Get branch with token (after create)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(newBranch),
+      });
+
+      const result = await clearBranch(config, "my-feature");
+
+      expect(mockFetch).toHaveBeenCalledTimes(5);
+
+      // Verify get was called first
+      const [getUrl, getInit] = mockFetch.mock.calls[0];
+      const getParsed = expectFromParam(getUrl);
+      expect(getParsed.pathname).toBe("/v0/environments/my-feature");
+      expect(getInit.method).toBe("GET");
+
+      // Verify delete was called with ID
+      const [deleteUrl, deleteInit] = mockFetch.mock.calls[1];
+      const deleteParsed = expectFromParam(deleteUrl);
+      expect(deleteParsed.pathname).toBe("/v0/environments/branch-old");
+      expect(deleteInit.method).toBe("DELETE");
+
+      // Verify create was called
+      const [createUrl, createInit] = mockFetch.mock.calls[2];
+      const createParsed = expectFromParam(createUrl);
+      expect(createParsed.pathname).toBe("/v1/environments");
+      expect(createParsed.searchParams.get("name")).toBe("my-feature");
+      expect(createInit.method).toBe("POST");
+
+      expect(result).toEqual(newBranch);
+    });
+
+    it("throws BranchApiError when branch does not exist", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+        text: () => Promise.resolve("Branch not found"),
+      });
+
+      await expect(clearBranch(config, "nonexistent")).rejects.toThrow(
+        BranchApiError
+      );
     });
   });
 });

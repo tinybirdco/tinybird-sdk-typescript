@@ -2,6 +2,8 @@
  * Tinybird Workspace API client
  */
 
+import { tinybirdFetch } from "./fetcher.js";
+
 /**
  * Workspace information from Tinybird API
  */
@@ -56,7 +58,7 @@ export async function getWorkspace(
 ): Promise<TinybirdWorkspace> {
   const url = new URL("/v1/workspace", config.baseUrl);
 
-  const response = await fetch(url.toString(), {
+  const response = await tinybirdFetch(url.toString(), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${config.token}`,

@@ -4,10 +4,8 @@ import * as path from "path";
 import * as os from "os";
 import {
   hasSrcFolder,
-  getLibDir,
-  getRelativeLibDir,
-  getTinybirdSchemaPath,
-  getRelativeSchemaPath,
+  getTinybirdDir,
+  getRelativeTinybirdDir,
   findConfigFile,
   loadConfig,
   getConfigPath,
@@ -50,55 +48,27 @@ describe("Config", () => {
     });
   });
 
-  describe("getLibDir", () => {
-    it("returns src/tinybird when project has src folder", () => {
+  describe("getTinybirdDir", () => {
+    it("returns src/lib when project has src folder", () => {
       fs.mkdirSync(path.join(tempDir, "src"));
 
-      expect(getLibDir(tempDir)).toBe(path.join(tempDir, "src", "tinybird"));
+      expect(getTinybirdDir(tempDir)).toBe(path.join(tempDir, "src", "lib"));
     });
 
-    it("returns tinybird when project does not have src folder", () => {
-      expect(getLibDir(tempDir)).toBe(path.join(tempDir, "tinybird"));
+    it("returns lib when project does not have src folder", () => {
+      expect(getTinybirdDir(tempDir)).toBe(path.join(tempDir, "lib"));
     });
   });
 
-  describe("getRelativeLibDir", () => {
-    it("returns src/tinybird when project has src folder", () => {
+  describe("getRelativeTinybirdDir", () => {
+    it("returns src/lib/tinybird.ts when project has src folder", () => {
       fs.mkdirSync(path.join(tempDir, "src"));
 
-      expect(getRelativeLibDir(tempDir)).toBe("src/tinybird");
+      expect(getRelativeTinybirdDir(tempDir)).toBe("src/lib/tinybird.ts");
     });
 
-    it("returns tinybird when project does not have src folder", () => {
-      expect(getRelativeLibDir(tempDir)).toBe("tinybird");
-    });
-  });
-
-  describe("getTinybirdSchemaPath", () => {
-    it("returns src/tinybird/datasources.ts when project has src folder", () => {
-      fs.mkdirSync(path.join(tempDir, "src"));
-
-      expect(getTinybirdSchemaPath(tempDir)).toBe(
-        path.join(tempDir, "src", "tinybird", "datasources.ts")
-      );
-    });
-
-    it("returns tinybird/datasources.ts when project does not have src folder", () => {
-      expect(getTinybirdSchemaPath(tempDir)).toBe(
-        path.join(tempDir, "tinybird", "datasources.ts")
-      );
-    });
-  });
-
-  describe("getRelativeSchemaPath", () => {
-    it("returns src/tinybird/datasources.ts when project has src folder", () => {
-      fs.mkdirSync(path.join(tempDir, "src"));
-
-      expect(getRelativeSchemaPath(tempDir)).toBe("src/tinybird/datasources.ts");
-    });
-
-    it("returns tinybird/datasources.ts when project does not have src folder", () => {
-      expect(getRelativeSchemaPath(tempDir)).toBe("tinybird/datasources.ts");
+    it("returns lib/tinybird.ts when project does not have src folder", () => {
+      expect(getRelativeTinybirdDir(tempDir)).toBe("lib/tinybird.ts");
     });
   });
 

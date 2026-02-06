@@ -1,0 +1,7 @@
+SCHEMA >
+    timestamp DateTime,
+    user_id String,
+    event String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "user_id, timestamp"

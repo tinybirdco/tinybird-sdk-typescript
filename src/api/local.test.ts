@@ -6,6 +6,8 @@ import {
   listLocalWorkspaces,
   createLocalWorkspace,
   getOrCreateLocalWorkspace,
+  deleteLocalWorkspace,
+  clearLocalWorkspace,
   isLocalRunning,
   getLocalWorkspaceName,
   LocalNotRunningError,
@@ -94,15 +96,18 @@ describe("Local API", () => {
   describe("listLocalWorkspaces", () => {
     it("returns list of workspaces", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
-          return HttpResponse.json({
-            organization_id: "org-123",
-            workspaces: [
-              { id: "ws-1", name: "Workspace1", token: "token-1" },
-              { id: "ws-2", name: "Workspace2", token: "token-2" },
-            ],
-          });
-        })
+        http.get(
+          `${LOCAL_BASE_URL}/v1/user/workspaces`,
+          () => {
+            return HttpResponse.json({
+              organization_id: "org-123",
+              workspaces: [
+                { id: "ws-1", name: "Workspace1", token: "token-1" },
+                { id: "ws-2", name: "Workspace2", token: "token-2" },
+              ],
+            });
+          }
+        )
       );
 
       const result = await listLocalWorkspaces("admin-token");
@@ -118,9 +123,12 @@ describe("Local API", () => {
 
     it("throws LocalApiError on failure", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
-          return new HttpResponse("Not found", { status: 404 });
-        })
+        http.get(
+          `${LOCAL_BASE_URL}/v1/user/workspaces`,
+          () => {
+            return new HttpResponse("Not found", { status: 404 });
+          }
+        )
       );
 
       await expect(listLocalWorkspaces("admin-token")).rejects.toThrow(LocalApiError);
@@ -170,14 +178,17 @@ describe("Local API", () => {
 
     it("returns existing workspace if found", async () => {
       server.use(
-        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
-          return HttpResponse.json({
-            organization_id: "org-123",
-            workspaces: [
-              { id: "existing-ws", name: "MyWorkspace", token: "existing-token" },
-            ],
-          });
-        })
+        http.get(
+          `${LOCAL_BASE_URL}/v1/user/workspaces`,
+          () => {
+            return HttpResponse.json({
+              organization_id: "org-123",
+              workspaces: [
+                { id: "existing-ws", name: "MyWorkspace", token: "existing-token" },
+              ],
+            });
+          }
+        )
       );
 
       const result = await getOrCreateLocalWorkspace(tokens, "MyWorkspace");
@@ -191,21 +202,24 @@ describe("Local API", () => {
       let createCalled = false;
 
       server.use(
-        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
-          // Return different response based on whether create was called
-          if (createCalled) {
+        http.get(
+          `${LOCAL_BASE_URL}/v1/user/workspaces`,
+          () => {
+            // Return different response based on whether create was called
+            if (createCalled) {
+              return HttpResponse.json({
+                organization_id: "org-123",
+                workspaces: [
+                  { id: "new-ws", name: "NewWorkspace", token: "new-token" },
+                ],
+              });
+            }
             return HttpResponse.json({
               organization_id: "org-123",
-              workspaces: [
-                { id: "new-ws", name: "NewWorkspace", token: "new-token" },
-              ],
+              workspaces: [], // Empty initially
             });
           }
-          return HttpResponse.json({
-            organization_id: "org-123",
-            workspaces: [], // Empty initially
-          });
-        }),
+        ),
         http.post(`${LOCAL_BASE_URL}/v1/workspaces`, () => {
           createCalled = true;
           return HttpResponse.json({
@@ -245,6 +259,110 @@ describe("Local API", () => {
       const name1 = getLocalWorkspaceName(null, "/path/one");
       const name2 = getLocalWorkspaceName(null, "/path/two");
       expect(name1).not.toBe(name2);
+    });
+  });
+
+  describe("deleteLocalWorkspace", () => {
+    it("deletes a workspace successfully", async () => {
+      server.use(
+        http.delete(`${LOCAL_BASE_URL}/v1/workspaces/ws-123`, () => {
+          return new HttpResponse(null, { status: 204 });
+        })
+      );
+
+      await deleteLocalWorkspace("user-token", "ws-123");
+      // No error means success
+    });
+
+    it("throws LocalApiError on failure", async () => {
+      server.use(
+        http.delete(`${LOCAL_BASE_URL}/v1/workspaces/ws-123`, () => {
+          return new HttpResponse("Not found", { status: 404 });
+        })
+      );
+
+      await expect(deleteLocalWorkspace("user-token", "ws-123")).rejects.toThrow(
+        LocalApiError
+      );
+    });
+  });
+
+  describe("clearLocalWorkspace", () => {
+    const tokens = {
+      user_token: "user-token",
+      admin_token: "admin-token",
+      workspace_admin_token: "default-token",
+    };
+
+    it("clears a workspace by deleting and recreating it", async () => {
+      let deleteCount = 0;
+      let createCount = 0;
+
+      server.use(
+        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
+          // First call: workspace exists
+          // Second call: workspace deleted
+          // Third call: workspace recreated
+          if (deleteCount === 0) {
+            return HttpResponse.json({
+              organization_id: "org-123",
+              workspaces: [
+                { id: "ws-123", name: "MyWorkspace", token: "old-token" },
+              ],
+            });
+          } else if (createCount === 0) {
+            return HttpResponse.json({
+              organization_id: "org-123",
+              workspaces: [],
+            });
+          } else {
+            return HttpResponse.json({
+              organization_id: "org-123",
+              workspaces: [
+                { id: "ws-456", name: "MyWorkspace", token: "new-token" },
+              ],
+            });
+          }
+        }),
+        http.delete(`${LOCAL_BASE_URL}/v1/workspaces/ws-123`, () => {
+          deleteCount++;
+          return new HttpResponse(null, { status: 204 });
+        }),
+        http.post(`${LOCAL_BASE_URL}/v1/workspaces`, () => {
+          createCount++;
+          return HttpResponse.json({
+            id: "ws-456",
+            name: "MyWorkspace",
+            token: "new-token",
+          });
+        })
+      );
+
+      const result = await clearLocalWorkspace(tokens, "MyWorkspace");
+
+      expect(deleteCount).toBe(1);
+      expect(createCount).toBe(1);
+      expect(result.id).toBe("ws-456");
+      expect(result.name).toBe("MyWorkspace");
+      expect(result.token).toBe("new-token");
+    });
+
+    it("throws LocalApiError when workspace not found", async () => {
+      server.use(
+        http.get(`${LOCAL_BASE_URL}/v1/user/workspaces`, () => {
+          return HttpResponse.json({
+            organization_id: "org-123",
+            workspaces: [],
+          });
+        })
+      );
+
+      await expect(clearLocalWorkspace(tokens, "NonExistent")).rejects.toThrow(
+        LocalApiError
+      );
+      await expect(clearLocalWorkspace(tokens, "NonExistent")).rejects.toThrow(
+        "Workspace 'NonExistent' not found"
+      );
     });
   });
 });

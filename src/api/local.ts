@@ -5,6 +5,7 @@
 
 import * as crypto from "crypto";
 import { LOCAL_BASE_URL } from "../cli/config.js";
+import { tinybirdFetch } from "./fetcher.js";
 
 /**
  * Tokens returned by the local /tokens endpoint
@@ -76,7 +77,7 @@ export class LocalApiError extends Error {
  */
 export async function isLocalRunning(): Promise<boolean> {
   try {
-    const response = await fetch(`${LOCAL_BASE_URL}/tokens`, {
+    const response = await tinybirdFetch(`${LOCAL_BASE_URL}/tokens`, {
       method: "GET",
       signal: AbortSignal.timeout(5000),
     });
@@ -94,7 +95,7 @@ export async function isLocalRunning(): Promise<boolean> {
  */
 export async function getLocalTokens(): Promise<LocalTokens> {
   try {
-    const response = await fetch(`${LOCAL_BASE_URL}/tokens`, {
+    const response = await tinybirdFetch(`${LOCAL_BASE_URL}/tokens`, {
       method: "GET",
       signal: AbortSignal.timeout(5000),
     });
@@ -136,7 +137,7 @@ export async function listLocalWorkspaces(
 ): Promise<{ workspaces: LocalWorkspace[]; organizationId?: string }> {
   const url = `${LOCAL_BASE_URL}/v1/user/workspaces?with_organization=true&token=${adminToken}`;
 
-  const response = await fetch(url, {
+  const response = await tinybirdFetch(url, {
     method: "GET",
   });
 
@@ -182,7 +183,7 @@ export async function createLocalWorkspace(
     formData.append("assign_to_organization_id", organizationId);
   }
 
-  const response = await fetch(url, {
+  const response = await tinybirdFetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${userToken}`,
@@ -267,4 +268,81 @@ export function getLocalWorkspaceName(
   // No branch detected - use hash of path like Python implementation
   const hash = crypto.createHash("sha256").update(cwd).digest("hex");
   return `Build_${hash.substring(0, 16)}`;
+}
+
+/**
+ * Delete a workspace in local Tinybird
+ *
+ * @param userToken - User token from getLocalTokens()
+ * @param workspaceId - ID of the workspace to delete
+ */
+export async function deleteLocalWorkspace(
+  userToken: string,
+  workspaceId: string
+): Promise<void> {
+  const url = `${LOCAL_BASE_URL}/v1/workspaces/${workspaceId}?hard_delete_confirmation=yes`;
+
+  const response = await tinybirdFetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${userToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const responseBody = await response.text();
+    throw new LocalApiError(
+      `Failed to delete local workspace: ${response.status} ${response.statusText}`,
+      response.status,
+      responseBody
+    );
+  }
+}
+
+/**
+ * Clear a workspace in local Tinybird by deleting and recreating it
+ *
+ * @param tokens - Tokens from getLocalTokens()
+ * @param workspaceName - Name of the workspace to clear
+ * @returns The recreated workspace
+ */
+export async function clearLocalWorkspace(
+  tokens: LocalTokens,
+  workspaceName: string
+): Promise<LocalWorkspace> {
+  // List existing workspaces to find the one to clear
+  const { workspaces, organizationId } = await listLocalWorkspaces(tokens.admin_token);
+
+  // Find the workspace by name
+  const workspace = workspaces.find((ws) => ws.name === workspaceName);
+  if (!workspace) {
+    throw new LocalApiError(`Workspace '${workspaceName}' not found`);
+  }
+
+  // Delete the workspace
+  await deleteLocalWorkspace(tokens.user_token, workspace.id);
+
+  // Verify it was deleted
+  const { workspaces: afterDelete } = await listLocalWorkspaces(tokens.admin_token);
+  const stillExists = afterDelete.find((ws) => ws.name === workspaceName);
+  if (stillExists) {
+    throw new LocalApiError(
+      `Workspace '${workspaceName}' was not deleted properly. Please try again.`
+    );
+  }
+
+  // Recreate the workspace
+  await createLocalWorkspace(tokens.user_token, workspaceName, organizationId);
+
+  // Fetch the workspace again to get the token
+  const { workspaces: afterCreate } = await listLocalWorkspaces(tokens.admin_token);
+  const newWorkspace = afterCreate.find((ws) => ws.name === workspaceName);
+
+  if (!newWorkspace) {
+    throw new LocalApiError(
+      `Workspace '${workspaceName}' was not recreated properly. Please try again.`
+    );
+  }
+
+  return newWorkspace;
 }

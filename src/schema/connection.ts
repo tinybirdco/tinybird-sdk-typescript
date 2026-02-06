@@ -3,8 +3,9 @@
  * Define external connections (Kafka, etc.) as TypeScript with full type safety
  */
 
-// Symbol for brand typing
-const CONNECTION_BRAND = Symbol("tinybird.connection");
+// Symbol for brand typing - use Symbol.for() for global registry
+// This ensures the same symbol is used across module instances
+const CONNECTION_BRAND = Symbol.for("tinybird.connection");
 
 /**
  * Kafka security protocol options

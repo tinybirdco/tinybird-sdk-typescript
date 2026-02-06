@@ -12,10 +12,13 @@ config({ path: ".env" });
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { Command } from "commander";
+import pc from "picocolors";
 import { runInit } from "./commands/init.js";
 import { runBuild } from "./commands/build.js";
+import { runDeploy } from "./commands/deploy.js";
+import { runPreview } from "./commands/preview.js";
 import { runDev } from "./commands/dev.js";
 import { runLogin } from "./commands/login.js";
 import {
@@ -23,20 +26,20 @@ import {
   runBranchStatus,
   runBranchDelete,
 } from "./commands/branch.js";
+import { runClear } from "./commands/clear.js";
+import {
+  detectPackageManagerInstallCmd,
+  detectPackageManagerRunCmd,
+  hasTinybirdSdkDependency,
+} from "./utils/package-manager.js";
 import type { DevMode } from "./config.js";
+import { output, type ResourceChange } from "./output.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(
   readFileSync(resolve(__dirname, "../../package.json"), "utf-8")
 ) as { version: string };
 const VERSION = packageJson.version;
-
-/**
- * Format timestamp for console output
- */
-function formatTime(): string {
-  return new Date().toLocaleTimeString("en-US", { hour12: false });
-}
 
 /**
  * Create and configure the CLI
@@ -55,12 +58,22 @@ function createCli(): Command {
     .description("Initialize a new Tinybird TypeScript project")
     .option("-f, --force", "Overwrite existing files")
     .option("--skip-login", "Skip browser login flow")
+    .option("-m, --mode <mode>", "Development mode: 'branch' or 'local'")
+    .option("-p, --path <path>", "Path for Tinybird client files")
     .action(async (options) => {
-      console.log("Initializing Tinybird project...\n");
+      // Validate mode if provided
+      if (options.mode && !["branch", "local"].includes(options.mode)) {
+        console.error(
+          `Error: Invalid mode '${options.mode}'. Use 'branch' or 'local'.`
+        );
+        process.exit(1);
+      }
 
       const result = await runInit({
         force: options.force,
         skipLogin: options.skipLogin,
+        devMode: options.mode,
+        clientPath: options.path,
       });
 
       if (!result.success) {
@@ -68,19 +81,14 @@ function createCli(): Command {
         process.exit(1);
       }
 
-      if (result.created.length > 0) {
-        console.log("Created:");
-        result.created.forEach((file) => {
-          console.log(`  - ${file}`);
-        });
-      }
-
-      if (result.skipped.length > 0) {
-        console.log("\nSkipped (already exists):");
-        result.skipped.forEach((file) => {
-          console.log(`  - ${file}`);
-        });
-      }
+      // Detect package manager for run command
+      const clientPath = result.clientPath ?? "tinybird";
+      const sdkCheckDir = result.clientPath
+        ? dirname(join(process.cwd(), clientPath))
+        : process.cwd();
+      const runCmd = detectPackageManagerRunCmd(sdkCheckDir);
+      const installCmd = detectPackageManagerInstallCmd(sdkCheckDir);
+      const needsInstallStep = !hasTinybirdSdkDependency(sdkCheckDir);
 
       if (result.loggedIn) {
         console.log(`\nLogged in successfully!`);
@@ -90,19 +98,49 @@ function createCli(): Command {
         if (result.userEmail) {
           console.log(`  User: ${result.userEmail}`);
         }
-        console.log("\nDone! Next steps:");
-        console.log("  1. Edit src/tinybird/schema.ts with your schema");
-        console.log("  2. Run 'npx tinybird dev' to start development");
+
+        if (result.existingDatafiles && result.existingDatafiles.length > 0) {
+          console.log(
+            `\nAdded ${result.existingDatafiles.length} existing datafile(s) to tinybird.json.`
+          );
+        }
+        console.log("\nNext steps:");
+        const steps = [
+          needsInstallStep
+            ? `Install dependencies with '${installCmd}'`
+            : undefined,
+          `Edit your schema in ${clientPath}`,
+          `Run '${runCmd} tinybird:dev' to start development`,
+        ].filter(Boolean);
+        steps.forEach((step, index) => {
+          console.log(`  ${index + 1}. ${step}`);
+        });
       } else if (result.loggedIn === false) {
         console.log("\nLogin was skipped or failed.");
-        console.log("\nDone! Next steps:");
-        console.log("  1. Run 'npx tinybird login' to authenticate");
-        console.log("  2. Edit src/tinybird/schema.ts with your schema");
-        console.log("  3. Run 'npx tinybird dev' to start development");
+        console.log("\nNext steps:");
+        const steps = [
+          "Run 'npx tinybird login' to authenticate",
+          needsInstallStep
+            ? `Install dependencies with '${installCmd}'`
+            : undefined,
+          `Edit your schema in ${clientPath}`,
+          `Run '${runCmd} tinybird:dev' to start development`,
+        ].filter(Boolean);
+        steps.forEach((step, index) => {
+          console.log(`  ${index + 1}. ${step}`);
+        });
       } else {
-        console.log("\nDone! Next steps:");
-        console.log("  1. Edit src/tinybird/schema.ts with your schema");
-        console.log("  2. Run 'npx tinybird dev' to start development");
+        console.log("\nNext steps:");
+        const steps = [
+          needsInstallStep
+            ? `Install dependencies with '${installCmd}'`
+            : undefined,
+          `Edit your schema in ${clientPath}`,
+          `Run '${runCmd} tinybird:dev' to start development`,
+        ].filter(Boolean);
+        steps.forEach((step, index) => {
+          console.log(`  ${index + 1}. ${step}`);
+        });
       }
     });
 
@@ -135,11 +173,10 @@ function createCli(): Command {
   // Build command
   program
     .command("build")
-    .description("Build and push resources to Tinybird")
+    .description("Build and push resources to a Tinybird branch (not main)")
     .option("--dry-run", "Generate without pushing to API")
     .option("--debug", "Show debug output including API requests/responses")
     .option("--local", "Use local Tinybird container")
-    .option("--branch", "Use Tinybird cloud with branches")
     .action(async (options) => {
       if (options.debug) {
         process.env.TINYBIRD_DEBUG = "1";
@@ -149,27 +186,27 @@ function createCli(): Command {
       let devModeOverride: DevMode | undefined;
       if (options.local) {
         devModeOverride = "local";
-      } else if (options.branch) {
-        devModeOverride = "branch";
       }
 
       const modeLabel = devModeOverride === "local" ? " (local)" : "";
-      console.log(`[${formatTime()}] Building${modeLabel}...\n`);
+      output.highlight(`Building${modeLabel}...`);
 
       const result = await runBuild({
         dryRun: options.dryRun,
         devModeOverride,
       });
 
-      if (!result.success) {
-        console.error(`Error: ${result.error}`);
-        process.exit(1);
-      }
-
       const { build, deploy } = result;
 
-      if (build) {
-        console.log(`Generated ${build.stats.datasourceCount} datasource(s), ${build.stats.pipeCount} pipe(s)`);
+      if (!result.success) {
+        // Show detailed errors if available
+        if (deploy?.errors && deploy.errors.length > 0) {
+          output.showBuildErrors(deploy.errors);
+        } else if (result.error) {
+          output.error(result.error);
+        }
+        output.showBuildFailure();
+        process.exit(1);
       }
 
       if (options.dryRun) {
@@ -189,15 +226,236 @@ function createCli(): Command {
             console.log(pipe.content);
           });
         }
+        output.showBuildSuccess(result.durationMs);
       } else if (deploy) {
         if (deploy.result === "no_changes") {
-          console.log("No changes detected - already up to date");
+          output.showNoChanges();
         } else {
-          console.log(`Deployed to Tinybird successfully`);
+          // Collect all changes for table display
+          const changes: ResourceChange[] = [];
+
+          if (deploy.datasources) {
+            for (const name of deploy.datasources.created) {
+              changes.push({ status: "new", name, type: "datasource" });
+            }
+            for (const name of deploy.datasources.changed) {
+              changes.push({ status: "modified", name, type: "datasource" });
+            }
+            for (const name of deploy.datasources.deleted) {
+              changes.push({ status: "deleted", name, type: "datasource" });
+            }
+          }
+
+          if (deploy.pipes) {
+            for (const name of deploy.pipes.created) {
+              changes.push({ status: "new", name, type: "pipe" });
+            }
+            for (const name of deploy.pipes.changed) {
+              changes.push({ status: "modified", name, type: "pipe" });
+            }
+            for (const name of deploy.pipes.deleted) {
+              changes.push({ status: "deleted", name, type: "pipe" });
+            }
+          }
+
+          output.showChangesTable(changes);
+          output.showBuildSuccess(result.durationMs);
+        }
+      }
+    });
+
+  // Deploy command
+  program
+    .command("deploy")
+    .description("Deploy resources to main Tinybird workspace (production)")
+    .option("--dry-run", "Generate without pushing to API")
+    .option("--check", "Validate deploy with Tinybird API without applying")
+    .option("--debug", "Show debug output including API requests/responses")
+    .action(async (options) => {
+      if (options.debug) {
+        process.env.TINYBIRD_DEBUG = "1";
+      }
+
+      output.highlight("Deploying to main workspace...");
+
+      const result = await runDeploy({
+        dryRun: options.dryRun,
+        check: options.check,
+        callbacks: {
+          onChanges: (deployChanges) => {
+            // Show changes table immediately after deployment is created
+            const changes: ResourceChange[] = [];
+
+            for (const name of deployChanges.datasources.created) {
+              changes.push({ status: "new", name, type: "datasource" });
+            }
+            for (const name of deployChanges.datasources.changed) {
+              changes.push({ status: "modified", name, type: "datasource" });
+            }
+            for (const name of deployChanges.datasources.deleted) {
+              changes.push({ status: "deleted", name, type: "datasource" });
+            }
+
+            for (const name of deployChanges.pipes.created) {
+              changes.push({ status: "new", name, type: "pipe" });
+            }
+            for (const name of deployChanges.pipes.changed) {
+              changes.push({ status: "modified", name, type: "pipe" });
+            }
+            for (const name of deployChanges.pipes.deleted) {
+              changes.push({ status: "deleted", name, type: "pipe" });
+            }
+
+            for (const name of deployChanges.connections.created) {
+              changes.push({ status: "new", name, type: "connection" });
+            }
+            for (const name of deployChanges.connections.changed) {
+              changes.push({ status: "modified", name, type: "connection" });
+            }
+            for (const name of deployChanges.connections.deleted) {
+              changes.push({ status: "deleted", name, type: "connection" });
+            }
+
+            output.showChangesTable(changes);
+          },
+          onWaitingForReady: () => output.showWaitingForDeployment(),
+          onDeploymentReady: () => output.showDeploymentReady(),
+          onDeploymentLive: (id) => output.showDeploymentLive(id),
+          onValidating: () => output.showValidatingDeployment(),
+        },
+      });
+
+      const { build, deploy } = result;
+
+      if (!result.success) {
+        // Show detailed errors if available
+        if (deploy?.errors && deploy.errors.length > 0) {
+          output.showBuildErrors(deploy.errors);
+        } else if (result.error) {
+          output.error(result.error);
+        }
+        output.showDeployFailure();
+        process.exit(1);
+      }
+
+      if (options.dryRun) {
+        console.log("\n[Dry run] Resources not deployed to API");
+
+        // Show generated content
+        if (build) {
+          console.log("\n--- Generated Datasources ---");
+          build.resources.datasources.forEach((ds) => {
+            console.log(`\n${ds.name}.datasource:`);
+            console.log(ds.content);
+          });
+
+          console.log("\n--- Generated Pipes ---");
+          build.resources.pipes.forEach((pipe) => {
+            console.log(`\n${pipe.name}.pipe:`);
+            console.log(pipe.content);
+          });
+        }
+        output.showDeploySuccess(result.durationMs);
+      } else if (options.check) {
+        console.log("\n[Check] Resources validated with Tinybird API");
+        output.showDeploySuccess(result.durationMs);
+      } else if (deploy) {
+        if (deploy.result === "no_changes") {
+          output.showNoChanges();
+        } else {
+          // Changes table was already shown via onChanges callback
+          output.showDeploySuccess(result.durationMs);
+        }
+      }
+    });
+
+  // Preview command
+  program
+    .command("preview")
+    .description("Create a preview branch and deploy resources (for CI/testing)")
+    .option("--dry-run", "Generate without creating branch or deploying")
+    .option("--check", "Validate deploy with Tinybird API without applying")
+    .option("--debug", "Show debug output including API requests/responses")
+    .option("--json", "Output JSON instead of human-readable format")
+    .option("-n, --name <name>", "Override preview branch name")
+    .option("--local", "Use local Tinybird container")
+    .action(async (options) => {
+      if (options.debug) {
+        process.env.TINYBIRD_DEBUG = "1";
+      }
+
+      // Determine devMode override
+      let devModeOverride: DevMode | undefined;
+      if (options.local) {
+        devModeOverride = "local";
+      }
+
+      if (!options.json) {
+        const modeLabel = devModeOverride === "local" ? " (local)" : "";
+        console.log(`Creating preview branch${modeLabel}...\n`);
+      }
+
+      const result = await runPreview({
+        dryRun: options.dryRun,
+        check: options.check,
+        name: options.name,
+        devModeOverride,
+      });
+
+      // JSON output mode
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+        if (!result.success) {
+          process.exit(1);
+        }
+        return;
+      }
+
+      // Human-readable output mode
+      if (!result.success) {
+        // Parse error message for individual errors (one per line)
+        const errorLines = result.error?.split("\n") ?? ["Unknown error"];
+        for (const line of errorLines) {
+          console.log(pc.red(`- ${line}`));
+        }
+        console.log("");
+        console.log(pc.red(`✗ Preview failed`));
+        process.exit(1);
+      }
+
+      // Success output
+      const durationSec = (result.durationMs / 1000).toFixed(1);
+      if (result.branch) {
+        if (options.dryRun) {
+          console.log(pc.green(`✓ Preview branch: ${result.branch.name}`));
+          console.log(pc.dim("  (dry run - branch not created)"));
+        } else {
+          console.log(pc.green(`✓ Preview branch: ${result.branch.name}`));
+          console.log(pc.dim(`  ID: ${result.branch.id}`));
+          console.log(pc.dim(`  (use --json to get branch token)`));
         }
       }
 
-      console.log(`\n[${formatTime()}] Done in ${result.durationMs}ms`);
+      if (result.build) {
+        console.log(
+          pc.green(`✓ Generated ${result.build.datasourceCount} datasource(s), ${result.build.pipeCount} pipe(s)`)
+        );
+      }
+
+      if (options.dryRun) {
+        console.log(pc.dim("\n[Dry run] Resources not deployed to API"));
+      } else if (options.check) {
+        console.log(pc.green("\n✓ Resources validated with Tinybird API"));
+      } else if (result.deploy) {
+        if (result.deploy.result === "no_changes") {
+          console.log(pc.green("✓ No changes detected - already up to date"));
+        } else {
+          console.log(pc.green("✓ Deployed to preview branch"));
+        }
+      }
+
+      console.log("");
+      console.log(pc.green(`✓ Preview completed in ${durationSec}s`));
     });
 
   // Dev command
@@ -214,9 +472,6 @@ function createCli(): Command {
       } else if (options.branch) {
         devModeOverride = "branch";
       }
-
-      console.log(`tinybird dev v${VERSION}`);
-      console.log("Loading config from tinybird.json...\n");
 
       try {
         const controller = await runDev({
@@ -241,7 +496,9 @@ function createCli(): Command {
                 console.log("Workspace created.\n");
               } else {
                 console.log(`Using local Tinybird container`);
-                console.log(`Using existing local workspace '${workspaceName}'\n`);
+                console.log(
+                  `Using existing local workspace '${workspaceName}'\n`
+                );
               }
             } else if (info.isMainBranch) {
               console.log("On main branch - deploying to workspace\n");
@@ -253,18 +510,27 @@ function createCli(): Command {
                 console.log("Branch created and token cached.\n");
               } else {
                 console.log(`Detected git branch: ${info.gitBranch}`);
-                console.log(`Using existing Tinybird branch '${tinybirdName}'\n`);
+                console.log(
+                  `Using existing Tinybird branch '${tinybirdName}'\n`
+                );
               }
             } else {
               console.log("Not in a git repository - deploying to workspace\n");
             }
           },
           onBuildStart: () => {
-            console.log(`[${formatTime()}] Building...`);
+            output.highlight("Building...");
           },
           onBuildComplete: (result) => {
             if (!result.success) {
-              console.error(`[${formatTime()}] Build failed: ${result.error}`);
+              // Show detailed errors if available
+              const { deploy } = result;
+              if (deploy?.errors && deploy.errors.length > 0) {
+                output.showBuildErrors(deploy.errors);
+              } else if (result.error) {
+                output.error(result.error);
+              }
+              output.showBuildFailure(true);
               return;
             }
 
@@ -272,52 +538,52 @@ function createCli(): Command {
 
             if (deploy) {
               if (deploy.result === "no_changes") {
-                console.log(`[${formatTime()}] No changes detected`);
+                output.showNoChanges();
               } else {
-                console.log(`[${formatTime()}] Built in ${result.durationMs}ms`);
-
                 // Show datasource changes
                 if (deploy.datasources) {
                   for (const name of deploy.datasources.created) {
-                    console.log(`  + datasource ${name} (created)`);
+                    output.showResourceChange(`${name}.datasource`, "created");
                   }
                   for (const name of deploy.datasources.changed) {
-                    console.log(`  ~ datasource ${name} (changed)`);
+                    output.showResourceChange(`${name}.datasource`, "changed");
                   }
                   for (const name of deploy.datasources.deleted) {
-                    console.log(`  - datasource ${name} (deleted)`);
+                    output.showResourceChange(`${name}.datasource`, "deleted");
                   }
                 }
 
                 // Show pipe changes
                 if (deploy.pipes) {
                   for (const name of deploy.pipes.created) {
-                    console.log(`  + pipe ${name} (created)`);
+                    output.showResourceChange(`${name}.pipe`, "created");
                   }
                   for (const name of deploy.pipes.changed) {
-                    console.log(`  ~ pipe ${name} (changed)`);
+                    output.showResourceChange(`${name}.pipe`, "changed");
                   }
                   for (const name of deploy.pipes.deleted) {
-                    console.log(`  - pipe ${name} (deleted)`);
+                    output.showResourceChange(`${name}.pipe`, "deleted");
                   }
                 }
+
+                output.showBuildSuccess(result.durationMs, true);
               }
             }
           },
           onSchemaValidation: (validation) => {
             if (validation.issues.length > 0) {
-              console.log(`[${formatTime()}] Schema validation:`);
+              output.info("Schema validation:");
               for (const issue of validation.issues) {
                 if (issue.type === "error") {
-                  console.error(`  ERROR [${issue.pipeName}]: ${issue.message}`);
+                  output.error(`  ERROR [${issue.pipeName}]: ${issue.message}`);
                 } else {
-                  console.warn(`  WARN [${issue.pipeName}]: ${issue.message}`);
+                  output.warning(`  WARN [${issue.pipeName}]: ${issue.message}`);
                 }
               }
             }
           },
-          onError: (error) => {
-            console.error(`[${formatTime()}] Error: ${error.message}`);
+          onError: (err) => {
+            output.error(err.message);
           },
         });
 
@@ -342,8 +608,9 @@ function createCli(): Command {
     });
 
   // Branch command
-  const branchCommand = new Command("branch")
-    .description("Manage Tinybird branches");
+  const branchCommand = new Command("branch").description(
+    "Manage Tinybird branches"
+  );
 
   branchCommand
     .command("list")
@@ -380,8 +647,13 @@ function createCli(): Command {
 
       console.log("Branch Status:");
       console.log(`  Git branch: ${result.gitBranch ?? "(not in git repo)"}`);
-      if (result.tinybirdBranchName && result.tinybirdBranchName !== result.gitBranch) {
-        console.log(`  Tinybird branch name: ${result.tinybirdBranchName} (sanitized)`);
+      if (
+        result.tinybirdBranchName &&
+        result.tinybirdBranchName !== result.gitBranch
+      ) {
+        console.log(
+          `  Tinybird branch name: ${result.tinybirdBranchName} (sanitized)`
+        );
       }
       console.log(`  Main branch: ${result.isMainBranch ? "yes" : "no"}`);
 
@@ -415,6 +687,61 @@ function createCli(): Command {
     });
 
   program.addCommand(branchCommand);
+
+  // Clear command
+  program
+    .command("clear")
+    .description("Clear the workspace or branch by deleting and recreating it")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .option("--local", "Use local Tinybird container")
+    .option("--branch", "Use Tinybird cloud with branches")
+    .action(async (options) => {
+      // Determine devMode override
+      let devModeOverride: DevMode | undefined;
+      if (options.local) {
+        devModeOverride = "local";
+      } else if (options.branch) {
+        devModeOverride = "branch";
+      }
+
+      const modeLabel = devModeOverride === "local" ? "local workspace" : "branch";
+
+      // Confirmation prompt unless --yes is passed
+      if (!options.yes) {
+        const readline = await import("readline");
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+
+        const answer = await new Promise<string>((resolve) => {
+          rl.question(
+            `Are you sure you want to clear the ${modeLabel}? This will delete all resources. [y/N]: `,
+            (ans) => {
+              rl.close();
+              resolve(ans);
+            }
+          );
+        });
+
+        if (answer.toLowerCase() !== "y" && answer.toLowerCase() !== "yes") {
+          console.log("Aborted.");
+          return;
+        }
+      }
+
+      console.log(`Clearing ${modeLabel}...`);
+
+      const result = await runClear({ devModeOverride });
+
+      if (!result.success) {
+        console.error(`Error: ${result.error}`);
+        process.exit(1);
+      }
+
+      const typeLabel = result.isLocal ? "Workspace" : "Branch";
+      console.log(`${typeLabel} '${result.name}' cleared successfully.`);
+    });
 
   return program;
 }

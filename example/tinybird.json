@@ -4,7 +4,8 @@
     "src/tinybird/pipes.ts",
     "src/tinybird/endpoints.ts",
     "src/tinybird/mvs.ts",
-    "src/tinybird/copies.ts"
+    "src/tinybird/copies.ts",
+    "src/tinybird/dummy.datasource"
   ],
   "token": "${TINYBIRD_TOKEN}",
   "baseUrl": "https://api.tinybird.co"

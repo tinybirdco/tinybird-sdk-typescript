@@ -4,6 +4,7 @@
  */
 
 import type { GeneratedResources } from "../generator/index.js";
+import { tinybirdFetch } from "./fetcher.js";
 
 /**
  * Configuration for building/deploying to Tinybird
@@ -82,8 +83,10 @@ export interface BuildApiResult {
   success: boolean;
   /** Result status from API */
   result: "success" | "failed" | "no_changes";
-  /** Error message if failed */
+  /** Error message if failed (formatted for display) */
   error?: string;
+  /** Detailed errors array from the API */
+  errors?: BuildError[];
   /** Number of datasources deployed */
   datasourceCount: number;
   /** Number of pipes deployed */
@@ -190,7 +193,7 @@ export async function buildToTinybird(
     console.log(`[debug] POST ${url}`);
   }
 
-  const response = await fetch(url, {
+  const response = await tinybirdFetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.token}`,
@@ -232,6 +235,7 @@ export async function buildToTinybird(
       success: false,
       result: "failed",
       error: formatErrors(),
+      errors: body.errors,
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
       connectionCount: resources.connections?.length ?? 0,
@@ -244,6 +248,7 @@ export async function buildToTinybird(
       success: false,
       result: "failed",
       error: formatErrors(),
+      errors: body.errors,
       datasourceCount: resources.datasources.length,
       pipeCount: resources.pipes.length,
       connectionCount: resources.connections?.length ?? 0,

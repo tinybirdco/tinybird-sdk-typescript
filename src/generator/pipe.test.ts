@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { generatePipe, generateAllPipes } from './pipe.js';
 import { definePipe, defineMaterializedView, node } from '../schema/pipe.js';
 import { defineDatasource } from '../schema/datasource.js';
+import { defineToken } from '../schema/token.js';
 import { t } from '../schema/types.js';
 import { p } from '../schema/params.js';
 import { engine } from '../schema/engines.js';
@@ -129,6 +130,38 @@ describe('Pipe Generator', () => {
 
       const result = generatePipe(pipe);
       expect(result.content).not.toContain('%');
+    });
+
+    it('adds % for SQL with Jinja block syntax {%...%}', () => {
+      const pipe = definePipe('test_pipe', {
+        nodes: [
+          node({
+            name: 'endpoint',
+            sql: `SELECT * FROM table {% if defined(filter) %} WHERE id = {{Int32(filter)}} {% end %}`,
+          }),
+        ],
+        output: simpleOutput,
+        endpoint: true,
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain('SQL >\n    %\n    SELECT');
+    });
+
+    it('adds % for SQL with only Jinja block syntax (no {{...}})', () => {
+      const pipe = definePipe('test_pipe', {
+        nodes: [
+          node({
+            name: 'endpoint',
+            sql: `SELECT * FROM table {% if true %} LIMIT 10 {% end %}`,
+          }),
+        ],
+        output: simpleOutput,
+        endpoint: true,
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain('    %\n');
     });
   });
 
@@ -436,6 +469,68 @@ GROUP BY day, country
 
       expect(result.content).toContain('TYPE MATERIALIZED');
       expect(result.content).toContain('DATASOURCE sales_by_hour');
+    });
+  });
+
+  describe('Token generation', () => {
+    it('generates TOKEN lines with inline config', () => {
+      const pipe = definePipe('test_pipe', {
+        nodes: [node({ name: 'endpoint', sql: 'SELECT 1' })],
+        output: simpleOutput,
+        endpoint: true,
+        tokens: [{ name: 'app_read' }],
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain('TOKEN app_read READ');
+    });
+
+    it('generates TOKEN lines with token reference', () => {
+      const appToken = defineToken('my_token');
+      const pipe = definePipe('test_pipe', {
+        nodes: [node({ name: 'endpoint', sql: 'SELECT 1' })],
+        output: simpleOutput,
+        endpoint: true,
+        tokens: [{ token: appToken, scope: 'READ' }],
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain('TOKEN my_token READ');
+    });
+
+    it('generates multiple TOKEN lines for multiple tokens', () => {
+      const token1 = defineToken('token_one');
+      const token2 = defineToken('token_two');
+      const pipe = definePipe('test_pipe', {
+        nodes: [node({ name: 'endpoint', sql: 'SELECT 1' })],
+        output: simpleOutput,
+        endpoint: true,
+        tokens: [
+          { token: token1, scope: 'READ' },
+          { token: token2, scope: 'READ' },
+        ],
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain('TOKEN token_one READ');
+      expect(result.content).toContain('TOKEN token_two READ');
+    });
+
+    it('generates mixed inline and reference tokens', () => {
+      const refToken = defineToken('ref_token');
+      const pipe = definePipe('test_pipe', {
+        nodes: [node({ name: 'endpoint', sql: 'SELECT 1' })],
+        output: simpleOutput,
+        endpoint: true,
+        tokens: [
+          { name: 'inline_token' },
+          { token: refToken, scope: 'READ' },
+        ],
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain('TOKEN inline_token READ');
+      expect(result.content).toContain('TOKEN ref_token READ');
     });
   });
 });

@@ -11,6 +11,7 @@ import type {
   TinybirdErrorResponse,
 } from "./types.js";
 import { TinybirdError } from "./types.js";
+import { createTinybirdFetcher, type TinybirdFetch } from "../api/fetcher.js";
 
 /**
  * Default timeout for requests (30 seconds)
@@ -56,7 +57,7 @@ interface ResolvedTokenInfo {
  */
 export class TinybirdClient {
   private readonly config: ClientConfig;
-  private readonly fetchFn: typeof fetch;
+  private readonly fetchFn: TinybirdFetch;
   private tokenPromise: Promise<ResolvedTokenInfo> | null = null;
   private resolvedToken: string | null = null;
 
@@ -75,7 +76,7 @@ export class TinybirdClient {
       baseUrl: config.baseUrl.replace(/\/$/, ""),
     };
 
-    this.fetchFn = config.fetch ?? globalThis.fetch;
+    this.fetchFn = createTinybirdFetcher(config.fetch ?? globalThis.fetch);
   }
 
   /**

@@ -11,8 +11,9 @@ import type { TinybirdClient } from "../client/base.js";
 import type { QueryResult } from "../client/types.js";
 import type { InferRow, InferParams, InferOutputRow } from "../infer/index.js";
 
-// Symbol for brand typing
-const PROJECT_BRAND = Symbol("tinybird.project");
+// Symbol for brand typing - use Symbol.for() for global registry
+// This ensures the same symbol is used across module instances
+const PROJECT_BRAND = Symbol.for("tinybird.project");
 
 /**
  * Collection of datasource definitions
@@ -221,11 +222,17 @@ function buildProjectClient<
 
   const getClient = async (): Promise<TinybirdClient> => {
     if (!_client) {
-      // Dynamic import to avoid circular dependencies
+      // Dynamic imports to avoid circular dependencies
       const { createClient } = await import("../client/base.js");
+      const { resolveToken } = await import("../client/preview.js");
+
+      // Resolve the token (handles preview environment detection)
+      const baseUrl = options?.baseUrl ?? process.env.TINYBIRD_URL ?? "https://api.tinybird.co";
+      const token = await resolveToken({ baseUrl, token: options?.token });
+
       _client = createClient({
-        baseUrl: options?.baseUrl ?? process.env.TINYBIRD_URL ?? "https://api.tinybird.co",
-        token: options?.token ?? process.env.TINYBIRD_TOKEN!,
+        baseUrl,
+        token,
         devMode: process.env.NODE_ENV === "development",
       });
     }

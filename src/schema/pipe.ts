@@ -8,11 +8,12 @@ import type { AnyParamValidator } from "./params.js";
 import type { DatasourceDefinition, SchemaDefinition, ColumnDefinition } from "./datasource.js";
 import { getColumnType } from "./datasource.js";
 import { getTinybirdType } from "./types.js";
+import type { TokenDefinition, PipeTokenScope } from "./token.js";
 
-/** Symbol for brand typing pipes */
-export const PIPE_BRAND: unique symbol = Symbol("tinybird.pipe");
-/** Symbol for brand typing nodes */
-export const NODE_BRAND: unique symbol = Symbol("tinybird.node");
+/** Symbol for brand typing pipes - use Symbol.for() for global registry */
+export const PIPE_BRAND = Symbol.for("tinybird.pipe");
+/** Symbol for brand typing nodes - use Symbol.for() for global registry */
+export const NODE_BRAND = Symbol.for("tinybird.node");
 
 /**
  * Parameter definition for a pipe
@@ -155,12 +156,28 @@ export interface CopyConfig<
 }
 
 /**
- * Token configuration for pipe access
+ * Inline token configuration for pipe access
  */
-export interface PipeTokenConfig {
+export interface InlinePipeTokenConfig {
   /** Token name */
   name: string;
 }
+
+/**
+ * Token reference with pipe-specific scope
+ */
+export interface PipeTokenReference {
+  /** The token definition */
+  token: TokenDefinition;
+  /** Scope for this pipe (READ only) */
+  scope: PipeTokenScope;
+}
+
+/**
+ * Token configuration for pipe access.
+ * Can be either an inline definition or a reference to a defined token.
+ */
+export type PipeTokenConfig = InlinePipeTokenConfig | PipeTokenReference;
 
 /**
  * Options for defining a pipe (reusable SQL logic, no endpoint)

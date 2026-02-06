@@ -1,11 +1,10 @@
 /**
- * Build command - generates and pushes resources to Tinybird
+ * Build command - generates and pushes resources to Tinybird branches
  */
 
 import { loadConfig, LOCAL_BASE_URL, type ResolvedConfig, type DevMode } from "../config.js";
 import { buildFromInclude, type BuildFromIncludeResult } from "../../generator/index.js";
 import { buildToTinybird, type BuildApiResult } from "../../api/build.js";
-import { deployToMain } from "../../api/deploy.js";
 import { getOrCreateBranch } from "../../api/branches.js";
 import {
   getLocalTokens,
@@ -24,8 +23,6 @@ export interface BuildCommandOptions {
   dryRun?: boolean;
   /** Override the token from config (used for branch tokens) */
   tokenOverride?: string;
-  /** Use /v1/deploy instead of /v1/build (for main branch) */
-  useDeployEndpoint?: boolean;
   /** Override the devMode from config */
   devModeOverride?: DevMode;
 }
@@ -49,7 +46,8 @@ export interface BuildCommandResult {
 /**
  * Run the build command
  *
- * Loads the schema, generates resources, and pushes to Tinybird API.
+ * Builds resources and pushes to Tinybird branches (not main).
+ * Use runDeploy for deploying to production.
  *
  * @param options - Build options
  * @returns Build command result
@@ -150,12 +148,19 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
       };
     }
   } else {
-    // Branch mode (default) - existing logic
-    // Deploy to Tinybird
-    // Determine token and endpoint based on git branch
-    let effectiveToken = options.tokenOverride ?? config.token;
-    // Use deploy endpoint if on main branch OR if no branch can be detected
-    let useDeployEndpoint = options.useDeployEndpoint ?? (config.isMainBranch || !config.tinybirdBranch);
+    // Branch mode (default)
+    // Prevent building to main - must use deploy command
+    // Skip this check if tokenOverride is provided (dev command passes branch token)
+    const isMainBranch = config.isMainBranch || !config.tinybirdBranch;
+
+    if (isMainBranch && !options.tokenOverride) {
+      return {
+        success: false,
+        build: buildResult,
+        error: `Cannot deploy to main workspace with 'build' command. Use 'tinybird deploy' to deploy to production, or switch to a feature branch.`,
+        durationMs: Date.now() - startTime,
+      };
+    }
 
     if (debug) {
       console.log(`[debug] isMainBranch: ${config.isMainBranch}`);
@@ -163,8 +168,10 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
       console.log(`[debug] tokenOverride: ${!!options.tokenOverride}`);
     }
 
-    // For feature branches, get or create the Tinybird branch and use its token
-    if (!config.isMainBranch && config.tinybirdBranch && !options.tokenOverride) {
+    let effectiveToken = options.tokenOverride ?? config.token;
+
+    // Get or create the Tinybird branch and use its token
+    if (!options.tokenOverride) {
       if (debug) {
         console.log(`[debug] Getting/creating Tinybird branch: ${config.tinybirdBranch}`);
       }
@@ -174,7 +181,7 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
             baseUrl: config.baseUrl,
             token: config.token,
           },
-          config.tinybirdBranch
+          config.tinybirdBranch!
         );
 
         if (!tinybirdBranch.token) {
@@ -187,7 +194,6 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
         }
 
         effectiveToken = tinybirdBranch.token;
-        useDeployEndpoint = false; // Always use /v1/build for branches
         if (debug) {
           console.log(`[debug] Using branch token for branch: ${config.tinybirdBranch}`);
         }
@@ -202,24 +208,14 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
     }
 
     try {
-      // Use /v1/deploy for main branch, /v1/build for feature branches
-      if (useDeployEndpoint) {
-        deployResult = await deployToMain(
-          {
-            baseUrl: config.baseUrl,
-            token: effectiveToken,
-          },
-          buildResult.resources
-        );
-      } else {
-        deployResult = await buildToTinybird(
-          {
-            baseUrl: config.baseUrl,
-            token: effectiveToken,
-          },
-          buildResult.resources
-        );
-      }
+      // Always use /v1/build for branches
+      deployResult = await buildToTinybird(
+        {
+          baseUrl: config.baseUrl,
+          token: effectiveToken,
+        },
+        buildResult.resources
+      );
     } catch (error) {
       return {
         success: false,

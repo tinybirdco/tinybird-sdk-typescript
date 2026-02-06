@@ -6,9 +6,11 @@
 import type { AnyTypeValidator } from "./types.js";
 import type { EngineConfig } from "./engines.js";
 import type { KafkaConnectionDefinition } from "./connection.js";
+import type { TokenDefinition, DatasourceTokenScope } from "./token.js";
 
-// Symbol for brand typing
-const DATASOURCE_BRAND = Symbol("tinybird.datasource");
+// Symbol for brand typing - use Symbol.for() for global registry
+// This ensures the same symbol is used across module instances
+const DATASOURCE_BRAND = Symbol.for("tinybird.datasource");
 
 /**
  * A column can be defined as just a type validator,
@@ -27,14 +29,30 @@ export interface ColumnDefinition<T extends AnyTypeValidator = AnyTypeValidator>
 export type SchemaDefinition = Record<string, AnyTypeValidator | ColumnDefinition>;
 
 /**
- * Token configuration for datasource access
+ * Inline token configuration for datasource access
  */
-export interface TokenConfig {
+export interface InlineTokenConfig {
   /** Token name */
   name: string;
   /** Permissions granted to this token */
-  permissions: readonly ("READ" | "APPEND")[];
+  permissions: readonly DatasourceTokenScope[];
 }
+
+/**
+ * Token reference with datasource-specific scope
+ */
+export interface DatasourceTokenReference {
+  /** The token definition */
+  token: TokenDefinition;
+  /** Scope for this datasource (READ or APPEND) */
+  scope: DatasourceTokenScope;
+}
+
+/**
+ * Token configuration for datasource access.
+ * Can be either an inline definition or a reference to a defined token.
+ */
+export type TokenConfig = InlineTokenConfig | DatasourceTokenReference;
 
 /**
  * Kafka ingestion configuration for a datasource
@@ -70,6 +88,11 @@ export interface DatasourceOptions<TSchema extends SchemaDefinition> {
    * Defaults to true.
    */
   jsonPaths?: boolean;
+  /**
+   * Forward query used to evolve a datasource with incompatible schema changes.
+   * This should be the SELECT clause only (no FROM/WHERE).
+   */
+  forwardQuery?: string;
   /** Kafka ingestion configuration */
   kafka?: KafkaConfig;
 }

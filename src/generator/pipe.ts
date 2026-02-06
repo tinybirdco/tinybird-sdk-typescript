@@ -9,6 +9,7 @@ import type {
   EndpointConfig,
   MaterializedConfig,
   CopyConfig,
+  PipeTokenConfig,
 } from "../schema/pipe.js";
 import { getEndpointConfig, getMaterializedConfig, getCopyConfig } from "../schema/pipe.js";
 
@@ -23,10 +24,10 @@ export interface GeneratedPipe {
 }
 
 /**
- * Check if SQL contains template parameters like {{...}}
+ * Check if SQL contains Jinja template syntax like {{...}} or {%...%}
  */
 function hasDynamicParameters(sql: string): boolean {
-  return /\{\{[^}]+\}\}/.test(sql);
+  return /\{\{[^}]+\}\}/.test(sql) || /\{%[^%]+%\}/.test(sql);
 }
 
 /**
@@ -111,6 +112,24 @@ function generateCopy(config: CopyConfig): string {
   }
 
   return parts.join("\n");
+}
+
+/**
+ * Generate TOKEN lines for a pipe
+ */
+function generateTokens(tokens?: readonly PipeTokenConfig[]): string[] {
+  if (!tokens || tokens.length === 0) {
+    return [];
+  }
+
+  return tokens.map((token) => {
+    if ("token" in token) {
+      // TokenReference
+      return `TOKEN ${token.token._name} ${token.scope}`;
+    }
+    // Inline config - pipes default to READ
+    return `TOKEN ${token.name} READ`;
+  });
 }
 
 /**
@@ -199,6 +218,13 @@ export function generatePipe(pipe: PipeDefinition): GeneratedPipe {
   if (copyConfig) {
     parts.push("");
     parts.push(generateCopy(copyConfig));
+  }
+
+  // Add tokens if present
+  const tokenLines = generateTokens(pipe.options.tokens);
+  if (tokenLines.length > 0) {
+    parts.push("");
+    parts.push(tokenLines.join("\n"));
   }
 
   return {

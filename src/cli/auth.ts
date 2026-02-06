@@ -8,6 +8,7 @@ import * as http from "node:http";
 import { spawn } from "node:child_process";
 import { platform } from "node:os";
 import { URL } from "node:url";
+import { tinybirdFetch } from "../api/fetcher.js";
 
 /**
  * Port for the local OAuth callback server
@@ -259,7 +260,7 @@ export async function exchangeCodeForTokens(
   const url = new URL("/api/cli-login", authHost);
   url.searchParams.set("code", code);
 
-  const response = await fetch(url.toString());
+  const response = await tinybirdFetch(url.toString());
 
   if (!response.ok) {
     const body = await response.text();

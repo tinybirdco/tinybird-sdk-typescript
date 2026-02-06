@@ -3,6 +3,8 @@
  * Uses the /v1/environments endpoints (Forward API)
  */
 
+import { tinybirdFetch } from "./fetcher.js";
+
 /**
  * Branch information from Tinybird API
  */
@@ -90,7 +92,7 @@ async function pollJob(
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const url = new URL(`/v0/jobs/${jobId}`, config.baseUrl);
 
-    const response = await fetch(url.toString(), {
+    const response = await tinybirdFetch(url.toString(), {
       method: "GET",
       headers: {
         Authorization: `Bearer ${config.token}`,
@@ -148,7 +150,7 @@ export async function createBranch(
   const url = new URL("/v1/environments", config.baseUrl);
   url.searchParams.set("name", name);
 
-  const response = await fetch(url.toString(), {
+  const response = await tinybirdFetch(url.toString(), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.token}`,
@@ -205,7 +207,7 @@ export async function listBranches(
 ): Promise<TinybirdBranch[]> {
   const url = new URL("/v1/environments", config.baseUrl);
 
-  const response = await fetch(url.toString(), {
+  const response = await tinybirdFetch(url.toString(), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${config.token}`,
@@ -240,7 +242,7 @@ export async function getBranch(
   const url = new URL(`/v0/environments/${encodeURIComponent(name)}`, config.baseUrl);
   url.searchParams.set("with_token", "true");
 
-  const response = await fetch(url.toString(), {
+  const response = await tinybirdFetch(url.toString(), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${config.token}`,
@@ -262,7 +264,10 @@ export async function getBranch(
 
 /**
  * Delete a branch
- * DELETE /v1/environments/{name}
+ * DELETE /v0/environments/{id}
+ *
+ * Note: The API requires the branch ID, not name. This function first
+ * fetches the branch to get its ID, then deletes it.
  *
  * @param config - API configuration
  * @param name - Branch name to delete
@@ -271,9 +276,12 @@ export async function deleteBranch(
   config: BranchApiConfig,
   name: string
 ): Promise<void> {
-  const url = new URL(`/v1/environments/${encodeURIComponent(name)}`, config.baseUrl);
+  // First get the branch to find its ID
+  const branch = await getBranch(config, name);
 
-  const response = await fetch(url.toString(), {
+  const url = new URL(`/v0/environments/${branch.id}`, config.baseUrl);
+
+  const response = await tinybirdFetch(url.toString(), {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${config.token}`,
@@ -331,4 +339,24 @@ export async function getOrCreateBranch(
     }
     throw error;
   }
+}
+
+/**
+ * Clear a branch by deleting and recreating it
+ *
+ * @param config - API configuration
+ * @param name - Branch name to clear
+ * @returns The recreated branch with token
+ */
+export async function clearBranch(
+  config: BranchApiConfig,
+  name: string
+): Promise<TinybirdBranch> {
+  // Delete the branch
+  await deleteBranch(config, name);
+
+  // Recreate the branch
+  const branch = await createBranch(config, name);
+
+  return branch;
 }
