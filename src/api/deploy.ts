@@ -69,8 +69,6 @@ export interface DeploymentDetails extends Deployment {
   deleted_data_connector_names?: string[];
   /** Deployment errors */
   errors?: Array<{ filename?: string; error: string }>;
-  /** Deployment feedback/warnings */
-  feedback?: Array<{ level: string; resource?: string; message: string }>;
 }
 
 /**
@@ -114,7 +112,30 @@ export interface DeploymentStatusResponse {
 /**
  * Callbacks for deploy progress updates
  */
+/**
+ * Resource changes from deployment
+ */
+export interface DeploymentChanges {
+  datasources: {
+    created: string[];
+    changed: string[];
+    deleted: string[];
+  };
+  pipes: {
+    created: string[];
+    changed: string[];
+    deleted: string[];
+  };
+  connections: {
+    created: string[];
+    changed: string[];
+    deleted: string[];
+  };
+}
+
 export interface DeployCallbacks {
+  /** Called when deployment is created and changes are available */
+  onChanges?: (changes: DeploymentChanges) => void;
   /** Called when waiting for deployment to be ready */
   onWaitingForReady?: () => void;
   /** Called when deployment is ready */
@@ -357,9 +378,31 @@ export async function deployToMain(
   }
 
   const deploymentId = body.deployment.id;
+  const deploymentDetails = body.deployment;
 
   if (debug) {
     console.log(`[debug] Deployment created with ID: ${deploymentId}`);
+  }
+
+  // Notify about changes immediately after deployment is created
+  if (options?.callbacks?.onChanges) {
+    options.callbacks.onChanges({
+      datasources: {
+        created: deploymentDetails.new_datasource_names ?? [],
+        changed: deploymentDetails.changed_datasource_names ?? [],
+        deleted: deploymentDetails.deleted_datasource_names ?? [],
+      },
+      pipes: {
+        created: deploymentDetails.new_pipe_names ?? [],
+        changed: deploymentDetails.changed_pipe_names ?? [],
+        deleted: deploymentDetails.deleted_pipe_names ?? [],
+      },
+      connections: {
+        created: deploymentDetails.new_data_connector_names ?? [],
+        changed: deploymentDetails.changed_data_connector_names ?? [],
+        deleted: deploymentDetails.deleted_data_connector_names ?? [],
+      },
+    });
   }
 
   // Step 2: Poll until deployment is ready
@@ -462,9 +505,6 @@ export async function deployToMain(
   }
 
   options?.callbacks?.onDeploymentLive?.(deploymentId);
-
-  // Extract resource changes from deployment details
-  const deploymentDetails = body.deployment as DeploymentDetails;
 
   return {
     success: true,

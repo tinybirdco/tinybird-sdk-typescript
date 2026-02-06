@@ -282,6 +282,42 @@ function createCli(): Command {
         dryRun: options.dryRun,
         check: options.check,
         callbacks: {
+          onChanges: (deployChanges) => {
+            // Show changes table immediately after deployment is created
+            const changes: ResourceChange[] = [];
+
+            for (const name of deployChanges.datasources.created) {
+              changes.push({ status: "new", name, type: "datasource" });
+            }
+            for (const name of deployChanges.datasources.changed) {
+              changes.push({ status: "modified", name, type: "datasource" });
+            }
+            for (const name of deployChanges.datasources.deleted) {
+              changes.push({ status: "deleted", name, type: "datasource" });
+            }
+
+            for (const name of deployChanges.pipes.created) {
+              changes.push({ status: "new", name, type: "pipe" });
+            }
+            for (const name of deployChanges.pipes.changed) {
+              changes.push({ status: "modified", name, type: "pipe" });
+            }
+            for (const name of deployChanges.pipes.deleted) {
+              changes.push({ status: "deleted", name, type: "pipe" });
+            }
+
+            for (const name of deployChanges.connections.created) {
+              changes.push({ status: "new", name, type: "connection" });
+            }
+            for (const name of deployChanges.connections.changed) {
+              changes.push({ status: "modified", name, type: "connection" });
+            }
+            for (const name of deployChanges.connections.deleted) {
+              changes.push({ status: "deleted", name, type: "connection" });
+            }
+
+            output.showChangesTable(changes);
+          },
           onWaitingForReady: () => output.showWaitingForDeployment(),
           onDeploymentReady: () => output.showDeploymentReady(),
           onDeploymentLive: (id) => output.showDeploymentLive(id),
@@ -327,34 +363,7 @@ function createCli(): Command {
         if (deploy.result === "no_changes") {
           output.showNoChanges();
         } else {
-          // Collect all changes for table display
-          const changes: ResourceChange[] = [];
-
-          if (deploy.datasources) {
-            for (const name of deploy.datasources.created) {
-              changes.push({ status: "new", name, type: "datasource" });
-            }
-            for (const name of deploy.datasources.changed) {
-              changes.push({ status: "modified", name, type: "datasource" });
-            }
-            for (const name of deploy.datasources.deleted) {
-              changes.push({ status: "deleted", name, type: "datasource" });
-            }
-          }
-
-          if (deploy.pipes) {
-            for (const name of deploy.pipes.created) {
-              changes.push({ status: "new", name, type: "pipe" });
-            }
-            for (const name of deploy.pipes.changed) {
-              changes.push({ status: "modified", name, type: "pipe" });
-            }
-            for (const name of deploy.pipes.deleted) {
-              changes.push({ status: "deleted", name, type: "pipe" });
-            }
-          }
-
-          output.showChangesTable(changes);
+          // Changes table was already shown via onChanges callback
           output.showDeploySuccess(result.durationMs);
         }
       }

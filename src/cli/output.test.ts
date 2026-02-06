@@ -81,7 +81,7 @@ describe("output utilities", () => {
       ]);
 
       // Check that table header and data were logged
-      const allCalls = consoleLogSpy.mock.calls.map((c) => c[0]).join("\n");
+      const allCalls = consoleLogSpy.mock.calls.map((c: unknown[]) => c[0]).join("\n");
       expect(allCalls).toContain("Changes to be deployed");
       expect(allCalls).toContain("status");
       expect(allCalls).toContain("name");
@@ -99,7 +99,7 @@ describe("output utilities", () => {
     it("shows table borders", () => {
       showChangesTable([{ status: "new", name: "test", type: "pipe" }]);
 
-      const allCalls = consoleLogSpy.mock.calls.map((c) => c[0]).join("\n");
+      const allCalls = consoleLogSpy.mock.calls.map((c: unknown[]) => c[0]).join("\n");
       expect(allCalls).toContain("┌");
       expect(allCalls).toContain("┐");
       expect(allCalls).toContain("├");
