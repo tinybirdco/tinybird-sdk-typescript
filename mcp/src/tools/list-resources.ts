@@ -10,21 +10,26 @@ import type { ResolvedConfig } from "../config.js";
 type ResourceType = "datasource" | "pipe" | "connection";
 
 interface Resource {
+  id: string;
   name: string;
   type: ResourceType;
-  definition: string;
+  description?: string;
 }
 
 interface DatasourcesResponse {
   datasources: Array<{
+    id: string;
     name: string;
+    description?: string;
     [key: string]: unknown;
   }>;
 }
 
 interface PipesResponse {
   pipes: Array<{
+    id: string;
     name: string;
+    description?: string;
     [key: string]: unknown;
   }>;
 }
@@ -38,32 +43,6 @@ interface ConnectorsResponse {
   }>;
 }
 
-interface DatafileResponse {
-  text?: string;
-  content?: string;
-}
-
-async function fetchDatafile(
-  config: ResolvedConfig,
-  type: "datasources" | "pipes" | "connections",
-  name: string
-): Promise<string> {
-  const url = `${config.baseUrl}/v0/${type}/${encodeURIComponent(name)}?format=datafile`;
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${config.token}`,
-    },
-  });
-
-  if (!response.ok) {
-    return `# Error fetching ${type}/${name}: ${response.status} ${response.statusText}`;
-  }
-
-  const data = (await response.json()) as DatafileResponse;
-  return data.text ?? data.content ?? "";
-}
-
 /**
  * Register the list_resources tool
  */
@@ -73,7 +52,7 @@ export function registerListResourcesTool(
 ): void {
   server.tool(
     "list_resources",
-    "List all resources in the workspace. Returns resource names and their full datafile definitions. Filter by type: 'datasource', 'pipe', or 'connection'.",
+    "List all resources in the workspace. Returns resource id, name, description, and type. Filter by type: 'datasource', 'pipe', or 'connection'. Use get_resource to fetch full datafile content.",
     {
       type: z
         .enum(["datasource", "pipe", "connection"])
@@ -99,15 +78,11 @@ export function registerListResourcesTool(
         if (response.ok) {
           const data = (await response.json()) as DatasourcesResponse;
           for (const ds of data.datasources) {
-            const definition = await fetchDatafile(
-              config,
-              "datasources",
-              ds.name
-            );
             resources.push({
+              id: ds.id,
               name: ds.name,
               type: "datasource",
-              definition,
+              description: ds.description,
             });
           }
         }
@@ -126,11 +101,11 @@ export function registerListResourcesTool(
         if (response.ok) {
           const data = (await response.json()) as PipesResponse;
           for (const pipe of data.pipes) {
-            const definition = await fetchDatafile(config, "pipes", pipe.name);
             resources.push({
+              id: pipe.id,
               name: pipe.name,
               type: "pipe",
-              definition,
+              description: pipe.description,
             });
           }
         }
@@ -149,15 +124,10 @@ export function registerListResourcesTool(
         if (response.ok) {
           const data = (await response.json()) as ConnectorsResponse;
           for (const conn of data.connectors) {
-            const definition = await fetchDatafile(
-              config,
-              "connections",
-              conn.name
-            );
             resources.push({
+              id: conn.id,
               name: conn.name,
               type: "connection",
-              definition,
             });
           }
         }

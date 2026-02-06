@@ -138,24 +138,47 @@ Execute SQL queries against your Tinybird workspace.
 <details>
 <summary><code>list_resources</code></summary>
 
-List all resources in your Tinybird workspace with their full datafile definitions.
+List all resources in your Tinybird workspace.
 
 **When to use:**
 - Explore workspace structure
-- Understand existing datasources and pipes
-- Review resource definitions
-- Audit workspace configuration
+- Get an overview of datasources, pipes, and connections
+- Find resource names before fetching full definitions
 
 **Input:**
 - `type` (optional) - Filter by resource type: `'datasource'`, `'pipe'`, or `'connection'`
 
 **Output:**
-- JSON array with each resource's name, type, and full datafile definition
+- JSON array with each resource's id, name, type, and description
 
 **Example prompts:**
 - "Tinybird, show me all resources in my workspace"
 - "Tinybird, list all my datasources"
 - "Tinybird, what pipes do I have?"
+
+</details>
+
+<details>
+<summary><code>get_resource</code></summary>
+
+Get the full datafile content of a specific resource.
+
+**When to use:**
+- View the complete definition of a datasource, pipe, or connection
+- Understand resource schemas and configurations
+- Review SQL transformations in pipes
+
+**Input:**
+- `name` (required) - The name of the resource to fetch
+- `type` (required) - The resource type: `'datasource'`, `'pipe'`, or `'connection'`
+
+**Output:**
+- Raw datafile content as text
+
+**Example prompts:**
+- "Tinybird, show me the definition of my events datasource"
+- "Tinybird, get the full content of the analytics_api pipe"
+- "Tinybird, what's the schema of my users datasource?"
 
 </details>
 
