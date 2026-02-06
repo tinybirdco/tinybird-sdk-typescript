@@ -9,7 +9,7 @@
 ### Requirements
 
 - [Node.js](https://nodejs.org/) v20.0.0 or newer
-- A Tinybird config file: either `tinybird.json` (from `npx @tinybirdco/sdk init`) or `.tinyb` (from `tb login`)
+- A Tinybird API token
 
 Add the following config to your MCP client:
 
@@ -19,14 +19,21 @@ Add the following config to your MCP client:
     "tinybird": {
       "command": "npx",
       "args": ["-y", "@tinybirdco/devtools-mcp@latest"],
-      "cwd": "/path/to/your/project"
+      "env": {
+        "TINYBIRD_TOKEN": "p.your-token-here"
+      }
     }
   }
 }
 ```
 
-> [!NOTE]
-> The `cwd` must point to your project root where your Tinybird config file is located. The server looks for `tinybird.json` (created by `npx @tinybirdco/sdk init`) or `.tinyb` (created by `tb login`). These files contain your Tinybird API token and base URL for authentication.
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `TINYBIRD_TOKEN` | Tinybird API token | Required |
+| `TINYBIRD_URL` | Tinybird API base URL | `https://api.tinybird.co` |
+
+> [!TIP]
+> For US region, set `TINYBIRD_URL` to `https://api.us-east.tinybird.co`.
 
 ### MCP Client Configuration
 
@@ -36,10 +43,8 @@ Add the following config to your MCP client:
 Use the Claude Code CLI to add the Tinybird DevTools MCP server:
 
 ```bash
-claude mcp add tinybird -- npx -y @tinybirdco/devtools-mcp@latest
+claude mcp add tinybird -e TINYBIRD_TOKEN=p.your-token-here -- npx -y @tinybirdco/devtools-mcp@latest
 ```
-
-Alternatively, manually configure Claude by editing your MCP settings file and adding the configuration shown above.
 
 </details>
 
@@ -54,7 +59,9 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
     "tinybird": {
       "command": "npx",
       "args": ["-y", "@tinybirdco/devtools-mcp@latest"],
-      "cwd": "/path/to/your/project"
+      "env": {
+        "TINYBIRD_TOKEN": "p.your-token-here"
+      }
     }
   }
 }
@@ -72,10 +79,8 @@ Go to `Cursor Settings` → `MCP` → `New MCP Server`. Use the config provided 
 <details>
 <summary>Codex</summary>
 
-**Using Codex CLI:**
-
 ```bash
-codex mcp add tinybird -- npx -y @tinybirdco/devtools-mcp@latest
+codex mcp add tinybird -e TINYBIRD_TOKEN=p.your-token-here -- npx -y @tinybirdco/devtools-mcp@latest
 ```
 
 </details>
@@ -83,10 +88,8 @@ codex mcp add tinybird -- npx -y @tinybirdco/devtools-mcp@latest
 <details>
 <summary>VS Code / Copilot</summary>
 
-**Using VS Code CLI:**
-
 ```bash
-code --add-mcp '{"name":"tinybird","command":"npx","args":["-y","@tinybirdco/devtools-mcp@latest"]}'
+code --add-mcp '{"name":"tinybird","command":"npx","args":["-y","@tinybirdco/devtools-mcp@latest"],"env":{"TINYBIRD_TOKEN":"p.your-token-here"}}'
 ```
 
 </details>
@@ -258,11 +261,26 @@ Preview data from a Kafka topic to understand its schema and content.
 
 ## Configuration
 
-The server supports two configuration file formats:
+The server resolves configuration in the following priority order:
 
-### Option 1: `tinybird.json` (TypeScript SDK)
+### 1. Environment Variables (Recommended)
 
-Created by `npx @tinybirdco/sdk init`:
+Set `TINYBIRD_TOKEN` and optionally `TINYBIRD_URL`:
+
+```json
+{
+  "env": {
+    "TINYBIRD_TOKEN": "p.your-token-here",
+    "TINYBIRD_URL": "https://api.us-east.tinybird.co"
+  }
+}
+```
+
+### 2. Config Files (Fallback)
+
+If environment variables are not set, the server looks for config files:
+
+**`tinybird.json`** (created by `npx @tinybirdco/sdk init`):
 
 ```json
 {
@@ -271,16 +289,7 @@ Created by `npx @tinybirdco/sdk init`:
 }
 ```
 
-Environment variables in `${VAR}` format are automatically resolved from your environment or `.env` files.
-
-| Field | Description | Default |
-|-------|-------------|---------|
-| `token` | Tinybird API token (supports env var interpolation) | Required |
-| `baseUrl` | Tinybird API base URL | `https://api.tinybird.co` |
-
-### Option 2: `.tinyb` (Tinybird CLI)
-
-Created by `tb login`:
+**`.tinyb`** (created by `tb login`):
 
 ```json
 {
@@ -289,7 +298,7 @@ Created by `tb login`:
 }
 ```
 
-The server will search for `tinybird.json` first, then `.tinyb` if not found.
+Environment variables in `${VAR}` format are automatically resolved from your environment or `.env` files.
 
 ## Local Development
 
@@ -308,7 +317,9 @@ To run the MCP server locally for development:
        "tinybird": {
          "command": "node",
          "args": ["/absolute/path/to/mcp/dist/index.js"],
-         "cwd": "/path/to/project/with/tinybird.json"
+         "env": {
+           "TINYBIRD_TOKEN": "p.your-token-here"
+         }
        }
      }
    }

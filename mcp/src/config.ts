@@ -190,14 +190,31 @@ function loadTinybConfigFile(configPath: string): ResolvedConfig {
 }
 
 /**
- * Load and resolve the configuration from tinybird.json or .tinyb
+ * Load and resolve the configuration
+ *
+ * Priority order:
+ * 1. Environment variables (TINYBIRD_TOKEN, TINYBIRD_URL)
+ * 2. tinybird.json file
+ * 3. .tinyb file
  */
 export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
+  // First, check for direct environment variables
+  const envToken = process.env.TINYBIRD_TOKEN;
+  if (envToken) {
+    const envBaseUrl = process.env.TINYBIRD_URL || DEFAULT_BASE_URL;
+    return {
+      token: envToken,
+      baseUrl: envBaseUrl,
+    };
+  }
+
+  // Fall back to config file lookup
   const configResult = findConfigFile(cwd);
 
   if (!configResult) {
     throw new Error(
-      `Could not find tinybird.json or .tinyb. Run 'npx @tinybirdco/sdk init' or 'tb login' to create one.`
+      `TINYBIRD_TOKEN environment variable not set and could not find tinybird.json or .tinyb. ` +
+      `Either set TINYBIRD_TOKEN or run 'npx @tinybirdco/sdk init' / 'tb login' to create a config file.`
     );
   }
 
