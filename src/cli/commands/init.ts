@@ -728,6 +728,11 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         modified = true;
       }
 
+      if (!packageJson.scripts["tinybird:preview"]) {
+        packageJson.scripts["tinybird:preview"] = "tinybird preview";
+        modified = true;
+      }
+
       if (modified) {
         fs.writeFileSync(
           packageJsonPath,
