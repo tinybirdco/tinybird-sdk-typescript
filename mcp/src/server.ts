@@ -11,6 +11,7 @@ import { registerPreviewKafkaTopicTool } from "./tools/preview-kafka-topic.js";
 import { registerListResourcesTool } from "./tools/list-resources.js";
 import { registerGetResourceTool } from "./tools/get-resource.js";
 import { registerListBranchesTool } from "./tools/list-branches.js";
+import pkg from "../package.json" with { type: "json" }
 
 /**
  * Create and configure the MCP server
@@ -21,8 +22,8 @@ import { registerListBranchesTool } from "./tools/list-branches.js";
  */
 export function createMcpServer(): McpServer {
   const server = new McpServer({
-    name: "tinybird-devtools",
-    version: "0.0.1",
+    name: "tinybird-devtools-mcp",
+    version: pkg.version,
   });
 
   // Load config from tinybird.json
