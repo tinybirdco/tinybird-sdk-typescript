@@ -119,12 +119,7 @@ export const tinybird = createTinybirdClient({
  */
 function generateGithubCiWorkflow(workingDirectory?: string): string {
   const pathPrefix = workingDirectory ? `${workingDirectory}/` : "";
-  const defaultsBlock = workingDirectory
-    ? `
-    defaults:
-      run:
-        working-directory: ${workingDirectory}`
-    : "";
+  const workDir = workingDirectory ?? ".";
   const cachePathOption = workingDirectory
     ? `
           cache-dependency-path: ${workingDirectory}/pnpm-lock.yaml`
@@ -141,9 +136,16 @@ on:
       - "${pathPrefix}**/*.datasource"
       - "${pathPrefix}**/*.pipe"
 
+env:
+  TINYBIRD_HOST: \${{ secrets.TINYBIRD_HOST }}
+  TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
+
 jobs:
   tinybird:
-    runs-on: ubuntu-latest${defaultsBlock}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "${workDir}"
     outputs:
       branch_name: \${{ steps.preview.outputs.branch_name }}
       branch_id: \${{ steps.preview.outputs.branch_id }}
@@ -170,8 +172,6 @@ jobs:
           echo "::add-mask::$token"
           echo "branch_token=$token" >> $GITHUB_OUTPUT
           echo "$result" | jq -r '"branch_url=" + .branch.url' >> $GITHUB_OUTPUT
-        env:
-          TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
 `;
 }
 
@@ -181,12 +181,7 @@ jobs:
  */
 function generateGithubCdWorkflow(workingDirectory?: string): string {
   const pathPrefix = workingDirectory ? `${workingDirectory}/` : "";
-  const defaultsBlock = workingDirectory
-    ? `
-    defaults:
-      run:
-        working-directory: ${workingDirectory}`
-    : "";
+  const workDir = workingDirectory ?? ".";
   const cachePathOption = workingDirectory
     ? `
           cache-dependency-path: ${workingDirectory}/pnpm-lock.yaml`
@@ -205,9 +200,16 @@ on:
       - "${pathPrefix}**/*.datasource"
       - "${pathPrefix}**/*.pipe"
 
+env:
+  TINYBIRD_HOST: \${{ secrets.TINYBIRD_HOST }}
+  TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
+
 jobs:
   tinybird:
-    runs-on: ubuntu-latest${defaultsBlock}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "${workDir}"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -220,8 +222,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run tinybird:build
       - run: pnpm run tinybird:deploy
-        env:
-          TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
 `;
 }
 
@@ -260,6 +260,7 @@ tinybird_ci:
     reports:
       dotenv: tinybird.env
   variables:
+    TINYBIRD_HOST: \${TINYBIRD_HOST}
     TINYBIRD_TOKEN: \${TINYBIRD_TOKEN}
 `;
 }
@@ -292,6 +293,7 @@ tinybird_cd:
     - ${cdCommand}pnpm run tinybird:build
     - ${cdCommand}pnpm run tinybird:deploy
   variables:
+    TINYBIRD_HOST: \${TINYBIRD_HOST}
     TINYBIRD_TOKEN: \${TINYBIRD_TOKEN}
 `;
 }
