@@ -10,6 +10,12 @@ import {
   showBuildSuccess,
   showBuildFailure,
   showNoChanges,
+  showWaitingForDeployment,
+  showDeploymentReady,
+  showDeploymentLive,
+  showValidatingDeployment,
+  showDeploySuccess,
+  showDeployFailure,
 } from "./output.js";
 
 describe("output utilities", () => {
@@ -139,6 +145,67 @@ describe("output utilities", () => {
     it("shows no changes message", () => {
       showNoChanges();
       expect(consoleLogSpy).toHaveBeenCalledWith("No changes. Build skipped.");
+    });
+  });
+
+  describe("showWaitingForDeployment", () => {
+    it("shows waiting for deployment message", () => {
+      showWaitingForDeployment();
+      expect(consoleLogSpy).toHaveBeenCalledWith("» Waiting for deployment...");
+    });
+  });
+
+  describe("showDeploymentReady", () => {
+    it("shows deployment ready message", () => {
+      showDeploymentReady();
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("✓");
+      expect(call).toContain("Deployment is ready");
+    });
+  });
+
+  describe("showDeploymentLive", () => {
+    it("shows deployment live message with ID", () => {
+      showDeploymentLive("abc123");
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("✓");
+      expect(call).toContain("Deployment #abc123 is live!");
+    });
+  });
+
+  describe("showValidatingDeployment", () => {
+    it("shows validating deployment message", () => {
+      showValidatingDeployment();
+      expect(consoleLogSpy).toHaveBeenCalledWith("» Validating deployment...");
+    });
+  });
+
+  describe("showDeploySuccess", () => {
+    it("shows deploy success with duration in ms", () => {
+      showDeploySuccess(500);
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("✓");
+      expect(call).toContain("Deploy completed in 500ms");
+    });
+
+    it("shows deploy success with duration in seconds", () => {
+      showDeploySuccess(2500);
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("Deploy completed in 2.5s");
+    });
+  });
+
+  describe("showDeployFailure", () => {
+    it("shows deploy failure", () => {
+      showDeployFailure();
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      const call = consoleErrorSpy.mock.calls[0][0];
+      expect(call).toContain("✗");
+      expect(call).toContain("Deploy failed");
     });
   });
 });

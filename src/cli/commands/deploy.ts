@@ -4,7 +4,7 @@
 
 import { loadConfig, type ResolvedConfig } from "../config.js";
 import { buildFromInclude, type BuildFromIncludeResult } from "../../generator/index.js";
-import { deployToMain } from "../../api/deploy.js";
+import { deployToMain, type DeployCallbacks } from "../../api/deploy.js";
 import type { BuildApiResult } from "../../api/build.js";
 
 /**
@@ -17,6 +17,8 @@ export interface DeployCommandOptions {
   dryRun?: boolean;
   /** Validate deploy with Tinybird API without applying */
   check?: boolean;
+  /** Callbacks for deploy progress */
+  callbacks?: DeployCallbacks;
 }
 
 /**
@@ -101,6 +103,7 @@ export async function runDeploy(options: DeployCommandOptions = {}): Promise<Dep
       buildResult.resources,
       {
         check: options.check,
+        callbacks: options.callbacks,
       }
     );
   } catch (error) {

@@ -152,6 +152,48 @@ export function showNoChanges(): void {
 }
 
 /**
+ * Show waiting for deployment message
+ */
+export function showWaitingForDeployment(): void {
+  info("» Waiting for deployment...");
+}
+
+/**
+ * Show deployment ready message
+ */
+export function showDeploymentReady(): void {
+  success("✓ Deployment is ready");
+}
+
+/**
+ * Show deployment live message
+ */
+export function showDeploymentLive(deploymentId: string): void {
+  success(`✓ Deployment #${deploymentId} is live!`);
+}
+
+/**
+ * Show validating deployment message
+ */
+export function showValidatingDeployment(): void {
+  info("» Validating deployment...");
+}
+
+/**
+ * Show final deploy success message
+ */
+export function showDeploySuccess(durationMs: number): void {
+  success(`\n✓ Deploy completed in ${formatDuration(durationMs)}`);
+}
+
+/**
+ * Show final deploy failure message
+ */
+export function showDeployFailure(): void {
+  error(`\n✗ Deploy failed`);
+}
+
+/**
  * Output object containing all output functions
  */
 export const output = {
@@ -170,4 +212,10 @@ export const output = {
   showBuildSuccess,
   showBuildFailure,
   showNoChanges,
+  showWaitingForDeployment,
+  showDeploymentReady,
+  showDeploymentLive,
+  showValidatingDeployment,
+  showDeploySuccess,
+  showDeployFailure,
 };

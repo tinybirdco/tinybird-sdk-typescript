@@ -279,6 +279,12 @@ function createCli(): Command {
       const result = await runDeploy({
         dryRun: options.dryRun,
         check: options.check,
+        callbacks: {
+          onWaitingForReady: () => output.showWaitingForDeployment(),
+          onDeploymentReady: () => output.showDeploymentReady(),
+          onDeploymentLive: (id) => output.showDeploymentLive(id),
+          onValidating: () => output.showValidatingDeployment(),
+        },
       });
 
       const { build, deploy } = result;
@@ -290,7 +296,7 @@ function createCli(): Command {
         } else if (result.error) {
           output.error(result.error);
         }
-        output.showBuildFailure();
+        output.showDeployFailure();
         process.exit(1);
       }
 
@@ -311,10 +317,10 @@ function createCli(): Command {
             console.log(pipe.content);
           });
         }
-        output.showBuildSuccess(result.durationMs);
+        output.showDeploySuccess(result.durationMs);
       } else if (options.check) {
         console.log("\n[Check] Resources validated with Tinybird API");
-        output.showBuildSuccess(result.durationMs);
+        output.showDeploySuccess(result.durationMs);
       } else if (deploy) {
         if (deploy.result === "no_changes") {
           output.showNoChanges();
@@ -345,7 +351,7 @@ function createCli(): Command {
             }
           }
 
-          output.showBuildSuccess(result.durationMs);
+          output.showDeploySuccess(result.durationMs);
         }
       }
     });
