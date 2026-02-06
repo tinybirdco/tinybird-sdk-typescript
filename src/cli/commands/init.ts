@@ -137,7 +137,6 @@ on:
       - "${pathPrefix}**/*.pipe"
 
 env:
-  TINYBIRD_HOST: \${{ secrets.TINYBIRD_HOST }}
   TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
 
 jobs:
@@ -201,7 +200,6 @@ on:
       - "${pathPrefix}**/*.pipe"
 
 env:
-  TINYBIRD_HOST: \${{ secrets.TINYBIRD_HOST }}
   TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
 
 jobs:
@@ -260,7 +258,6 @@ tinybird_ci:
     reports:
       dotenv: tinybird.env
   variables:
-    TINYBIRD_HOST: \${TINYBIRD_HOST}
     TINYBIRD_TOKEN: \${TINYBIRD_TOKEN}
 `;
 }
@@ -293,7 +290,6 @@ tinybird_cd:
     - ${cdCommand}pnpm run tinybird:build
     - ${cdCommand}pnpm run tinybird:deploy
   variables:
-    TINYBIRD_HOST: \${TINYBIRD_HOST}
     TINYBIRD_TOKEN: \${TINYBIRD_TOKEN}
 `;
 }
