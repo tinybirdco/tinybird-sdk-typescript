@@ -24,6 +24,7 @@ import {
   runBranchStatus,
   runBranchDelete,
 } from "./commands/branch.js";
+import { runClear } from "./commands/clear.js";
 import {
   detectPackageManagerInstallCmd,
   detectPackageManagerRunCmd,
@@ -531,6 +532,61 @@ function createCli(): Command {
     });
 
   program.addCommand(branchCommand);
+
+  // Clear command
+  program
+    .command("clear")
+    .description("Clear the workspace or branch by deleting and recreating it")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .option("--local", "Use local Tinybird container")
+    .option("--branch", "Use Tinybird cloud with branches")
+    .action(async (options) => {
+      // Determine devMode override
+      let devModeOverride: DevMode | undefined;
+      if (options.local) {
+        devModeOverride = "local";
+      } else if (options.branch) {
+        devModeOverride = "branch";
+      }
+
+      const modeLabel = devModeOverride === "local" ? "local workspace" : "branch";
+
+      // Confirmation prompt unless --yes is passed
+      if (!options.yes) {
+        const readline = await import("readline");
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+
+        const answer = await new Promise<string>((resolve) => {
+          rl.question(
+            `Are you sure you want to clear the ${modeLabel}? This will delete all resources. [y/N]: `,
+            (ans) => {
+              rl.close();
+              resolve(ans);
+            }
+          );
+        });
+
+        if (answer.toLowerCase() !== "y" && answer.toLowerCase() !== "yes") {
+          console.log("Aborted.");
+          return;
+        }
+      }
+
+      console.log(`Clearing ${modeLabel}...`);
+
+      const result = await runClear({ devModeOverride });
+
+      if (!result.success) {
+        console.error(`Error: ${result.error}`);
+        process.exit(1);
+      }
+
+      const typeLabel = result.isLocal ? "Workspace" : "Branch";
+      console.log(`${typeLabel} '${result.name}' cleared successfully.`);
+    });
 
   return program;
 }

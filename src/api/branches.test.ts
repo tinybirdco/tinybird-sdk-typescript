@@ -7,6 +7,7 @@ import {
   deleteBranch,
   branchExists,
   getOrCreateBranch,
+  clearBranch,
   type BranchApiConfig,
 } from "./branches.js";
 
@@ -380,6 +381,75 @@ describe("Branch API client", () => {
       const result = await getOrCreateBranch(config, "new-feature");
       expect(result).toEqual({ ...newBranch, wasCreated: true });
       expect(mockFetch).toHaveBeenCalledTimes(4);
+    });
+  });
+
+  describe("clearBranch", () => {
+    it("clears a branch by deleting and recreating it", async () => {
+      const newBranch = {
+        id: "branch-new",
+        name: "my-feature",
+        token: "p.new-token",
+        created_at: "2024-01-02T00:00:00Z",
+      };
+
+      // 1. DELETE branch
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+      });
+
+      // 2. POST to /v1/environments returns a job
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          job: { id: "job-789", status: "waiting" },
+          workspace: { id: "ws-789" },
+        }),
+      });
+
+      // 3. Poll job - done
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: "job-789", status: "done" }),
+      });
+
+      // 4. Get branch with token
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(newBranch),
+      });
+
+      const result = await clearBranch(config, "my-feature");
+
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+
+      // Verify delete was called
+      const [deleteUrl, deleteInit] = mockFetch.mock.calls[0];
+      const deleteParsed = expectFromParam(deleteUrl);
+      expect(deleteParsed.pathname).toBe("/v1/environments/my-feature");
+      expect(deleteInit.method).toBe("DELETE");
+
+      // Verify create was called
+      const [createUrl, createInit] = mockFetch.mock.calls[1];
+      const createParsed = expectFromParam(createUrl);
+      expect(createParsed.pathname).toBe("/v1/environments");
+      expect(createParsed.searchParams.get("name")).toBe("my-feature");
+      expect(createInit.method).toBe("POST");
+
+      expect(result).toEqual(newBranch);
+    });
+
+    it("throws BranchApiError when branch does not exist", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+        text: () => Promise.resolve("Branch not found"),
+      });
+
+      await expect(clearBranch(config, "nonexistent")).rejects.toThrow(
+        BranchApiError
+      );
     });
   });
 });

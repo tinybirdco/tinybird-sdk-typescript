@@ -334,3 +334,23 @@ export async function getOrCreateBranch(
     throw error;
   }
 }
+
+/**
+ * Clear a branch by deleting and recreating it
+ *
+ * @param config - API configuration
+ * @param name - Branch name to clear
+ * @returns The recreated branch with token
+ */
+export async function clearBranch(
+  config: BranchApiConfig,
+  name: string
+): Promise<TinybirdBranch> {
+  // Delete the branch
+  await deleteBranch(config, name);
+
+  // Recreate the branch
+  const branch = await createBranch(config, name);
+
+  return branch;
+}
