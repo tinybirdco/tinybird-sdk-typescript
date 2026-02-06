@@ -7,8 +7,7 @@
 ### Requirements
 
 - [Node.js](https://nodejs.org/) v20.0.0 or newer
-- A `tinybird.json` config file in your project (created by `npx @tinybirdco/sdk init`)
-- Valid Tinybird API token
+- A Tinybird config file: either `tinybird.json` (from `npx @tinybirdco/sdk init`) or `.tinyb` (from `tb login`)
 
 Add the following config to your MCP client:
 
@@ -25,7 +24,7 @@ Add the following config to your MCP client:
 ```
 
 > [!NOTE]
-> The `cwd` must point to a directory containing your `tinybird.json` config file.
+> The `cwd` must point to your project root where your Tinybird config file is located. The server looks for `tinybird.json` (created by `npx @tinybirdco/sdk init`) or `.tinyb` (created by `tb login`). These files contain your Tinybird API token and base URL for authentication.
 
 ### MCP Client Configuration
 
@@ -228,7 +227,11 @@ Preview data from a Kafka topic to understand its schema and content.
 
 ## Configuration
 
-The server reads configuration from `tinybird.json` in your project:
+The server supports two configuration file formats:
+
+### Option 1: `tinybird.json` (TypeScript SDK)
+
+Created by `npx @tinybirdco/sdk init`:
 
 ```json
 {
@@ -239,12 +242,23 @@ The server reads configuration from `tinybird.json` in your project:
 
 Environment variables in `${VAR}` format are automatically resolved from your environment or `.env` files.
 
-### Configuration Options
-
 | Field | Description | Default |
 |-------|-------------|---------|
 | `token` | Tinybird API token (supports env var interpolation) | Required |
 | `baseUrl` | Tinybird API base URL | `https://api.tinybird.co` |
+
+### Option 2: `.tinyb` (Tinybird CLI)
+
+Created by `tb login`:
+
+```json
+{
+  "host": "https://api.tinybird.co",
+  "token": "p.eyJ..."
+}
+```
+
+The server will search for `tinybird.json` first, then `.tinyb` if not found.
 
 ## Local Development
 
