@@ -222,11 +222,17 @@ function buildProjectClient<
 
   const getClient = async (): Promise<TinybirdClient> => {
     if (!_client) {
-      // Dynamic import to avoid circular dependencies
+      // Dynamic imports to avoid circular dependencies
       const { createClient } = await import("../client/base.js");
+      const { resolveToken } = await import("../client/preview.js");
+
+      // Resolve the token (handles preview environment detection)
+      const baseUrl = options?.baseUrl ?? process.env.TINYBIRD_URL ?? "https://api.tinybird.co";
+      const token = await resolveToken({ baseUrl, token: options?.token });
+
       _client = createClient({
-        baseUrl: options?.baseUrl ?? process.env.TINYBIRD_URL ?? "https://api.tinybird.co",
-        token: options?.token ?? process.env.TINYBIRD_TOKEN!,
+        baseUrl,
+        token,
         devMode: process.env.NODE_ENV === "development",
       });
     }
