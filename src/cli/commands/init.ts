@@ -131,10 +131,7 @@ on:
   pull_request:
     paths:
       - "${pathPrefix}tinybird.json"
-      - "${pathPrefix}src/tinybird/**"
-      - "${pathPrefix}tinybird/**"
-      - "${pathPrefix}**/*.datasource"
-      - "${pathPrefix}**/*.pipe"
+      - "${pathPrefix}**/*.ts"
 
 env:
   TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
@@ -180,10 +177,7 @@ on:
       - main
     paths:
       - "${pathPrefix}tinybird.json"
-      - "${pathPrefix}src/tinybird/**"
-      - "${pathPrefix}tinybird/**"
-      - "${pathPrefix}**/*.datasource"
-      - "${pathPrefix}**/*.pipe"
+      - "${pathPrefix}**/*.ts"
 
 env:
   TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
@@ -204,7 +198,6 @@ jobs:
           node-version: "22"
           cache: "pnpm"${cachePathOption}
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run tinybird:build
       - run: pnpm run tinybird:deploy
 `;
 }
@@ -226,10 +219,7 @@ tinybird_ci:
   rules:
     - changes:
         - ${pathPrefix}tinybird.json
-        - ${pathPrefix}src/tinybird/**
-        - ${pathPrefix}tinybird/**
-        - ${pathPrefix}**/*.datasource
-        - ${pathPrefix}**/*.pipe
+        - ${pathPrefix}**/*.ts
   script:
     - corepack enable
     - ${cdCommand}pnpm install --frozen-lockfile
@@ -257,14 +247,10 @@ tinybird_cd:
     - if: '$CI_COMMIT_BRANCH == "main"'
       changes:
         - ${pathPrefix}tinybird.json
-        - ${pathPrefix}src/tinybird/**
-        - ${pathPrefix}tinybird/**
-        - ${pathPrefix}**/*.datasource
-        - ${pathPrefix}**/*.pipe
+        - ${pathPrefix}**/*.ts
   script:
     - corepack enable
     - ${cdCommand}pnpm install --frozen-lockfile
-    - ${cdCommand}pnpm run tinybird:build
     - ${cdCommand}pnpm run tinybird:deploy
   variables:
     TINYBIRD_TOKEN: \${TINYBIRD_TOKEN}
