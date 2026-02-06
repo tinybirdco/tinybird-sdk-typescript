@@ -1,5 +1,7 @@
 # Tinybird DevTools MCP
 
+> **Note:** This package is experimental. APIs may change between versions.
+
 `@tinybirdco/devtools-mcp` is a Model Context Protocol (MCP) server that provides Tinybird development tools and utilities for coding agents like Claude, Cursor, and Codex.
 
 ## Getting Started
