@@ -1,5 +1,5 @@
 {
-  "name": "@tinybirdco/devtools",
+  "name": "@tinybirdco/devtools-mcp",
   "version": "0.0.1",
   "description": "Tinybird DevTools MCP Server",
   "type": "module",

@@ -1,11 +1,11 @@
-# @tinybirdco/devtools
+# @tinybirdco/devtools-mcp
 
 MCP (Model Context Protocol) server for Tinybird DevTools. Enables LLMs like Claude to interact with your Tinybird workspace during development.
 
 ## Installation
 
 ```bash
-npm install @tinybirdco/devtools
+npm install @tinybirdco/devtools-mcp
 ```
 
 ## Requirements
