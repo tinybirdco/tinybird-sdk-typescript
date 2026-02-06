@@ -1,0 +1,38 @@
+{
+  "name": "@tinybirdco/devtools-mcp",
+  "version": "0.0.1",
+  "description": "Tinybird DevTools MCP Server",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "tinybird-devtools-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "tinybird",
+    "mcp",
+    "devtools",
+    "model-context-protocol"
+  ],
+  "author": "Tinybird",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.2",
+    "dotenv": "^16.0.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
