@@ -144,14 +144,17 @@ describe("output utilities", () => {
   describe("showNoChanges", () => {
     it("shows no changes message", () => {
       showNoChanges();
-      expect(consoleLogSpy).toHaveBeenCalledWith("No changes. Build skipped.");
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("△");
+      expect(call).toContain("Not deploying. No changes.");
     });
   });
 
   describe("showWaitingForDeployment", () => {
     it("shows waiting for deployment message", () => {
       showWaitingForDeployment();
-      expect(consoleLogSpy).toHaveBeenCalledWith("» Waiting for deployment...");
+      expect(consoleLogSpy).toHaveBeenCalledWith("» Waiting for deployment to be ready...");
     });
   });
 

@@ -148,14 +148,14 @@ export function showBuildFailure(isRebuild = false): void {
  * Show no changes message
  */
 export function showNoChanges(): void {
-  info("No changes. Build skipped.");
+  warning("△ Not deploying. No changes.");
 }
 
 /**
  * Show waiting for deployment message
  */
 export function showWaitingForDeployment(): void {
-  info("» Waiting for deployment...");
+  info("» Waiting for deployment to be ready...");
 }
 
 /**
