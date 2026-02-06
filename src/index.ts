@@ -213,3 +213,11 @@ export type {
   TypedPipeEndpoint,
   TypedDatasourceIngest,
 } from "./client/types.js";
+
+// ============ Preview Environment ============
+export {
+  isPreviewEnvironment,
+  getPreviewBranchName,
+  resolveToken,
+  clearTokenCache,
+} from "./client/preview.js";
