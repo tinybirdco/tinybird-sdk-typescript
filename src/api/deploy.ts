@@ -39,9 +39,35 @@ export interface DeploymentsListResponse {
  * Response from /v1/deploy endpoint
  */
 export interface DeployResponse {
-  result: "success" | "failed";
-  deployment?: Deployment;
+  result: "success" | "failed" | "no_changes";
+  deployment?: DeploymentDetails;
   error?: string;
+  errors?: Array<{ filename?: string; error: string }>;
+}
+
+/**
+ * Detailed deployment information with resource changes
+ */
+export interface DeploymentDetails extends Deployment {
+  /** Names of newly created datasources */
+  new_datasource_names?: string[];
+  /** Names of changed datasources */
+  changed_datasource_names?: string[];
+  /** Names of deleted datasources */
+  deleted_datasource_names?: string[];
+  /** Names of newly created pipes */
+  new_pipe_names?: string[];
+  /** Names of changed pipes */
+  changed_pipe_names?: string[];
+  /** Names of deleted pipes */
+  deleted_pipe_names?: string[];
+  /** Names of newly created connections */
+  new_data_connector_names?: string[];
+  /** Names of changed connections */
+  changed_data_connector_names?: string[];
+  /** Names of deleted connections */
+  deleted_data_connector_names?: string[];
+  /** Deployment errors */
   errors?: Array<{ filename?: string; error: string }>;
 }
 
@@ -83,6 +109,47 @@ export interface DeploymentStatusResponse {
  * }
  * ```
  */
+/**
+ * Callbacks for deploy progress updates
+ */
+/**
+ * Resource changes from deployment
+ */
+export interface DeploymentChanges {
+  datasources: {
+    created: string[];
+    changed: string[];
+    deleted: string[];
+  };
+  pipes: {
+    created: string[];
+    changed: string[];
+    deleted: string[];
+  };
+  connections: {
+    created: string[];
+    changed: string[];
+    deleted: string[];
+  };
+}
+
+export interface DeployCallbacks {
+  /** Called when deployment is created and changes are available */
+  onChanges?: (changes: DeploymentChanges) => void;
+  /** Called when waiting for deployment to be ready */
+  onWaitingForReady?: () => void;
+  /** Called when deployment is ready */
+  onDeploymentReady?: () => void;
+  /** Called when waiting for deployment to be promoted */
+  onWaitingForPromote?: () => void;
+  /** Called when deployment is promoted */
+  onDeploymentPromoted?: () => void;
+  /** Called when deployment is live */
+  onDeploymentLive?: (deploymentId: string) => void;
+  /** Called when validating deployment (check mode) */
+  onValidating?: () => void;
+}
+
 export async function deployToMain(
   config: BuildConfig,
   resources: GeneratedResources,
@@ -92,6 +159,7 @@ export async function deployToMain(
     maxPollAttempts?: number;
     check?: boolean;
     allowDestructiveOperations?: boolean;
+    callbacks?: DeployCallbacks;
   }
 ): Promise<BuildApiResult> {
   const debug = options?.debug ?? !!process.env.TINYBIRD_DEBUG;
@@ -254,6 +322,8 @@ export async function deployToMain(
   }
 
   if (options?.check) {
+    options.callbacks?.onValidating?.();
+
     if (body.result === "failed") {
       return {
         success: false,
@@ -274,6 +344,27 @@ export async function deployToMain(
     };
   }
 
+  // Handle no changes - no deployment was created, so we can return early
+  if (body.result === "no_changes") {
+    return {
+      success: true,
+      result: "no_changes",
+      datasourceCount: resources.datasources.length,
+      pipeCount: resources.pipes.length,
+      connectionCount: resources.connections?.length ?? 0,
+      pipes: {
+        changed: [],
+        created: [],
+        deleted: [],
+      },
+      datasources: {
+        changed: [],
+        created: [],
+        deleted: [],
+      },
+    };
+  }
+
   // Handle API result
   if (body.result === "failed" || !body.deployment) {
     return {
@@ -287,14 +378,38 @@ export async function deployToMain(
   }
 
   const deploymentId = body.deployment.id;
+  const deploymentDetails = body.deployment;
 
   if (debug) {
     console.log(`[debug] Deployment created with ID: ${deploymentId}`);
   }
 
+  // Notify about changes immediately after deployment is created
+  if (options?.callbacks?.onChanges) {
+    options.callbacks.onChanges({
+      datasources: {
+        created: deploymentDetails.new_datasource_names ?? [],
+        changed: deploymentDetails.changed_datasource_names ?? [],
+        deleted: deploymentDetails.deleted_datasource_names ?? [],
+      },
+      pipes: {
+        created: deploymentDetails.new_pipe_names ?? [],
+        changed: deploymentDetails.changed_pipe_names ?? [],
+        deleted: deploymentDetails.deleted_pipe_names ?? [],
+      },
+      connections: {
+        created: deploymentDetails.new_data_connector_names ?? [],
+        changed: deploymentDetails.changed_data_connector_names ?? [],
+        deleted: deploymentDetails.deleted_data_connector_names ?? [],
+      },
+    });
+  }
+
   // Step 2: Poll until deployment is ready
   let deployment = body.deployment;
   let attempts = 0;
+
+  options?.callbacks?.onWaitingForReady?.();
 
   while (deployment.status !== "data_ready" && attempts < maxPollAttempts) {
     await sleep(pollIntervalMs);
@@ -356,6 +471,8 @@ export async function deployToMain(
     };
   }
 
+  options?.callbacks?.onDeploymentReady?.();
+
   // Step 3: Set the deployment as live
   const setLiveUrl = `${baseUrl}/v1/deployments/${deploymentId}/set-live`;
 
@@ -387,6 +504,8 @@ export async function deployToMain(
     console.log(`[debug] Deployment ${deploymentId} is now live`);
   }
 
+  options?.callbacks?.onDeploymentLive?.(deploymentId);
+
   return {
     success: true,
     result: "success",
@@ -395,14 +514,14 @@ export async function deployToMain(
     connectionCount: resources.connections?.length ?? 0,
     buildId: deploymentId,
     pipes: {
-      changed: [],
-      created: [],
-      deleted: [],
+      changed: deploymentDetails.changed_pipe_names ?? [],
+      created: deploymentDetails.new_pipe_names ?? [],
+      deleted: deploymentDetails.deleted_pipe_names ?? [],
     },
     datasources: {
-      changed: [],
-      created: [],
-      deleted: [],
+      changed: deploymentDetails.changed_datasource_names ?? [],
+      created: deploymentDetails.new_datasource_names ?? [],
+      deleted: deploymentDetails.deleted_datasource_names ?? [],
     },
   };
 }

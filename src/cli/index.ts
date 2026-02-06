@@ -33,7 +33,7 @@ import {
   hasTinybirdSdkDependency,
 } from "./utils/package-manager.js";
 import type { DevMode } from "./config.js";
-import { output } from "./output.js";
+import { output, type ResourceChange } from "./output.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(
@@ -231,32 +231,34 @@ function createCli(): Command {
         if (deploy.result === "no_changes") {
           output.showNoChanges();
         } else {
-          // Show datasource changes
+          // Collect all changes for table display
+          const changes: ResourceChange[] = [];
+
           if (deploy.datasources) {
             for (const name of deploy.datasources.created) {
-              output.showResourceChange(`${name}.datasource`, "created");
+              changes.push({ status: "new", name, type: "datasource" });
             }
             for (const name of deploy.datasources.changed) {
-              output.showResourceChange(`${name}.datasource`, "changed");
+              changes.push({ status: "modified", name, type: "datasource" });
             }
             for (const name of deploy.datasources.deleted) {
-              output.showResourceChange(`${name}.datasource`, "deleted");
+              changes.push({ status: "deleted", name, type: "datasource" });
             }
           }
 
-          // Show pipe changes
           if (deploy.pipes) {
             for (const name of deploy.pipes.created) {
-              output.showResourceChange(`${name}.pipe`, "created");
+              changes.push({ status: "new", name, type: "pipe" });
             }
             for (const name of deploy.pipes.changed) {
-              output.showResourceChange(`${name}.pipe`, "changed");
+              changes.push({ status: "modified", name, type: "pipe" });
             }
             for (const name of deploy.pipes.deleted) {
-              output.showResourceChange(`${name}.pipe`, "deleted");
+              changes.push({ status: "deleted", name, type: "pipe" });
             }
           }
 
+          output.showChangesTable(changes);
           output.showBuildSuccess(result.durationMs);
         }
       }
@@ -279,6 +281,48 @@ function createCli(): Command {
       const result = await runDeploy({
         dryRun: options.dryRun,
         check: options.check,
+        callbacks: {
+          onChanges: (deployChanges) => {
+            // Show changes table immediately after deployment is created
+            const changes: ResourceChange[] = [];
+
+            for (const name of deployChanges.datasources.created) {
+              changes.push({ status: "new", name, type: "datasource" });
+            }
+            for (const name of deployChanges.datasources.changed) {
+              changes.push({ status: "modified", name, type: "datasource" });
+            }
+            for (const name of deployChanges.datasources.deleted) {
+              changes.push({ status: "deleted", name, type: "datasource" });
+            }
+
+            for (const name of deployChanges.pipes.created) {
+              changes.push({ status: "new", name, type: "pipe" });
+            }
+            for (const name of deployChanges.pipes.changed) {
+              changes.push({ status: "modified", name, type: "pipe" });
+            }
+            for (const name of deployChanges.pipes.deleted) {
+              changes.push({ status: "deleted", name, type: "pipe" });
+            }
+
+            for (const name of deployChanges.connections.created) {
+              changes.push({ status: "new", name, type: "connection" });
+            }
+            for (const name of deployChanges.connections.changed) {
+              changes.push({ status: "modified", name, type: "connection" });
+            }
+            for (const name of deployChanges.connections.deleted) {
+              changes.push({ status: "deleted", name, type: "connection" });
+            }
+
+            output.showChangesTable(changes);
+          },
+          onWaitingForReady: () => output.showWaitingForDeployment(),
+          onDeploymentReady: () => output.showDeploymentReady(),
+          onDeploymentLive: (id) => output.showDeploymentLive(id),
+          onValidating: () => output.showValidatingDeployment(),
+        },
       });
 
       const { build, deploy } = result;
@@ -290,7 +334,7 @@ function createCli(): Command {
         } else if (result.error) {
           output.error(result.error);
         }
-        output.showBuildFailure();
+        output.showDeployFailure();
         process.exit(1);
       }
 
@@ -311,41 +355,16 @@ function createCli(): Command {
             console.log(pipe.content);
           });
         }
-        output.showBuildSuccess(result.durationMs);
+        output.showDeploySuccess(result.durationMs);
       } else if (options.check) {
         console.log("\n[Check] Resources validated with Tinybird API");
-        output.showBuildSuccess(result.durationMs);
+        output.showDeploySuccess(result.durationMs);
       } else if (deploy) {
         if (deploy.result === "no_changes") {
           output.showNoChanges();
         } else {
-          // Show datasource changes
-          if (deploy.datasources) {
-            for (const name of deploy.datasources.created) {
-              output.showResourceChange(`${name}.datasource`, "created");
-            }
-            for (const name of deploy.datasources.changed) {
-              output.showResourceChange(`${name}.datasource`, "changed");
-            }
-            for (const name of deploy.datasources.deleted) {
-              output.showResourceChange(`${name}.datasource`, "deleted");
-            }
-          }
-
-          // Show pipe changes
-          if (deploy.pipes) {
-            for (const name of deploy.pipes.created) {
-              output.showResourceChange(`${name}.pipe`, "created");
-            }
-            for (const name of deploy.pipes.changed) {
-              output.showResourceChange(`${name}.pipe`, "changed");
-            }
-            for (const name of deploy.pipes.deleted) {
-              output.showResourceChange(`${name}.pipe`, "deleted");
-            }
-          }
-
-          output.showBuildSuccess(result.durationMs);
+          // Changes table was already shown via onChanges callback
+          output.showDeploySuccess(result.durationMs);
         }
       }
     });

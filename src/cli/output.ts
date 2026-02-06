@@ -90,12 +90,58 @@ export function formatDuration(ms: number): string {
 
 /**
  * Show a resource change (checkmark + path + status)
+ * @deprecated Use showChangesTable instead for table format
  */
 export function showResourceChange(
   path: string,
   status: "created" | "changed" | "deleted"
 ): void {
   console.log(`✓ ${path} ${status}`);
+}
+
+/**
+ * Resource change entry for table display
+ */
+export interface ResourceChange {
+  status: "new" | "modified" | "deleted";
+  name: string;
+  type: "datasource" | "pipe" | "connection";
+}
+
+/**
+ * Show changes table similar to Python CLI
+ * Displays a formatted table of resource changes
+ */
+export function showChangesTable(changes: ResourceChange[]): void {
+  if (changes.length === 0) {
+    gray("* No changes to be deployed");
+    return;
+  }
+
+  info("\n* Changes to be deployed:");
+
+  // Calculate column widths
+  const statusWidth = Math.max(6, ...changes.map((c) => c.status.length));
+  const nameWidth = Math.max(4, ...changes.map((c) => c.name.length));
+  const typeWidth = Math.max(4, ...changes.map((c) => c.type.length));
+
+  // Build table
+  const separator = `├${"─".repeat(statusWidth + 2)}┼${"─".repeat(nameWidth + 2)}┼${"─".repeat(typeWidth + 2)}┤`;
+  const topBorder = `┌${"─".repeat(statusWidth + 2)}┬${"─".repeat(nameWidth + 2)}┬${"─".repeat(typeWidth + 2)}┐`;
+  const bottomBorder = `└${"─".repeat(statusWidth + 2)}┴${"─".repeat(nameWidth + 2)}┴${"─".repeat(typeWidth + 2)}┘`;
+
+  const padRight = (str: string, width: number) => str + " ".repeat(width - str.length);
+
+  // Print table
+  console.log(topBorder);
+  console.log(`│ ${padRight("status", statusWidth)} │ ${padRight("name", nameWidth)} │ ${padRight("type", typeWidth)} │`);
+  console.log(separator);
+
+  for (const change of changes) {
+    console.log(`│ ${padRight(change.status, statusWidth)} │ ${padRight(change.name, nameWidth)} │ ${padRight(change.type, typeWidth)} │`);
+  }
+
+  console.log(bottomBorder);
 }
 
 /**
@@ -148,7 +194,49 @@ export function showBuildFailure(isRebuild = false): void {
  * Show no changes message
  */
 export function showNoChanges(): void {
-  info("No changes. Build skipped.");
+  warning("△ Not deploying. No changes.");
+}
+
+/**
+ * Show waiting for deployment message
+ */
+export function showWaitingForDeployment(): void {
+  info("» Waiting for deployment to be ready...");
+}
+
+/**
+ * Show deployment ready message
+ */
+export function showDeploymentReady(): void {
+  success("✓ Deployment is ready");
+}
+
+/**
+ * Show deployment live message
+ */
+export function showDeploymentLive(deploymentId: string): void {
+  success(`✓ Deployment #${deploymentId} is live!`);
+}
+
+/**
+ * Show validating deployment message
+ */
+export function showValidatingDeployment(): void {
+  info("» Validating deployment...");
+}
+
+/**
+ * Show final deploy success message
+ */
+export function showDeploySuccess(durationMs: number): void {
+  success(`\n✓ Deploy completed in ${formatDuration(durationMs)}`);
+}
+
+/**
+ * Show final deploy failure message
+ */
+export function showDeployFailure(): void {
+  error(`\n✗ Deploy failed`);
 }
 
 /**
@@ -165,9 +253,16 @@ export const output = {
   formatTime,
   formatDuration,
   showResourceChange,
+  showChangesTable,
   showResourceWarning,
   showBuildErrors,
   showBuildSuccess,
   showBuildFailure,
   showNoChanges,
+  showWaitingForDeployment,
+  showDeploymentReady,
+  showDeploymentLive,
+  showValidatingDeployment,
+  showDeploySuccess,
+  showDeployFailure,
 };

@@ -6,10 +6,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   formatDuration,
   showResourceChange,
+  showChangesTable,
   showBuildErrors,
   showBuildSuccess,
   showBuildFailure,
   showNoChanges,
+  showWaitingForDeployment,
+  showDeploymentReady,
+  showDeploymentLive,
+  showValidatingDeployment,
+  showDeploySuccess,
+  showDeployFailure,
 } from "./output.js";
 
 describe("output utilities", () => {
@@ -55,6 +62,50 @@ describe("output utilities", () => {
     it("shows deleted resource", () => {
       showResourceChange("old_data.datasource", "deleted");
       expect(consoleLogSpy).toHaveBeenCalledWith("✓ old_data.datasource deleted");
+    });
+  });
+
+  describe("showChangesTable", () => {
+    it("shows no changes message when empty", () => {
+      showChangesTable([]);
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("No changes to be deployed");
+    });
+
+    it("shows table with changes", () => {
+      showChangesTable([
+        { status: "new", name: "events", type: "datasource" },
+        { status: "modified", name: "top_pages", type: "pipe" },
+        { status: "deleted", name: "old_data", type: "datasource" },
+      ]);
+
+      // Check that table header and data were logged
+      const allCalls = consoleLogSpy.mock.calls.map((c: unknown[]) => c[0]).join("\n");
+      expect(allCalls).toContain("Changes to be deployed");
+      expect(allCalls).toContain("status");
+      expect(allCalls).toContain("name");
+      expect(allCalls).toContain("type");
+      expect(allCalls).toContain("new");
+      expect(allCalls).toContain("events");
+      expect(allCalls).toContain("datasource");
+      expect(allCalls).toContain("modified");
+      expect(allCalls).toContain("top_pages");
+      expect(allCalls).toContain("pipe");
+      expect(allCalls).toContain("deleted");
+      expect(allCalls).toContain("old_data");
+    });
+
+    it("shows table borders", () => {
+      showChangesTable([{ status: "new", name: "test", type: "pipe" }]);
+
+      const allCalls = consoleLogSpy.mock.calls.map((c: unknown[]) => c[0]).join("\n");
+      expect(allCalls).toContain("┌");
+      expect(allCalls).toContain("┐");
+      expect(allCalls).toContain("├");
+      expect(allCalls).toContain("┤");
+      expect(allCalls).toContain("└");
+      expect(allCalls).toContain("┘");
     });
   });
 
@@ -138,7 +189,71 @@ describe("output utilities", () => {
   describe("showNoChanges", () => {
     it("shows no changes message", () => {
       showNoChanges();
-      expect(consoleLogSpy).toHaveBeenCalledWith("No changes. Build skipped.");
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("△");
+      expect(call).toContain("Not deploying. No changes.");
+    });
+  });
+
+  describe("showWaitingForDeployment", () => {
+    it("shows waiting for deployment message", () => {
+      showWaitingForDeployment();
+      expect(consoleLogSpy).toHaveBeenCalledWith("» Waiting for deployment to be ready...");
+    });
+  });
+
+  describe("showDeploymentReady", () => {
+    it("shows deployment ready message", () => {
+      showDeploymentReady();
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("✓");
+      expect(call).toContain("Deployment is ready");
+    });
+  });
+
+  describe("showDeploymentLive", () => {
+    it("shows deployment live message with ID", () => {
+      showDeploymentLive("abc123");
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("✓");
+      expect(call).toContain("Deployment #abc123 is live!");
+    });
+  });
+
+  describe("showValidatingDeployment", () => {
+    it("shows validating deployment message", () => {
+      showValidatingDeployment();
+      expect(consoleLogSpy).toHaveBeenCalledWith("» Validating deployment...");
+    });
+  });
+
+  describe("showDeploySuccess", () => {
+    it("shows deploy success with duration in ms", () => {
+      showDeploySuccess(500);
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("✓");
+      expect(call).toContain("Deploy completed in 500ms");
+    });
+
+    it("shows deploy success with duration in seconds", () => {
+      showDeploySuccess(2500);
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const call = consoleLogSpy.mock.calls[0][0];
+      expect(call).toContain("Deploy completed in 2.5s");
+    });
+  });
+
+  describe("showDeployFailure", () => {
+    it("shows deploy failure", () => {
+      showDeployFailure();
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      const call = consoleErrorSpy.mock.calls[0][0];
+      expect(call).toContain("✗");
+      expect(call).toContain("Deploy failed");
     });
   });
 });
