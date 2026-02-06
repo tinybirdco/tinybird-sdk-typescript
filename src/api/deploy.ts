@@ -323,6 +323,27 @@ export async function deployToMain(
     };
   }
 
+  // Handle no changes - no deployment was created, so we can return early
+  if (body.result === "no_changes") {
+    return {
+      success: true,
+      result: "no_changes",
+      datasourceCount: resources.datasources.length,
+      pipeCount: resources.pipes.length,
+      connectionCount: resources.connections?.length ?? 0,
+      pipes: {
+        changed: [],
+        created: [],
+        deleted: [],
+      },
+      datasources: {
+        changed: [],
+        created: [],
+        deleted: [],
+      },
+    };
+  }
+
   // Handle API result
   if (body.result === "failed" || !body.deployment) {
     return {
