@@ -5,16 +5,10 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ResolvedConfig } from "../../cli/config.js";
+import type { ResolvedConfig } from "../config.js";
 
 /**
  * Register the execute_query tool
- *
- * This tool allows LLMs to execute SQL queries against Tinybird.
- * Useful for querying datasources, testing SQL, or exploring data.
- *
- * @param server - The MCP server instance
- * @param config - Resolved configuration with token and baseUrl
  */
 export function registerExecuteQueryTool(
   server: McpServer,

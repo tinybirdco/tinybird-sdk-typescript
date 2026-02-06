@@ -4,8 +4,11 @@
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { loadConfig } from "../cli/config.js";
+import { loadConfig } from "./config.js";
 import { registerExecuteQueryTool } from "./tools/execute-query.js";
+import { registerListConnectionsTool } from "./tools/list-connections.js";
+import { registerListKafkaTopicsTool } from "./tools/list-kafka-topics.js";
+import { registerPreviewKafkaTopicTool } from "./tools/preview-kafka-topic.js";
 
 /**
  * Create and configure the MCP server
@@ -16,8 +19,8 @@ import { registerExecuteQueryTool } from "./tools/execute-query.js";
  */
 export function createMcpServer(): McpServer {
   const server = new McpServer({
-    name: "tinybird-devtools-mcp",
-    version: "0.0.3",
+    name: "tinybird-devtools",
+    version: "0.0.1",
   });
 
   // Load config from tinybird.json
@@ -25,6 +28,9 @@ export function createMcpServer(): McpServer {
 
   // Register tools
   registerExecuteQueryTool(server, config);
+  registerListConnectionsTool(server, config);
+  registerListKafkaTopicsTool(server, config);
+  registerPreviewKafkaTopicTool(server, config);
 
   return server;
 }
