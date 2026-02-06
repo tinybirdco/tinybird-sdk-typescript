@@ -160,28 +160,6 @@ List all resources in your Tinybird workspace with their full datafile definitio
 </details>
 
 <details>
-<summary><code>list_connections</code></summary>
-
-List all connections (Kafka, S3, etc.) in your Tinybird workspace.
-
-**When to use:**
-- View available streaming connections
-- Find connection IDs for Kafka operations
-- Audit data source integrations
-
-**Input:**
-- `service` (optional) - Filter by service type (e.g., `'kafka'`, `'s3'`, `'s3_iamrole'`)
-
-**Output:**
-- JSON array with connection ID, name, service type, and settings
-
-**Example prompts:**
-- "Tinybird, list all my connections"
-- "Tinybird, show me my Kafka connections"
-
-</details>
-
-<details>
 <summary><code>list_kafka_topics</code></summary>
 
 List available Kafka topics for a connection.
