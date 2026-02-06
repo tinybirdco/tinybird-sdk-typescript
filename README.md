@@ -10,6 +10,25 @@ A TypeScript SDK for defining Tinybird resources with full type inference. Defin
 npm install @tinybirdco/sdk
 ```
 
+## Requirements
+
+TypeScript `>=4.9` is supported for consumers.
+
+Officially supported runtime:
+- Node.js 20 LTS or later non-EOL versions
+
+Not officially supported (untested in this repository at this time):
+- Deno `>=1.28.0`
+- Bun `>=1.0.0`
+- Cloudflare Workers
+- Vercel Edge Runtime
+- Jest `>=28` (including `"node"` environment)
+- Nitro `>=2.6.0`
+
+Web browsers are not supported. This SDK is designed for server-side usage and using it directly in the browser may expose Tinybird API credentials.
+
+If you need support for other runtimes, please open or upvote an issue on GitHub.
+
 ## Quick Start
 
 ### 1. Initialize your project
