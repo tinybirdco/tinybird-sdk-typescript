@@ -196,7 +196,7 @@ describe("Init Command", () => {
   });
 
   describe("package.json scripts", () => {
-    it("adds tinybird:dev, tinybird:build, and tinybird:deploy scripts to existing package.json", async () => {
+    it("adds tinybird scripts to existing package.json", async () => {
       const packageJson = { name: "test-project", scripts: { dev: "next dev" } };
       fs.writeFileSync(
         path.join(tempDir, "package.json"),
@@ -214,6 +214,7 @@ describe("Init Command", () => {
       expect(updatedPackageJson.scripts["tinybird:dev"]).toBe("tinybird dev");
       expect(updatedPackageJson.scripts["tinybird:build"]).toBe("tinybird build");
       expect(updatedPackageJson.scripts["tinybird:deploy"]).toBe("tinybird deploy");
+      expect(updatedPackageJson.scripts["tinybird:preview"]).toBe("tinybird preview");
       expect(updatedPackageJson.scripts.dev).toBe("next dev"); // preserved
     });
 
@@ -224,6 +225,7 @@ describe("Init Command", () => {
           "tinybird:dev": "custom dev command",
           "tinybird:build": "custom build command",
           "tinybird:deploy": "custom deploy command",
+          "tinybird:preview": "custom preview command",
         },
       };
       fs.writeFileSync(
@@ -242,6 +244,7 @@ describe("Init Command", () => {
       expect(updatedPackageJson.scripts["tinybird:dev"]).toBe("custom dev command");
       expect(updatedPackageJson.scripts["tinybird:build"]).toBe("custom build command");
       expect(updatedPackageJson.scripts["tinybird:deploy"]).toBe("custom deploy command");
+      expect(updatedPackageJson.scripts["tinybird:preview"]).toBe("custom preview command");
     });
 
     it("creates scripts object if package.json has no scripts", async () => {
@@ -260,6 +263,7 @@ describe("Init Command", () => {
       );
       expect(updatedPackageJson.scripts["tinybird:dev"]).toBe("tinybird dev");
       expect(updatedPackageJson.scripts["tinybird:build"]).toBe("tinybird build");
+      expect(updatedPackageJson.scripts["tinybird:preview"]).toBe("tinybird preview");
     });
 
     it("does not fail if no package.json exists", async () => {
