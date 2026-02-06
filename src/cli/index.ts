@@ -33,7 +33,7 @@ import {
   hasTinybirdSdkDependency,
 } from "./utils/package-manager.js";
 import type { DevMode } from "./config.js";
-import { output } from "./output.js";
+import { output, type ResourceChange } from "./output.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(
@@ -231,32 +231,34 @@ function createCli(): Command {
         if (deploy.result === "no_changes") {
           output.showNoChanges();
         } else {
-          // Show datasource changes
+          // Collect all changes for table display
+          const changes: ResourceChange[] = [];
+
           if (deploy.datasources) {
             for (const name of deploy.datasources.created) {
-              output.showResourceChange(`${name}.datasource`, "created");
+              changes.push({ status: "new", name, type: "datasource" });
             }
             for (const name of deploy.datasources.changed) {
-              output.showResourceChange(`${name}.datasource`, "changed");
+              changes.push({ status: "modified", name, type: "datasource" });
             }
             for (const name of deploy.datasources.deleted) {
-              output.showResourceChange(`${name}.datasource`, "deleted");
+              changes.push({ status: "deleted", name, type: "datasource" });
             }
           }
 
-          // Show pipe changes
           if (deploy.pipes) {
             for (const name of deploy.pipes.created) {
-              output.showResourceChange(`${name}.pipe`, "created");
+              changes.push({ status: "new", name, type: "pipe" });
             }
             for (const name of deploy.pipes.changed) {
-              output.showResourceChange(`${name}.pipe`, "changed");
+              changes.push({ status: "modified", name, type: "pipe" });
             }
             for (const name of deploy.pipes.deleted) {
-              output.showResourceChange(`${name}.pipe`, "deleted");
+              changes.push({ status: "deleted", name, type: "pipe" });
             }
           }
 
+          output.showChangesTable(changes);
           output.showBuildSuccess(result.durationMs);
         }
       }
@@ -325,32 +327,34 @@ function createCli(): Command {
         if (deploy.result === "no_changes") {
           output.showNoChanges();
         } else {
-          // Show datasource changes
+          // Collect all changes for table display
+          const changes: ResourceChange[] = [];
+
           if (deploy.datasources) {
             for (const name of deploy.datasources.created) {
-              output.showResourceChange(`${name}.datasource`, "created");
+              changes.push({ status: "new", name, type: "datasource" });
             }
             for (const name of deploy.datasources.changed) {
-              output.showResourceChange(`${name}.datasource`, "changed");
+              changes.push({ status: "modified", name, type: "datasource" });
             }
             for (const name of deploy.datasources.deleted) {
-              output.showResourceChange(`${name}.datasource`, "deleted");
+              changes.push({ status: "deleted", name, type: "datasource" });
             }
           }
 
-          // Show pipe changes
           if (deploy.pipes) {
             for (const name of deploy.pipes.created) {
-              output.showResourceChange(`${name}.pipe`, "created");
+              changes.push({ status: "new", name, type: "pipe" });
             }
             for (const name of deploy.pipes.changed) {
-              output.showResourceChange(`${name}.pipe`, "changed");
+              changes.push({ status: "modified", name, type: "pipe" });
             }
             for (const name of deploy.pipes.deleted) {
-              output.showResourceChange(`${name}.pipe`, "deleted");
+              changes.push({ status: "deleted", name, type: "pipe" });
             }
           }
 
+          output.showChangesTable(changes);
           output.showDeploySuccess(result.durationMs);
         }
       }
