@@ -31,19 +31,13 @@ import {
   hasTinybirdSdkDependency,
 } from "./utils/package-manager.js";
 import type { DevMode } from "./config.js";
+import { output } from "./output.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(
   readFileSync(resolve(__dirname, "../../package.json"), "utf-8")
 ) as { version: string };
 const VERSION = packageJson.version;
-
-/**
- * Format timestamp for console output
- */
-function formatTime(): string {
-  return new Date().toLocaleTimeString("en-US", { hour12: false });
-}
 
 /**
  * Create and configure the CLI
@@ -193,24 +187,24 @@ function createCli(): Command {
       }
 
       const modeLabel = devModeOverride === "local" ? " (local)" : "";
-      console.log(`[${formatTime()}] Building${modeLabel}...\n`);
+      output.highlight(`Building${modeLabel}...`);
 
       const result = await runBuild({
         dryRun: options.dryRun,
         devModeOverride,
       });
 
-      if (!result.success) {
-        console.error(`Error: ${result.error}`);
-        process.exit(1);
-      }
-
       const { build, deploy } = result;
 
-      if (build) {
-        console.log(
-          `Generated ${build.stats.datasourceCount} datasource(s), ${build.stats.pipeCount} pipe(s)`
-        );
+      if (!result.success) {
+        // Show detailed errors if available
+        if (deploy?.errors && deploy.errors.length > 0) {
+          output.showBuildErrors(deploy.errors);
+        } else if (result.error) {
+          output.error(result.error);
+        }
+        output.showBuildFailure();
+        process.exit(1);
       }
 
       if (options.dryRun) {
@@ -230,15 +224,40 @@ function createCli(): Command {
             console.log(pipe.content);
           });
         }
+        output.showBuildSuccess(result.durationMs);
       } else if (deploy) {
         if (deploy.result === "no_changes") {
-          console.log("No changes detected - already up to date");
+          output.showNoChanges();
         } else {
-          console.log(`Deployed to Tinybird successfully`);
+          // Show datasource changes
+          if (deploy.datasources) {
+            for (const name of deploy.datasources.created) {
+              output.showResourceChange(`${name}.datasource`, "created");
+            }
+            for (const name of deploy.datasources.changed) {
+              output.showResourceChange(`${name}.datasource`, "changed");
+            }
+            for (const name of deploy.datasources.deleted) {
+              output.showResourceChange(`${name}.datasource`, "deleted");
+            }
+          }
+
+          // Show pipe changes
+          if (deploy.pipes) {
+            for (const name of deploy.pipes.created) {
+              output.showResourceChange(`${name}.pipe`, "created");
+            }
+            for (const name of deploy.pipes.changed) {
+              output.showResourceChange(`${name}.pipe`, "changed");
+            }
+            for (const name of deploy.pipes.deleted) {
+              output.showResourceChange(`${name}.pipe`, "deleted");
+            }
+          }
+
+          output.showBuildSuccess(result.durationMs);
         }
       }
-
-      console.log(`\n[${formatTime()}] Done in ${result.durationMs}ms`);
     });
 
   // Deploy command
@@ -253,24 +272,24 @@ function createCli(): Command {
         process.env.TINYBIRD_DEBUG = "1";
       }
 
-      console.log(`[${formatTime()}] Deploying to main workspace...\n`);
+      output.highlight("Deploying to main workspace...");
 
       const result = await runDeploy({
         dryRun: options.dryRun,
         check: options.check,
       });
 
-      if (!result.success) {
-        console.error(`Error: ${result.error}`);
-        process.exit(1);
-      }
-
       const { build, deploy } = result;
 
-      if (build) {
-        console.log(
-          `Generated ${build.stats.datasourceCount} datasource(s), ${build.stats.pipeCount} pipe(s)`
-        );
+      if (!result.success) {
+        // Show detailed errors if available
+        if (deploy?.errors && deploy.errors.length > 0) {
+          output.showBuildErrors(deploy.errors);
+        } else if (result.error) {
+          output.error(result.error);
+        }
+        output.showBuildFailure();
+        process.exit(1);
       }
 
       if (options.dryRun) {
@@ -290,17 +309,43 @@ function createCli(): Command {
             console.log(pipe.content);
           });
         }
+        output.showBuildSuccess(result.durationMs);
       } else if (options.check) {
         console.log("\n[Check] Resources validated with Tinybird API");
+        output.showBuildSuccess(result.durationMs);
       } else if (deploy) {
         if (deploy.result === "no_changes") {
-          console.log("No changes detected - already up to date");
+          output.showNoChanges();
         } else {
-          console.log(`Deployed to main workspace successfully`);
+          // Show datasource changes
+          if (deploy.datasources) {
+            for (const name of deploy.datasources.created) {
+              output.showResourceChange(`${name}.datasource`, "created");
+            }
+            for (const name of deploy.datasources.changed) {
+              output.showResourceChange(`${name}.datasource`, "changed");
+            }
+            for (const name of deploy.datasources.deleted) {
+              output.showResourceChange(`${name}.datasource`, "deleted");
+            }
+          }
+
+          // Show pipe changes
+          if (deploy.pipes) {
+            for (const name of deploy.pipes.created) {
+              output.showResourceChange(`${name}.pipe`, "created");
+            }
+            for (const name of deploy.pipes.changed) {
+              output.showResourceChange(`${name}.pipe`, "changed");
+            }
+            for (const name of deploy.pipes.deleted) {
+              output.showResourceChange(`${name}.pipe`, "deleted");
+            }
+          }
+
+          output.showBuildSuccess(result.durationMs);
         }
       }
-
-      console.log(`\n[${formatTime()}] Done in ${result.durationMs}ms`);
     });
 
   // Dev command
@@ -317,9 +362,6 @@ function createCli(): Command {
       } else if (options.branch) {
         devModeOverride = "branch";
       }
-
-      console.log(`tinybird dev v${VERSION}`);
-      console.log("Loading config from tinybird.json...\n");
 
       try {
         const controller = await runDev({
@@ -367,11 +409,18 @@ function createCli(): Command {
             }
           },
           onBuildStart: () => {
-            console.log(`[${formatTime()}] Building...`);
+            output.highlight("Building...");
           },
           onBuildComplete: (result) => {
             if (!result.success) {
-              console.error(`[${formatTime()}] Build failed: ${result.error}`);
+              // Show detailed errors if available
+              const { deploy } = result;
+              if (deploy?.errors && deploy.errors.length > 0) {
+                output.showBuildErrors(deploy.errors);
+              } else if (result.error) {
+                output.error(result.error);
+              }
+              output.showBuildFailure(true);
               return;
             }
 
@@ -379,56 +428,52 @@ function createCli(): Command {
 
             if (deploy) {
               if (deploy.result === "no_changes") {
-                console.log(`[${formatTime()}] No changes detected`);
+                output.showNoChanges();
               } else {
-                console.log(
-                  `[${formatTime()}] Built in ${result.durationMs}ms`
-                );
-
                 // Show datasource changes
                 if (deploy.datasources) {
                   for (const name of deploy.datasources.created) {
-                    console.log(`  + datasource ${name} (created)`);
+                    output.showResourceChange(`${name}.datasource`, "created");
                   }
                   for (const name of deploy.datasources.changed) {
-                    console.log(`  ~ datasource ${name} (changed)`);
+                    output.showResourceChange(`${name}.datasource`, "changed");
                   }
                   for (const name of deploy.datasources.deleted) {
-                    console.log(`  - datasource ${name} (deleted)`);
+                    output.showResourceChange(`${name}.datasource`, "deleted");
                   }
                 }
 
                 // Show pipe changes
                 if (deploy.pipes) {
                   for (const name of deploy.pipes.created) {
-                    console.log(`  + pipe ${name} (created)`);
+                    output.showResourceChange(`${name}.pipe`, "created");
                   }
                   for (const name of deploy.pipes.changed) {
-                    console.log(`  ~ pipe ${name} (changed)`);
+                    output.showResourceChange(`${name}.pipe`, "changed");
                   }
                   for (const name of deploy.pipes.deleted) {
-                    console.log(`  - pipe ${name} (deleted)`);
+                    output.showResourceChange(`${name}.pipe`, "deleted");
                   }
                 }
+
+                output.showBuildSuccess(result.durationMs, true);
               }
             }
           },
           onSchemaValidation: (validation) => {
             if (validation.issues.length > 0) {
-              console.log(`[${formatTime()}] Schema validation:`);
+              output.info("Schema validation:");
               for (const issue of validation.issues) {
                 if (issue.type === "error") {
-                  console.error(
-                    `  ERROR [${issue.pipeName}]: ${issue.message}`
-                  );
+                  output.error(`  ERROR [${issue.pipeName}]: ${issue.message}`);
                 } else {
-                  console.warn(`  WARN [${issue.pipeName}]: ${issue.message}`);
+                  output.warning(`  WARN [${issue.pipeName}]: ${issue.message}`);
                 }
               }
             }
           },
-          onError: (error) => {
-            console.error(`[${formatTime()}] Error: ${error.message}`);
+          onError: (err) => {
+            output.error(err.message);
           },
         });
 
