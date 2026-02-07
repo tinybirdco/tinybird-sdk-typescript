@@ -127,9 +127,9 @@ export class TinybirdApi {
   /**
    * Query a Tinybird endpoint
    */
-  async query<T = unknown>(
+  async query<T = unknown, P extends Record<string, unknown> = Record<string, unknown>>(
     endpointName: string,
-    params: Record<string, unknown> = {},
+    params: P = {} as P,
     options: TinybirdApiQueryOptions = {}
   ): Promise<QueryResult<T>> {
     const url = new URL(`/v0/pipes/${endpointName}.json`, `${this.baseUrl}/`);
