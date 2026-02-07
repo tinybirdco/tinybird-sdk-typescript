@@ -8,15 +8,9 @@ import type {
   IngestResult,
   QueryOptions,
   IngestOptions,
-  TinybirdErrorResponse,
 } from "./types.js";
 import { TinybirdError } from "./types.js";
-import { createTinybirdFetcher, type TinybirdFetch } from "../api/fetcher.js";
-
-/**
- * Default timeout for requests (30 seconds)
- */
-const DEFAULT_TIMEOUT = 30000;
+import { TinybirdApi, TinybirdApiError } from "../api/tinybird-api.js";
 
 /**
  * Resolved token info from dev mode
@@ -57,7 +51,7 @@ interface ResolvedTokenInfo {
  */
 export class TinybirdClient {
   private readonly config: ClientConfig;
-  private readonly fetchFn: TinybirdFetch;
+  private readonly apisByToken = new Map<string, TinybirdApi>();
   private tokenPromise: Promise<ResolvedTokenInfo> | null = null;
   private resolvedToken: string | null = null;
 
@@ -75,8 +69,6 @@ export class TinybirdClient {
       ...config,
       baseUrl: config.baseUrl.replace(/\/$/, ""),
     };
-
-    this.fetchFn = createTinybirdFetcher(config.fetch ?? globalThis.fetch);
   }
 
   /**
@@ -159,39 +151,12 @@ export class TinybirdClient {
     options: QueryOptions = {}
   ): Promise<QueryResult<T>> {
     const token = await this.getToken();
-    const url = new URL(`/v0/pipes/${pipeName}.json`, this.config.baseUrl);
 
-    // Add parameters to query string
-    for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== null) {
-        if (Array.isArray(value)) {
-          // Handle array parameters
-          for (const item of value) {
-            url.searchParams.append(key, String(item));
-          }
-        } else if (value instanceof Date) {
-          // Handle Date objects
-          url.searchParams.set(key, value.toISOString());
-        } else {
-          url.searchParams.set(key, String(value));
-        }
-      }
+    try {
+      return await this.getApi(token).query<T>(pipeName, params, options);
+    } catch (error) {
+      this.rethrowApiError(error);
     }
-
-    const response = await this.fetch(url.toString(), {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      signal: this.createAbortSignal(options.timeout, options.signal),
-    });
-
-    if (!response.ok) {
-      await this.handleErrorResponse(response);
-    }
-
-    const result = (await response.json()) as QueryResult<T>;
-    return result;
   }
 
   /**
@@ -223,39 +188,13 @@ export class TinybirdClient {
     events: T[],
     options: IngestOptions = {}
   ): Promise<IngestResult> {
-    if (events.length === 0) {
-      return { successful_rows: 0, quarantined_rows: 0 };
-    }
-
     const token = await this.getToken();
-    const url = new URL("/v0/events", this.config.baseUrl);
-    url.searchParams.set("name", datasourceName);
 
-    if (options.wait !== false) {
-      url.searchParams.set("wait", "true");
+    try {
+      return await this.getApi(token).ingestBatch(datasourceName, events, options);
+    } catch (error) {
+      this.rethrowApiError(error);
     }
-
-    // Convert events to NDJSON format
-    const ndjson = events
-      .map((event) => JSON.stringify(this.serializeEvent(event)))
-      .join("\n");
-
-    const response = await this.fetch(url.toString(), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/x-ndjson",
-      },
-      body: ndjson,
-      signal: this.createAbortSignal(options.timeout, options.signal),
-    });
-
-    if (!response.ok) {
-      await this.handleErrorResponse(response);
-    }
-
-    const result = (await response.json()) as IngestResult;
-    return result;
   }
 
   /**
@@ -270,127 +209,41 @@ export class TinybirdClient {
     options: QueryOptions = {}
   ): Promise<QueryResult<T>> {
     const token = await this.getToken();
-    const url = new URL("/v0/sql", this.config.baseUrl);
-
-    const response = await this.fetch(url.toString(), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "text/plain",
-      },
-      body: sql,
-      signal: this.createAbortSignal(options.timeout, options.signal),
-    });
-
-    if (!response.ok) {
-      await this.handleErrorResponse(response);
-    }
-
-    const result = (await response.json()) as QueryResult<T>;
-    return result;
-  }
-
-  /**
-   * Serialize an event for ingestion, handling Date objects and other special types
-   */
-  private serializeEvent<T extends Record<string, unknown>>(
-    event: T
-  ): Record<string, unknown> {
-    const serialized: Record<string, unknown> = {};
-
-    for (const [key, value] of Object.entries(event)) {
-      if (value instanceof Date) {
-        // Convert Date to ISO string
-        serialized[key] = value.toISOString();
-      } else if (value instanceof Map) {
-        // Convert Map to object
-        serialized[key] = Object.fromEntries(value);
-      } else if (typeof value === "bigint") {
-        // Convert BigInt to string (ClickHouse will parse it)
-        serialized[key] = value.toString();
-      } else if (Array.isArray(value)) {
-        // Recursively serialize array elements
-        serialized[key] = value.map((item) =>
-          typeof item === "object" && item !== null
-            ? this.serializeEvent(item as Record<string, unknown>)
-            : item instanceof Date
-              ? item.toISOString()
-              : item
-        );
-      } else if (typeof value === "object" && value !== null) {
-        // Recursively serialize nested objects
-        serialized[key] = this.serializeEvent(value as Record<string, unknown>);
-      } else {
-        serialized[key] = value;
-      }
-    }
-
-    return serialized;
-  }
-
-  /**
-   * Create an AbortSignal with timeout
-   */
-  private createAbortSignal(
-    timeout?: number,
-    existingSignal?: AbortSignal
-  ): AbortSignal | undefined {
-    const timeoutMs = timeout ?? this.config.timeout ?? DEFAULT_TIMEOUT;
-
-    // If no timeout and no existing signal, return undefined
-    if (!timeoutMs && !existingSignal) {
-      return undefined;
-    }
-
-    // If only existing signal, return it
-    if (!timeoutMs && existingSignal) {
-      return existingSignal;
-    }
-
-    // Create timeout signal
-    const timeoutSignal = AbortSignal.timeout(timeoutMs);
-
-    // If only timeout, return timeout signal
-    if (!existingSignal) {
-      return timeoutSignal;
-    }
-
-    // Combine both signals
-    return AbortSignal.any([timeoutSignal, existingSignal]);
-  }
-
-  /**
-   * Handle error responses from the API
-   */
-  private async handleErrorResponse(response: Response): Promise<never> {
-    let errorResponse: TinybirdErrorResponse | undefined;
-    let rawBody: string | undefined;
 
     try {
-      rawBody = await response.text();
-      errorResponse = JSON.parse(rawBody) as TinybirdErrorResponse;
-    } catch {
-      // Failed to parse error response - include raw body in message
-      if (rawBody) {
-        throw new TinybirdError(
-          `Request failed with status ${response.status}: ${rawBody}`,
-          response.status,
-          undefined
-        );
-      }
+      return await this.getApi(token).sql<T>(sql, options);
+    } catch (error) {
+      this.rethrowApiError(error);
     }
-
-    const message =
-      errorResponse?.error ?? `Request failed with status ${response.status}`;
-
-    throw new TinybirdError(message, response.status, errorResponse);
   }
 
-  /**
-   * Internal fetch wrapper
-   */
-  private fetch(url: string, init?: RequestInit): Promise<Response> {
-    return this.fetchFn(url, init);
+  private getApi(token: string): TinybirdApi {
+    const existing = this.apisByToken.get(token);
+    if (existing) {
+      return existing;
+    }
+
+    const api = new TinybirdApi({
+      baseUrl: this.config.baseUrl,
+      token,
+      fetch: this.config.fetch,
+      timeout: this.config.timeout,
+    });
+
+    this.apisByToken.set(token, api);
+    return api;
+  }
+
+  private rethrowApiError(error: unknown): never {
+    if (error instanceof TinybirdApiError) {
+      throw new TinybirdError(
+        error.message,
+        error.statusCode,
+        error.response
+      );
+    }
+
+    throw error;
   }
 }
 
