@@ -188,11 +188,22 @@ const api = createTinybirdApi({
   token: process.env.TINYBIRD_TOKEN!,
 });
 
-// Raw response
-const response = await api.request("/v1/workspace");
+// Query endpoint pipe
+const topPages = await api.query("top_pages", {
+  start_date: "2024-01-01",
+  end_date: "2024-01-31",
+  limit: 5,
+});
 
-// Parsed JSON response
-const workspace = await api.requestJson<{ id: string; name: string }>("/v1/workspace");
+// Ingest one row into datasource
+await api.ingest("events", {
+  timestamp: new Date(),
+  event_name: "page_view",
+  pathname: "/home",
+});
+
+// Execute raw SQL
+const sqlResult = await api.sql("SELECT count() AS total FROM events");
 
 // Optional per-request token override
 await api.request("/v1/workspace", {

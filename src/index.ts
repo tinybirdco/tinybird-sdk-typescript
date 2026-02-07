@@ -223,6 +223,8 @@ export {
 } from "./api/tinybird-api.js";
 export type {
   TinybirdApiConfig,
+  TinybirdApiQueryOptions,
+  TinybirdApiIngestOptions,
   TinybirdApiRequestInit,
 } from "./api/tinybird-api.js";
 

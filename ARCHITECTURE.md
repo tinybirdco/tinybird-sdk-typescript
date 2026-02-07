@@ -103,6 +103,7 @@ Sends generated resources to Tinybird's API and fetches existing resources.
 - Form field `data_project://` signals Tinybird to process the file
 - `/v1/build` for branches, `/v1/deploy` for main workspace
 - Public API wrapper can be used standalone with only `baseUrl` + `token`
+- Public API exposes direct runtime methods: `query()`, `ingest()`, `sql()`
 
 ### Codegen Layer (`src/codegen/`)
 
