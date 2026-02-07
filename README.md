@@ -175,6 +175,35 @@ const result = await tinybird.query.topPages({
 // result.data is fully typed: { pathname: string, views: bigint }[]
 ```
 
+## Public Tinybird API (Optional)
+
+If you want a low-level API wrapper that is decoupled from the typed client layer,
+you can use `createTinybirdApi()` directly with just `baseUrl` and `token`:
+
+```typescript
+import { createTinybirdApi } from "@tinybirdco/sdk";
+
+const api = createTinybirdApi({
+  baseUrl: "https://api.tinybird.co",
+  token: process.env.TINYBIRD_TOKEN!,
+});
+
+// Raw response
+const response = await api.request("/v1/workspace");
+
+// Parsed JSON response
+const workspace = await api.requestJson<{ id: string; name: string }>("/v1/workspace");
+
+// Optional per-request token override
+await api.request("/v1/workspace", {
+  token: process.env.TINYBIRD_BRANCH_TOKEN,
+});
+```
+
+This Tinybird API is standalone and can be used without `createClient()` or `createTinybirdClient()`.
+It is intended for cases where you want a simple public API that remains
+decoupled from the higher-level typed client APIs.
+
 ## CLI Commands
 
 ### `npx tinybird init`
