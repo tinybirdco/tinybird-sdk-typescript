@@ -175,6 +175,53 @@ const result = await tinybird.query.topPages({
 // result.data is fully typed: { pathname: string, views: bigint }[]
 ```
 
+## Public Tinybird API (Optional)
+
+If you want a low-level API wrapper that is decoupled from the typed client layer,
+you can use `createTinybirdApi()` directly with just `baseUrl` and `token`:
+
+```typescript
+import { createTinybirdApi } from "@tinybirdco/sdk";
+
+const api = createTinybirdApi({
+  baseUrl: "https://api.tinybird.co",
+  token: process.env.TINYBIRD_TOKEN!,
+});
+
+// Query endpoint pipe (with optional type parameters)
+interface TopPagesRow { pathname: string; visits: number }
+interface TopPagesParams { start_date: string; end_date: string; limit?: number }
+
+const topPages = await api.query<TopPagesRow, TopPagesParams>("top_pages", {
+  start_date: "2024-01-01",
+  end_date: "2024-01-31",
+  limit: 5,
+});
+
+// Ingest one row into datasource (with optional type parameter)
+interface EventRow { timestamp: Date; event_name: string; pathname: string }
+
+await api.ingest<EventRow>("events", {
+  timestamp: new Date(),
+  event_name: "page_view",
+  pathname: "/home",
+});
+
+// Execute raw SQL (with optional type parameter)
+interface CountResult { total: number }
+
+const sqlResult = await api.sql<CountResult>("SELECT count() AS total FROM events");
+
+// Optional per-request token override
+await api.request("/v1/workspace", {
+  token: process.env.TINYBIRD_BRANCH_TOKEN,
+});
+```
+
+This Tinybird API is standalone and can be used without `createClient()` or `createTinybirdClient()`.
+It is intended for cases where you want a simple public API that remains
+decoupled from the higher-level typed client APIs.
+
 ## CLI Commands
 
 ### `npx tinybird init`

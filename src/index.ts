@@ -214,6 +214,20 @@ export type {
   TypedDatasourceIngest,
 } from "./client/types.js";
 
+// ============ Public Tinybird API ============
+export {
+  TinybirdApi,
+  TinybirdApiError,
+  createTinybirdApi,
+  createTinybirdApiWrapper,
+} from "./api/api.js";
+export type {
+  TinybirdApiConfig,
+  TinybirdApiQueryOptions,
+  TinybirdApiIngestOptions,
+  TinybirdApiRequestInit,
+} from "./api/api.js";
+
 // ============ Preview Environment ============
 export {
   isPreviewEnvironment,
