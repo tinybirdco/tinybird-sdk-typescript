@@ -220,13 +220,13 @@ export {
   TinybirdApiError,
   createTinybirdApi,
   createTinybirdApiWrapper,
-} from "./api/tinybird-api.js";
+} from "./api/api.js";
 export type {
   TinybirdApiConfig,
   TinybirdApiQueryOptions,
   TinybirdApiIngestOptions,
   TinybirdApiRequestInit,
-} from "./api/tinybird-api.js";
+} from "./api/api.js";
 
 // ============ Preview Environment ============
 export {

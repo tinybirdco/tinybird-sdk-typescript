@@ -10,7 +10,7 @@ import type {
   IngestOptions,
 } from "./types.js";
 import { TinybirdError } from "./types.js";
-import { TinybirdApi, TinybirdApiError } from "../api/tinybird-api.js";
+import { TinybirdApi, TinybirdApiError } from "../api/api.js";
 
 /**
  * Resolved token info from dev mode

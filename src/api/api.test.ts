@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
-import { createTinybirdApi } from "./tinybird-api.js";
+import { createTinybirdApi } from "./api.js";
 import { TINYBIRD_FROM_PARAM } from "./fetcher.js";
 import { BASE_URL } from "../test/handlers.js";
 

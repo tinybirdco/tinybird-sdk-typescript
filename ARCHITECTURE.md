@@ -95,7 +95,7 @@ Sends generated resources to Tinybird's API and fetches existing resources.
 - `workspaces.ts` - Workspace discovery
 - `resources.ts` - Fetch existing datasources and pipes from workspace
 - `local.ts` - Local Tinybird container integration
-- `tinybird-api.ts` - Public decoupled API wrapper (`createTinybirdApi()`)
+- `api.ts` - Public decoupled API wrapper (`createTinybirdApi()`)
 
 **Key Patterns:**
 - Resources sent as multipart form data
