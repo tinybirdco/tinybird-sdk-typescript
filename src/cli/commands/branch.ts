@@ -16,6 +16,7 @@ import {
   removeBranch as removeCachedBranch,
   listCachedBranches,
 } from "../branch-store.js";
+import { getBranchDashboardUrl } from "../../api/dashboard.js";
 
 /**
  * Branch command options
@@ -53,6 +54,8 @@ export interface BranchStatusResult {
   tinybirdBranch?: TinybirdBranch;
   /** Whether a cached token exists */
   hasCachedToken: boolean;
+  /** Dashboard URL for the branch */
+  dashboardUrl?: string;
   /** Error message if failed */
   error?: string;
 }
@@ -135,14 +138,16 @@ export async function runBranchStatus(
   const tinybirdBranchName = config.tinybirdBranch; // Sanitized name
   const isMainBranch = config.isMainBranch;
 
-  // Fetch the workspace ID from the API
+  // Fetch the workspace from the API
   let workspaceId: string;
+  let workspaceName: string;
   try {
     const workspace = await getWorkspace({
       baseUrl: config.baseUrl,
       token: config.token,
     });
     workspaceId = workspace.id;
+    workspaceName = workspace.name;
   } catch (error) {
     return {
       success: false,
@@ -153,6 +158,11 @@ export async function runBranchStatus(
       error: (error as Error).message,
     };
   }
+
+  // Generate dashboard URL for the branch
+  const dashboardUrl = tinybirdBranchName
+    ? getBranchDashboardUrl(config.baseUrl, workspaceName, tinybirdBranchName) ?? undefined
+    : undefined;
 
   // Check for cached token (use sanitized name)
   const cachedBranch = tinybirdBranchName ? getBranchToken(workspaceId, tinybirdBranchName) : null;
@@ -166,6 +176,7 @@ export async function runBranchStatus(
       tinybirdBranchName,
       isMainBranch,
       hasCachedToken,
+      dashboardUrl,
     };
   }
 
@@ -186,6 +197,7 @@ export async function runBranchStatus(
       isMainBranch,
       tinybirdBranch,
       hasCachedToken,
+      dashboardUrl,
     };
   } catch (error) {
     // If 404, branch doesn't exist yet
@@ -196,6 +208,7 @@ export async function runBranchStatus(
         tinybirdBranchName,
         isMainBranch,
         hasCachedToken,
+        dashboardUrl,
       };
     }
 
@@ -205,6 +218,7 @@ export async function runBranchStatus(
       tinybirdBranchName,
       isMainBranch,
       hasCachedToken,
+      dashboardUrl,
       error: (error as Error).message,
     };
   }

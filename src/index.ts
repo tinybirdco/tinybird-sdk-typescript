@@ -235,3 +235,12 @@ export {
   resolveToken,
   clearTokenCache,
 } from "./client/preview.js";
+
+// ============ Dashboard URL Utilities ============
+export {
+  parseApiUrl,
+  getDashboardUrl,
+  getBranchDashboardUrl,
+  getLocalDashboardUrl,
+} from "./api/dashboard.js";
+export type { RegionInfo } from "./api/dashboard.js";

@@ -101,4 +101,12 @@ export const handlers = [
     const jobId = params.jobId as string;
     return HttpResponse.json(createJobDoneResponse(jobId));
   }),
+
+  // Get workspace (GET /v1/workspace)
+  http.get(`${BASE_URL}/v1/workspace`, () => {
+    return HttpResponse.json({
+      id: "workspace-e2e-123",
+      name: "test_workspace",
+    });
+  }),
 ];
