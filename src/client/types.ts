@@ -148,6 +148,23 @@ export interface IngestOptions {
 }
 
 /**
+ * Client context information
+ * Contains the resolved configuration and state of the client
+ */
+export interface ClientContext {
+  /** The resolved token being used for requests (workspace or branch token) */
+  token: string;
+  /** Tinybird API base URL */
+  baseUrl: string;
+  /** Whether dev mode is enabled */
+  devMode: boolean;
+  /** Whether the resolved token is a branch token (vs workspace token) */
+  isBranchToken: boolean;
+  /** The branch name if using a branch token */
+  branchName: string | null;
+}
+
+/**
  * Base interface for typed pipe endpoints
  */
 export interface TypedPipeEndpoint<TParams, TOutput> {

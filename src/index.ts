@@ -203,6 +203,7 @@ export { TinybirdClient, createClient } from "./client/base.js";
 export { TinybirdError } from "./client/types.js";
 export type {
   ClientConfig,
+  ClientContext,
   QueryResult,
   IngestResult,
   QueryOptions,

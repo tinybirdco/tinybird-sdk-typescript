@@ -4,6 +4,7 @@
 
 import type {
   ClientConfig,
+  ClientContext,
   QueryResult,
   IngestResult,
   QueryOptions,
@@ -52,8 +53,8 @@ interface ResolvedTokenInfo {
 export class TinybirdClient {
   private readonly config: ClientConfig;
   private readonly apisByToken = new Map<string, TinybirdApi>();
-  private tokenPromise: Promise<ResolvedTokenInfo> | null = null;
-  private resolvedToken: string | null = null;
+  private contextPromise: Promise<ClientContext> | null = null;
+  private resolvedContext: ClientContext | null = null;
 
   constructor(config: ClientConfig) {
     // Validate required config
@@ -75,31 +76,55 @@ export class TinybirdClient {
    * Get the effective token, resolving branch token in dev mode if needed
    */
   private async getToken(): Promise<string> {
+    const context = await this.resolveContext();
+    return context.token;
+  }
+
+  /**
+   * Resolve the client context, including branch token resolution in dev mode
+   * This is the single source of truth for all context data
+   */
+  private async resolveContext(): Promise<ClientContext> {
     // If already resolved, return it
-    if (this.resolvedToken) {
-      return this.resolvedToken;
+    if (this.resolvedContext) {
+      return this.resolvedContext;
     }
 
     // If not in dev mode, use the configured token
     if (!this.config.devMode) {
-      this.resolvedToken = this.config.token;
-      return this.resolvedToken;
+      this.resolvedContext = this.buildContext({
+        token: this.config.token,
+        isBranchToken: false,
+      });
+      return this.resolvedContext;
     }
 
     // In dev mode, lazily resolve the branch token
-    if (!this.tokenPromise) {
-      this.tokenPromise = this.resolveBranchToken();
+    if (!this.contextPromise) {
+      this.contextPromise = this.resolveBranchContext();
     }
 
-    const resolved = await this.tokenPromise;
-    this.resolvedToken = resolved.token;
-    return this.resolvedToken;
+    this.resolvedContext = await this.contextPromise;
+    return this.resolvedContext;
   }
 
   /**
-   * Resolve the branch token in dev mode
+   * Build the client context from resolved token info
    */
-  private async resolveBranchToken(): Promise<ResolvedTokenInfo> {
+  private buildContext(tokenInfo: ResolvedTokenInfo): ClientContext {
+    return {
+      token: tokenInfo.token,
+      baseUrl: this.config.baseUrl,
+      devMode: this.config.devMode ?? false,
+      isBranchToken: tokenInfo.isBranchToken,
+      branchName: tokenInfo.branchName ?? null,
+    };
+  }
+
+  /**
+   * Resolve the branch context in dev mode
+   */
+  private async resolveBranchContext(): Promise<ClientContext> {
     try {
       // Dynamic import to avoid circular dependencies and to keep CLI code
       // out of the client bundle when not using dev mode
@@ -110,7 +135,7 @@ export class TinybirdClient {
 
       // If on main branch, use the workspace token
       if (config.isMainBranch || !config.tinybirdBranch) {
-        return { token: this.config.token, isBranchToken: false };
+        return this.buildContext({ token: this.config.token, isBranchToken: false });
       }
 
       const branchName = config.tinybirdBranch;
@@ -123,17 +148,17 @@ export class TinybirdClient {
 
       if (!branch.token) {
         // Fall back to workspace token if no branch token
-        return { token: this.config.token, isBranchToken: false };
+        return this.buildContext({ token: this.config.token, isBranchToken: false });
       }
 
-      return {
+      return this.buildContext({
         token: branch.token,
         isBranchToken: true,
         branchName,
-      };
+      });
     } catch {
       // If anything fails, fall back to the workspace token
-      return { token: this.config.token, isBranchToken: false };
+      return this.buildContext({ token: this.config.token, isBranchToken: false });
     }
   }
 
@@ -215,6 +240,31 @@ export class TinybirdClient {
     } catch (error) {
       this.rethrowApiError(error);
     }
+  }
+
+  /**
+   * Get the current client context
+   *
+   * Returns information about the resolved configuration including the token being used,
+   * API URL, dev mode status, and branch information.
+   *
+   * @returns Client context with resolved configuration
+   *
+   * @example
+   * ```ts
+   * const client = createClient({
+   *   baseUrl: 'https://api.tinybird.co',
+   *   token: process.env.TINYBIRD_TOKEN,
+   *   devMode: true,
+   * });
+   *
+   * const context = await client.getContext();
+   * console.log(context.branchName); // 'feature_my_branch'
+   * console.log(context.isBranchToken); // true
+   * ```
+   */
+  async getContext(): Promise<ClientContext> {
+    return this.resolveContext();
   }
 
   private getApi(token: string): TinybirdApi {
