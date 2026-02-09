@@ -133,7 +133,9 @@ export class TinybirdClient {
       const { loadConfig } = await import("../cli/config.js");
       const { getOrCreateBranch } = await import("../api/branches.js");
 
-      const config = loadConfig();
+      // Use configDir if provided (important for monorepo setups where process.cwd()
+      // may not be in the same directory tree as tinybird.json)
+      const config = loadConfig(this.config.configDir);
       const gitBranch = config.gitBranch ?? undefined;
 
       // If on main branch, use the workspace token

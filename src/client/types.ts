@@ -20,6 +20,13 @@ export interface ClientConfig {
    * Tinybird branch token instead of the workspace token.
    */
   devMode?: boolean;
+  /**
+   * Directory to use as the starting point when searching for tinybird.json config.
+   * In monorepo setups, this should be set to the directory containing tinybird.json
+   * to ensure the config is found regardless of where the application runs from.
+   * Typically derived from import.meta.url in the generated client.
+   */
+  configDir?: string;
 }
 
 /**

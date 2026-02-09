@@ -110,6 +110,9 @@ export function generateClientFile(options: GenerateClientOptions): GeneratedCli
   importLines.push(
     `import { createTinybirdClient, type ${sdkTypes.join(", type ")} } from "@tinybirdco/sdk";`
   );
+  // Node imports for deriving configDir from import.meta.url (monorepo support)
+  importLines.push(`import { fileURLToPath } from "url";`);
+  importLines.push(`import { dirname } from "path";`);
   importLines.push("");
 
   // Entity imports and re-exports
@@ -129,6 +132,10 @@ export function generateClientFile(options: GenerateClientOptions): GeneratedCli
   const pipeNames = Object.keys(entities.pipes);
 
   const clientLines: string[] = [];
+  // Derive configDir from import.meta.url for monorepo support
+  // This ensures tinybird.json is found regardless of where the app runs from
+  clientLines.push("const __configDir = dirname(fileURLToPath(import.meta.url));");
+  clientLines.push("");
   clientLines.push("export const tinybird = createTinybirdClient({");
 
   if (datasourceNames.length > 0) {
@@ -143,6 +150,7 @@ export function generateClientFile(options: GenerateClientOptions): GeneratedCli
     clientLines.push("  pipes: {},");
   }
 
+  clientLines.push("  configDir: __configDir,");
   clientLines.push("});");
 
   // Build type exports
