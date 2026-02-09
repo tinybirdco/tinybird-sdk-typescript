@@ -313,6 +313,18 @@ describe("generateClientFile", () => {
     expect(file).toContain("export { events, topEvents }");
   });
 
+  it("includes configDir for monorepo support", () => {
+    const file = generateClientFile([], []);
+
+    // Should include Node imports for deriving configDir
+    expect(file).toContain('import { fileURLToPath } from "url"');
+    expect(file).toContain('import { dirname } from "path"');
+    // Should derive __configDir from import.meta.url
+    expect(file).toContain("const __configDir = dirname(fileURLToPath(import.meta.url))");
+    // Should pass configDir to createTinybirdClient
+    expect(file).toContain("configDir: __configDir");
+  });
+
   it("handles empty datasources and pipes", () => {
     const file = generateClientFile([], []);
 

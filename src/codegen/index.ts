@@ -268,6 +268,9 @@ export function generateClientFile(
     " */",
     "",
     'import { createTinybirdClient } from "@tinybirdco/sdk";',
+    // Node imports for deriving configDir from import.meta.url (monorepo support)
+    'import { fileURLToPath } from "url";',
+    'import { dirname } from "path";',
     "",
   ];
 
@@ -304,7 +307,11 @@ export function generateClientFile(
 
   lines.push("");
 
-  // Create client
+  // Create client with configDir for monorepo support
+  lines.push("// Derive configDir from import.meta.url for monorepo support");
+  lines.push("// This ensures tinybird.json is found regardless of where the app runs from");
+  lines.push("const __configDir = dirname(fileURLToPath(import.meta.url));");
+  lines.push("");
   lines.push("// Create the typed Tinybird client");
   lines.push("export const tinybird = createTinybirdClient({");
 
@@ -322,6 +329,7 @@ export function generateClientFile(
     lines.push("  pipes: {},");
   }
 
+  lines.push("  configDir: __configDir,");
   lines.push("});");
   lines.push("");
 
@@ -445,6 +453,9 @@ export function generateCombinedFile(
   lines.push(`import {`);
   lines.push(`  ${sdkImports.join(",\n  ")},`);
   lines.push(`} from "@tinybirdco/sdk";`);
+  // Node imports for deriving configDir from import.meta.url (monorepo support)
+  lines.push('import { fileURLToPath } from "url";');
+  lines.push('import { dirname } from "path";');
   lines.push("");
 
   // Datasources section
@@ -489,9 +500,15 @@ export function generateCombinedFile(
       ? endpoints.map((p) => toCamelCase(p.name)).join(", ")
       : "";
 
+  // Derive configDir from import.meta.url for monorepo support
+  lines.push("// Derive configDir from import.meta.url for monorepo support");
+  lines.push("// This ensures tinybird.json is found regardless of where the app runs from");
+  lines.push("const __configDir = dirname(fileURLToPath(import.meta.url));");
+  lines.push("");
   lines.push("export const tinybird = createTinybirdClient({");
   lines.push(`  datasources: { ${dsNames} },`);
   lines.push(`  pipes: { ${pipeNames} },`);
+  lines.push("  configDir: __configDir,");
   lines.push("});");
   lines.push("");
 

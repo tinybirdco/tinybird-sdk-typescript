@@ -101,6 +101,12 @@ export interface TinybirdClientConfig<
   baseUrl?: string;
   /** Tinybird API token (defaults to TINYBIRD_TOKEN env var) */
   token?: string;
+  /**
+   * Directory to use as the starting point when searching for tinybird.json config.
+   * In monorepo setups, this should be set to the directory containing tinybird.json
+   * to ensure the config is found regardless of where the application runs from.
+   */
+  configDir?: string;
 }
 
 /**
@@ -215,7 +221,7 @@ function buildProjectClient<
 >(
   datasources: TDatasources,
   pipes: TPipes,
-  options?: { baseUrl?: string; token?: string }
+  options?: { baseUrl?: string; token?: string; configDir?: string }
 ): ProjectClient<TDatasources, TPipes> {
   // Lazy client initialization
   let _client: TinybirdClient | null = null;
@@ -234,6 +240,7 @@ function buildProjectClient<
         baseUrl,
         token,
         devMode: process.env.NODE_ENV === "development",
+        configDir: options?.configDir,
       });
     }
     return _client;
@@ -342,7 +349,7 @@ export function createTinybirdClient<
   return buildProjectClient(
     config.datasources,
     config.pipes,
-    { baseUrl: config.baseUrl, token: config.token }
+    { baseUrl: config.baseUrl, token: config.token, configDir: config.configDir }
   );
 }
 
