@@ -20,6 +20,7 @@ interface ResolvedTokenInfo {
   token: string;
   isBranchToken: boolean;
   branchName?: string;
+  gitBranch?: string;
 }
 
 /**
@@ -118,6 +119,7 @@ export class TinybirdClient {
       devMode: this.config.devMode ?? false,
       isBranchToken: tokenInfo.isBranchToken,
       branchName: tokenInfo.branchName ?? null,
+      gitBranch: tokenInfo.gitBranch ?? null,
     };
   }
 
@@ -132,10 +134,11 @@ export class TinybirdClient {
       const { getOrCreateBranch } = await import("../api/branches.js");
 
       const config = loadConfig();
+      const gitBranch = config.gitBranch ?? undefined;
 
       // If on main branch, use the workspace token
       if (config.isMainBranch || !config.tinybirdBranch) {
-        return this.buildContext({ token: this.config.token, isBranchToken: false });
+        return this.buildContext({ token: this.config.token, isBranchToken: false, gitBranch });
       }
 
       const branchName = config.tinybirdBranch;
@@ -148,13 +151,14 @@ export class TinybirdClient {
 
       if (!branch.token) {
         // Fall back to workspace token if no branch token
-        return this.buildContext({ token: this.config.token, isBranchToken: false });
+        return this.buildContext({ token: this.config.token, isBranchToken: false, gitBranch });
       }
 
       return this.buildContext({
         token: branch.token,
         isBranchToken: true,
         branchName,
+        gitBranch,
       });
     } catch {
       // If anything fails, fall back to the workspace token
