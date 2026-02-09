@@ -160,8 +160,10 @@ export interface ClientContext {
   devMode: boolean;
   /** Whether the resolved token is a branch token (vs workspace token) */
   isBranchToken: boolean;
-  /** The branch name if using a branch token */
+  /** The Tinybird branch name if using a branch token (sanitized for Tinybird) */
   branchName: string | null;
+  /** The current git branch name (null if not in a git repo or devMode is disabled) */
+  gitBranch: string | null;
 }
 
 /**

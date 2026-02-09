@@ -48,6 +48,7 @@ describe("TinybirdClient", () => {
         devMode: false,
         isBranchToken: false,
         branchName: null,
+        gitBranch: null,
       });
     });
 
@@ -79,6 +80,16 @@ describe("TinybirdClient", () => {
 
       const context = await client.getContext();
       expect(context.branchName).toBeNull();
+    });
+
+    it("returns gitBranch: null when not in devMode", async () => {
+      const client = new TinybirdClient({
+        baseUrl: "https://api.tinybird.co",
+        token: "test-token",
+      });
+
+      const context = await client.getContext();
+      expect(context.gitBranch).toBeNull();
     });
 
     it("caches the resolved context", async () => {
