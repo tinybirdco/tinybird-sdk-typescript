@@ -4,6 +4,7 @@
 
 import type {
   ClientConfig,
+  ClientContext,
   QueryResult,
   IngestResult,
   QueryOptions,
@@ -54,6 +55,7 @@ export class TinybirdClient {
   private readonly apisByToken = new Map<string, TinybirdApi>();
   private tokenPromise: Promise<ResolvedTokenInfo> | null = null;
   private resolvedToken: string | null = null;
+  private resolvedTokenInfo: ResolvedTokenInfo | null = null;
 
   constructor(config: ClientConfig) {
     // Validate required config
@@ -83,6 +85,7 @@ export class TinybirdClient {
     // If not in dev mode, use the configured token
     if (!this.config.devMode) {
       this.resolvedToken = this.config.token;
+      this.resolvedTokenInfo = { token: this.config.token, isBranchToken: false };
       return this.resolvedToken;
     }
 
@@ -93,6 +96,7 @@ export class TinybirdClient {
 
     const resolved = await this.tokenPromise;
     this.resolvedToken = resolved.token;
+    this.resolvedTokenInfo = resolved;
     return this.resolvedToken;
   }
 
@@ -215,6 +219,40 @@ export class TinybirdClient {
     } catch (error) {
       this.rethrowApiError(error);
     }
+  }
+
+  /**
+   * Get the current client context
+   *
+   * Returns information about the resolved configuration including the token being used,
+   * API URL, dev mode status, and branch information.
+   *
+   * @returns Client context with resolved configuration
+   *
+   * @example
+   * ```ts
+   * const client = createClient({
+   *   baseUrl: 'https://api.tinybird.co',
+   *   token: process.env.TINYBIRD_TOKEN,
+   *   devMode: true,
+   * });
+   *
+   * const context = await client.getContext();
+   * console.log(context.branchName); // 'feature_my_branch'
+   * console.log(context.isBranchToken); // true
+   * ```
+   */
+  async getContext(): Promise<ClientContext> {
+    // Ensure token is resolved
+    await this.getToken();
+
+    return {
+      token: this.resolvedToken!,
+      baseUrl: this.config.baseUrl,
+      devMode: this.config.devMode ?? false,
+      isBranchToken: this.resolvedTokenInfo?.isBranchToken ?? false,
+      branchName: this.resolvedTokenInfo?.branchName ?? null,
+    };
   }
 
   private getApi(token: string): TinybirdApi {
