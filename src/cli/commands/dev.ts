@@ -4,7 +4,16 @@
 
 import * as path from "path";
 import { watch } from "chokidar";
-import { loadConfig, configExists, findConfigFile, hasValidToken, updateConfig, LOCAL_BASE_URL, type ResolvedConfig, type DevMode } from "../config.js";
+import {
+  loadConfig,
+  configExists,
+  findConfigFile,
+  hasValidToken,
+  updateConfig,
+  LOCAL_BASE_URL,
+  type ResolvedConfig,
+  type DevMode,
+} from "../config.js";
 import { runBuild, type BuildCommandResult } from "./build.js";
 import { getOrCreateBranch, type TinybirdBranch } from "../../api/branches.js";
 import { browserLogin } from "../auth.js";
@@ -19,6 +28,8 @@ import {
   getLocalWorkspaceName,
   type LocalWorkspace,
 } from "../../api/local.js";
+import { getWorkspace } from "../../api/workspaces.js";
+import { getBranchDashboardUrl, getLocalDashboardUrl } from "../../api/dashboard.js";
 
 /**
  * Login result info
@@ -70,6 +81,8 @@ export interface BranchReadyInfo {
   isLocal?: boolean;
   /** Local workspace info (only in local mode) */
   localWorkspace?: LocalWorkspace;
+  /** Dashboard URL for the branch (only in branch mode) */
+  dashboardUrl?: string;
 }
 
 /**
@@ -99,7 +112,9 @@ export interface DevController {
  * @param options - Dev options
  * @returns Dev controller
  */
-export async function runDev(options: DevCommandOptions = {}): Promise<DevController> {
+export async function runDev(
+  options: DevCommandOptions = {}
+): Promise<DevController> {
   const cwd = options.cwd ?? process.cwd();
   const debounceMs = options.debounce ?? 100;
 
@@ -129,7 +144,8 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
 
     if (!authResult.success || !authResult.token) {
       throw new Error(
-        authResult.error ?? "Login failed. Run 'npx tinybird login' to authenticate."
+        authResult.error ??
+          "Login failed. Run 'npx tinybird login' to authenticate."
       );
     }
 
@@ -173,8 +189,14 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
   if (devMode === "local") {
     // Local mode: get tokens from local container and set up workspace
     const localTokens = await getLocalTokens();
-    const workspaceName = getLocalWorkspaceName(config.tinybirdBranch, config.cwd);
-    const { workspace, wasCreated } = await getOrCreateLocalWorkspace(localTokens, workspaceName);
+    const workspaceName = getLocalWorkspaceName(
+      config.tinybirdBranch,
+      config.cwd
+    );
+    const { workspace, wasCreated } = await getOrCreateLocalWorkspace(
+      localTokens,
+      workspaceName
+    );
 
     effectiveToken = workspace.token;
     effectiveBaseUrl = LOCAL_BASE_URL;
@@ -184,6 +206,7 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
       isLocal: true,
       localWorkspace: workspace,
       wasCreated,
+      dashboardUrl: getLocalDashboardUrl(workspace.name),
     };
   } else {
     // Branch mode: use Tinybird cloud with branches
@@ -216,11 +239,22 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
       }
 
       effectiveToken = tinybirdBranch.token;
+
+      // Get workspace name for dashboard URL
+      const workspace = await getWorkspace({
+        baseUrl: config.baseUrl,
+        token: config.token,
+      });
+      const dashboardUrl =
+        getBranchDashboardUrl(config.baseUrl, workspace.name, branchName) ??
+        undefined;
+
       branchInfo = {
         gitBranch: config.gitBranch, // Original git branch name for display
         isMainBranch: false,
         tinybirdBranch,
         wasCreated: tinybirdBranch.wasCreated ?? false,
+        dashboardUrl,
       };
     }
   }
@@ -246,7 +280,11 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
   async function doBuild(): Promise<BuildCommandResult> {
     if (isBuilding) {
       pendingBuild = true;
-      return { success: false, error: "Build already in progress", durationMs: 0 };
+      return {
+        success: false,
+        error: "Build already in progress",
+        durationMs: 0,
+      };
     }
 
     isBuilding = true;
@@ -357,7 +395,9 @@ export async function runDev(options: DevCommandOptions = {}): Promise<DevContro
   });
 
   watcher.on("error", (error: unknown) => {
-    options.onError?.(error instanceof Error ? error : new Error(String(error)));
+    options.onError?.(
+      error instanceof Error ? error : new Error(String(error))
+    );
   });
 
   // Do initial build

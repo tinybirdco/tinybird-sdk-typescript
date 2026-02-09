@@ -240,6 +240,59 @@ export function showDeployFailure(): void {
 }
 
 /**
+ * Branch info for display
+ */
+export interface BranchDisplayInfo {
+  /** Git branch name */
+  gitBranch: string | null;
+  /** Tinybird branch name */
+  tinybirdBranch: string | null;
+  /** Whether the branch was newly created */
+  wasCreated: boolean;
+  /** Dashboard URL for the branch */
+  dashboardUrl?: string;
+  /** Whether using local mode */
+  isLocal?: boolean;
+}
+
+/**
+ * Show branch information in a compact, styled format
+ */
+export function showBranchInfo(info: BranchDisplayInfo): void {
+  const status = info.wasCreated
+    ? colorize("✓ created", "green")
+    : colorize("existing", "gray");
+
+  if (info.isLocal) {
+    // Show git branch
+    if (info.gitBranch) {
+      console.log(`» Git branch:      ${info.gitBranch}`);
+    }
+    // Show local workspace
+    const name = info.tinybirdBranch ?? "unknown";
+    console.log(`» Local workspace: ${name} ${status}`);
+    // Show dashboard URL
+    if (info.dashboardUrl) {
+      console.log(colorize(`  ↳ ${info.dashboardUrl}`, "gray"));
+    }
+  } else {
+    // Show git branch
+    if (info.gitBranch) {
+      console.log(`» Git branch:      ${info.gitBranch}`);
+    }
+    // Show Tinybird branch
+    if (info.tinybirdBranch) {
+      console.log(`» Tinybird branch: ${info.tinybirdBranch} ${status}`);
+    }
+    // Show dashboard URL
+    if (info.dashboardUrl) {
+      console.log(colorize(`  ↳ ${info.dashboardUrl}`, "gray"));
+    }
+  }
+  console.log("");
+}
+
+/**
  * Output object containing all output functions
  */
 export const output = {
@@ -265,4 +318,5 @@ export const output = {
   showValidatingDeployment,
   showDeploySuccess,
   showDeployFailure,
+  showBranchInfo,
 };

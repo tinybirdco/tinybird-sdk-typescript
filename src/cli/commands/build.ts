@@ -12,6 +12,8 @@ import {
   getLocalWorkspaceName,
   LocalNotRunningError,
 } from "../../api/local.js";
+import { getWorkspace } from "../../api/workspaces.js";
+import { getBranchDashboardUrl, getLocalDashboardUrl } from "../../api/dashboard.js";
 
 /**
  * Build command options
@@ -28,6 +30,22 @@ export interface BuildCommandOptions {
 }
 
 /**
+ * Branch info included in build result
+ */
+export interface BuildBranchInfo {
+  /** Git branch name */
+  gitBranch: string | null;
+  /** Tinybird branch name */
+  tinybirdBranch: string | null;
+  /** Whether the branch was newly created */
+  wasCreated: boolean;
+  /** Dashboard URL for the branch */
+  dashboardUrl?: string;
+  /** Whether using local mode */
+  isLocal: boolean;
+}
+
+/**
  * Build command result
  */
 export interface BuildCommandResult {
@@ -37,6 +55,8 @@ export interface BuildCommandResult {
   build?: BuildFromIncludeResult;
   /** Build API result (if not dry run) */
   deploy?: BuildApiResult;
+  /** Branch info (when building to a branch) */
+  branchInfo?: BuildBranchInfo;
   /** Error message if failed */
   error?: string;
   /** Duration in milliseconds */
@@ -101,6 +121,7 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
   }
 
   let deployResult: BuildApiResult;
+  let branchInfo: BuildBranchInfo | undefined;
 
   // Handle local mode
   if (devMode === "local") {
@@ -122,6 +143,14 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
       if (debug) {
         console.log(`[debug] Workspace ${wasCreated ? "created" : "found"}: ${workspace.name}`);
       }
+
+      branchInfo = {
+        gitBranch: config.gitBranch,
+        tinybirdBranch: workspaceName,
+        wasCreated,
+        dashboardUrl: getLocalDashboardUrl(workspaceName),
+        isLocal: true,
+      };
 
       // Always use /v1/build for local (no deploy endpoint)
       deployResult = await buildToTinybird(
@@ -197,6 +226,21 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
         if (debug) {
           console.log(`[debug] Using branch token for branch: ${config.tinybirdBranch}`);
         }
+
+        // Get workspace name for dashboard URL
+        const workspace = await getWorkspace({
+          baseUrl: config.baseUrl,
+          token: config.token,
+        });
+        const dashboardUrl = getBranchDashboardUrl(config.baseUrl, workspace.name, config.tinybirdBranch!) ?? undefined;
+
+        branchInfo = {
+          gitBranch: config.gitBranch,
+          tinybirdBranch: config.tinybirdBranch,
+          wasCreated: tinybirdBranch.wasCreated ?? false,
+          dashboardUrl,
+          isLocal: false,
+        };
       } catch (error) {
         return {
           success: false,
@@ -231,6 +275,7 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
       success: false,
       build: buildResult,
       deploy: deployResult,
+      branchInfo,
       error: deployResult.error,
       durationMs: Date.now() - startTime,
     };
@@ -240,6 +285,7 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
     success: true,
     build: buildResult,
     deploy: deployResult,
+    branchInfo,
     durationMs: Date.now() - startTime,
   };
 }

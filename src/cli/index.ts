@@ -188,15 +188,19 @@ function createCli(): Command {
         devModeOverride = "local";
       }
 
-      const modeLabel = devModeOverride === "local" ? " (local)" : "";
-      output.highlight(`Building${modeLabel}...`);
-
       const result = await runBuild({
         dryRun: options.dryRun,
         devModeOverride,
       });
 
-      const { build, deploy } = result;
+      const { build, deploy, branchInfo } = result;
+
+      // Show branch info
+      if (branchInfo) {
+        output.showBranchInfo(branchInfo);
+      }
+
+      output.highlight("Building...");
 
       if (!result.success) {
         // Show detailed errors if available
@@ -486,32 +490,23 @@ function createCli(): Command {
           },
           onBranchReady: (info) => {
             if (info.isLocal) {
-              // Local mode
-              const workspaceName = info.localWorkspace?.name ?? "unknown";
-              if (info.wasCreated) {
-                console.log(`Using local Tinybird container`);
-                console.log(`Creating local workspace '${workspaceName}'...`);
-                console.log("Workspace created.\n");
-              } else {
-                console.log(`Using local Tinybird container`);
-                console.log(
-                  `Using existing local workspace '${workspaceName}'\n`
-                );
-              }
+              output.showBranchInfo({
+                gitBranch: info.gitBranch,
+                tinybirdBranch: info.localWorkspace?.name ?? null,
+                wasCreated: info.wasCreated ?? false,
+                dashboardUrl: info.dashboardUrl,
+                isLocal: true,
+              });
             } else if (info.isMainBranch) {
               console.log("On main branch - deploying to workspace\n");
             } else if (info.gitBranch) {
-              const tinybirdName = info.tinybirdBranch?.name ?? info.gitBranch;
-              if (info.wasCreated) {
-                console.log(`Detected git branch: ${info.gitBranch}`);
-                console.log(`Creating Tinybird branch '${tinybirdName}'...`);
-                console.log("Branch created and token cached.\n");
-              } else {
-                console.log(`Detected git branch: ${info.gitBranch}`);
-                console.log(
-                  `Using existing Tinybird branch '${tinybirdName}'\n`
-                );
-              }
+              output.showBranchInfo({
+                gitBranch: info.gitBranch,
+                tinybirdBranch: info.tinybirdBranch?.name ?? null,
+                wasCreated: info.wasCreated ?? false,
+                dashboardUrl: info.dashboardUrl,
+                isLocal: false,
+              });
             } else {
               console.log("Not in a git repository - deploying to workspace\n");
             }
@@ -659,6 +654,9 @@ function createCli(): Command {
         console.log(`  Tinybird branch: ${result.tinybirdBranch.name}`);
         console.log(`  Branch ID: ${result.tinybirdBranch.id}`);
         console.log(`  Created: ${result.tinybirdBranch.created_at}`);
+        if (result.dashboardUrl) {
+          console.log(`  Dashboard: ${result.dashboardUrl}`);
+        }
       } else if (!result.isMainBranch && result.tinybirdBranchName) {
         console.log("  Tinybird branch: not created yet");
         console.log("  (Run 'npx tinybird dev' to create it)");
