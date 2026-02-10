@@ -170,56 +170,8 @@ export function findConfigFile(startDir: string): ConfigFileResult | null {
   }
 }
 
-/**
- * Load a JSON config file
- */
-function loadJsonConfig(configPath: string): TinybirdConfig {
-  let rawContent: string;
-  try {
-    rawContent = fs.readFileSync(configPath, "utf-8");
-  } catch (error) {
-    throw new Error(`Failed to read ${configPath}: ${(error as Error).message}`);
-  }
-
-  try {
-    return JSON.parse(rawContent) as TinybirdConfig;
-  } catch (error) {
-    throw new Error(`Failed to parse ${configPath}: ${(error as Error).message}`);
-  }
-}
-
-/**
- * Load a JS/TS config file using native Node.js import
- * Node.js 22+ supports TypeScript via --experimental-strip-types
- */
-async function loadJsConfig(configPath: string): Promise<TinybirdConfig> {
-  try {
-    // Use pathToFileURL for proper cross-platform file URL handling
-    const { pathToFileURL } = await import("url");
-    const fileUrl = pathToFileURL(configPath).href;
-
-    // Native dynamic import - Node.js 22+ supports TypeScript files
-    const module = await import(fileUrl);
-
-    // Support both default export and named 'config' export
-    const config = module.default ?? module.config;
-
-    if (!config) {
-      throw new Error(
-        `Config file must export a default config object or named 'config' export`
-      );
-    }
-
-    // If it's a function, call it to get the config
-    if (typeof config === "function") {
-      return await config();
-    }
-
-    return config as TinybirdConfig;
-  } catch (error) {
-    throw new Error(`Failed to load ${configPath}: ${(error as Error).message}`);
-  }
-}
+// Import the universal config loader
+import { loadConfigFile } from "./config-loader.js";
 
 /**
  * Resolve a TinybirdConfig to a ResolvedConfig
@@ -324,7 +276,20 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
 
   // JSON files can be loaded synchronously
   if (configType === "tinybird.config.json" || configType === "tinybird.json") {
-    const config = loadJsonConfig(configPath);
+    let rawContent: string;
+    try {
+      rawContent = fs.readFileSync(configPath, "utf-8");
+    } catch (error) {
+      throw new Error(`Failed to read ${configPath}: ${(error as Error).message}`);
+    }
+
+    let config: TinybirdConfig;
+    try {
+      config = JSON.parse(rawContent) as TinybirdConfig;
+    } catch (error) {
+      throw new Error(`Failed to parse ${configPath}: ${(error as Error).message}`);
+    }
+
     return resolveConfig(config, configPath);
   }
 
@@ -354,15 +319,10 @@ export async function loadConfigAsync(cwd: string = process.cwd()): Promise<Reso
     );
   }
 
-  const { path: configPath, type: configType } = configResult;
+  const { path: configPath } = configResult;
 
-  let config: TinybirdConfig;
-
-  if (configType === "tinybird.config.json" || configType === "tinybird.json") {
-    config = loadJsonConfig(configPath);
-  } else {
-    config = await loadJsConfig(configPath);
-  }
+  // Use the universal config loader for all file types
+  const { config } = await loadConfigFile<TinybirdConfig>(configPath);
 
   return resolveConfig(config, configPath);
 }
