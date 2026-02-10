@@ -107,6 +107,11 @@ export interface TinybirdClientConfig<
    * to ensure the config is found regardless of where the application runs from.
    */
   configDir?: string;
+  /**
+   * Enable development mode for the client.
+   * Defaults to `process.env.NODE_ENV === "development"` if not specified.
+   */
+  devMode?: boolean;
 }
 
 /**
@@ -221,7 +226,7 @@ function buildProjectClient<
 >(
   datasources: TDatasources,
   pipes: TPipes,
-  options?: { baseUrl?: string; token?: string; configDir?: string }
+  options?: { baseUrl?: string; token?: string; configDir?: string; devMode?: boolean }
 ): ProjectClient<TDatasources, TPipes> {
   // Lazy client initialization
   let _client: TinybirdClient | null = null;
@@ -239,7 +244,7 @@ function buildProjectClient<
       _client = createClient({
         baseUrl,
         token,
-        devMode: process.env.NODE_ENV === "development",
+        devMode: options?.devMode ?? process.env.NODE_ENV === "development",
         configDir: options?.configDir,
       });
     }
@@ -349,7 +354,7 @@ export function createTinybirdClient<
   return buildProjectClient(
     config.datasources,
     config.pipes,
-    { baseUrl: config.baseUrl, token: config.token, configDir: config.configDir }
+    { baseUrl: config.baseUrl, token: config.token, configDir: config.configDir, devMode: config.devMode }
   );
 }
 

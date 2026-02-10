@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   defineProject,
+  createTinybirdClient,
   isProjectDefinition,
   getDatasourceNames,
   getPipeNames,
@@ -231,6 +232,94 @@ describe("Project Schema", () => {
 
       expect(retrieved).toBe(topEvents);
       expect(retrieved._name).toBe("top_events");
+    });
+  });
+
+  describe("createTinybirdClient", () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+
+    beforeEach(() => {
+      vi.resetModules();
+    });
+
+    afterEach(() => {
+      process.env.NODE_ENV = originalNodeEnv;
+    });
+
+    it("creates a client with query and ingest methods", () => {
+      const events = defineDatasource("events", {
+        schema: { id: t.string() },
+      });
+
+      const topEvents = definePipe("top_events", {
+        nodes: [node({ name: "endpoint", sql: "SELECT 1" })],
+        output: { count: t.int64() },
+        endpoint: true,
+      });
+
+      const client = createTinybirdClient({
+        datasources: { events },
+        pipes: { topEvents },
+      });
+
+      expect(client.query).toBeDefined();
+      expect(client.ingest).toBeDefined();
+      expect(typeof client.query.topEvents).toBe("function");
+      expect(typeof client.ingest.events).toBe("function");
+      expect(typeof client.ingest.eventsBatch).toBe("function");
+    });
+
+    it("accepts devMode option", () => {
+      const events = defineDatasource("events", {
+        schema: { id: t.string() },
+      });
+
+      // Should not throw when devMode is explicitly set
+      const clientWithDevMode = createTinybirdClient({
+        datasources: { events },
+        pipes: {},
+        devMode: true,
+      });
+
+      expect(clientWithDevMode.query).toBeDefined();
+      expect(clientWithDevMode.ingest).toBeDefined();
+
+      const clientWithoutDevMode = createTinybirdClient({
+        datasources: { events },
+        pipes: {},
+        devMode: false,
+      });
+
+      expect(clientWithoutDevMode.query).toBeDefined();
+      expect(clientWithoutDevMode.ingest).toBeDefined();
+    });
+
+    it("accepts all configuration options", () => {
+      const events = defineDatasource("events", {
+        schema: { id: t.string() },
+      });
+
+      // Should accept all options without throwing
+      const client = createTinybirdClient({
+        datasources: { events },
+        pipes: {},
+        baseUrl: "https://custom.tinybird.co",
+        token: "test-token",
+        configDir: "/custom/config/dir",
+        devMode: true,
+      });
+
+      expect(client.query).toBeDefined();
+      expect(client.ingest).toBeDefined();
+    });
+
+    it("throws error when accessing underlying client before initialization", () => {
+      const client = createTinybirdClient({
+        datasources: {},
+        pipes: {},
+      });
+
+      expect(() => client.client).toThrow("Client not initialized");
     });
   });
 });
