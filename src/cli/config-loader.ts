@@ -29,39 +29,31 @@ async function readJsonFile<T>(filepath: string): Promise<T> {
 }
 
 /**
- * Import a TypeScript file using esbuild to compile it first
+ * Convert JavaScript code to a data URL for dynamic import
  */
-async function importWithEsbuild(filepath: string): Promise<unknown> {
+function toDataUrl(jsCode: string): string {
+  const base64 = Buffer.from(jsCode, "utf8").toString("base64");
+  return `data:text/javascript;base64,${base64}`;
+}
+
+/**
+ * Import a TypeScript file using esbuild transform (in-memory, no temp files)
+ */
+async function importTypeScript(filepath: string): Promise<unknown> {
   // Dynamic import to avoid bundler issues
   const esbuildModule = "es" + "build";
   const esbuild = (await import(esbuildModule)) as typeof import("esbuild");
 
-  const configDir = path.dirname(filepath);
-  const outfile = path.join(configDir, `.tinybird-config-${Date.now()}.mjs`);
+  const source = await fs.readFile(filepath, "utf8");
 
-  try {
-    await esbuild.build({
-      entryPoints: [filepath],
-      outfile,
-      bundle: true,
-      platform: "node",
-      format: "esm",
-      target: "node18",
-      external: ["@tinybirdco/sdk"],
-      sourcemap: "inline",
-      minify: false,
-    });
+  const result = await esbuild.transform(source, {
+    loader: "ts",
+    format: "esm",
+    target: "node18",
+    sourcemap: "inline",
+  });
 
-    const moduleUrl = pathToFileURL(outfile).href;
-    return await import(moduleUrl);
-  } finally {
-    // Clean up temporary file
-    try {
-      await fs.unlink(outfile);
-    } catch {
-      // Ignore cleanup errors
-    }
-  }
+  return await import(toDataUrl(result.code));
 }
 
 /**
@@ -73,10 +65,10 @@ async function importModule(filepath: string): Promise<unknown> {
 
   try {
     return await import(url);
-  } catch (err) {
-    // If it's a .ts file and native import failed, try esbuild
+  } catch {
+    // If it's a .ts file and native import failed, use esbuild transform
     if (filepath.endsWith(".ts")) {
-      return await importWithEsbuild(filepath);
+      return await importTypeScript(filepath);
     }
     // Fallback to CJS require for .js/.cjs files
     const require = createRequire(import.meta.url);
