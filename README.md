@@ -271,11 +271,18 @@ tinybird deploy --dry-run  # Preview without pushing
 
 ### `tinybird login`
 
-Authenticate with Tinybird via browser.
+Authenticate with Tinybird via browser. Use this to set up credentials for an existing project without reinitializing.
 
 ```bash
 tinybird login
 ```
+
+This is useful when:
+- You cloned an existing project that has `tinybird.json` but no credentials
+- Your token has expired or needs to be refreshed
+- You're switching to a different Tinybird workspace
+
+The command saves your token to `.env.local` and updates the `baseUrl` in `tinybird.json` if you select a different region.
 
 ### `tinybird branch`
 
