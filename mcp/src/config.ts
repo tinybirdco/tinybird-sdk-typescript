@@ -203,9 +203,11 @@ function loadTinybConfigFile(configPath: string): ResolvedConfig {
  */
 async function loadJsConfig(configPath: string): Promise<ResolvedConfig> {
   try {
-    // Use file:// URL for dynamic import
-    const fileUrl = `file://${configPath}`;
-    const module = await import(fileUrl);
+    // Convert path to file URL for proper handling on all platforms
+    const { pathToFileURL } = await import("url");
+    const fileUrl = pathToFileURL(configPath).href;
+    // Direct dynamic import - works in Node.js and bundlers that support external modules
+    const module = await import(/* webpackIgnore: true */ fileUrl);
 
     // Support both default export and named 'config' export
     const config = module.default ?? module.config;
