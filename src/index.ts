@@ -247,4 +247,5 @@ export {
 export type { RegionInfo } from "./api/dashboard.js";
 
 // ============ Config Types ============
-export type { TinybirdConfig, DevMode } from "./cli/config.js";
+// Import from config-types.ts to avoid bundling esbuild in client code
+export type { TinybirdConfig, DevMode } from "./cli/config-types.js";

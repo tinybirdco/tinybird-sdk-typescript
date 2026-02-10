@@ -7,28 +7,9 @@ import * as path from "path";
 import * as esbuild from "esbuild";
 import { getCurrentGitBranch, isMainBranch, getTinybirdBranchName } from "./git.js";
 
-/**
- * Development mode options
- * - "branch": Use Tinybird cloud with branches (default)
- * - "local": Use local Tinybird container at localhost:7181
- */
-export type DevMode = "branch" | "local";
-
-/**
- * Tinybird configuration file structure
- */
-export interface TinybirdConfig {
-  /** Array of TypeScript files to scan for datasources and pipes */
-  include?: string[];
-  /** @deprecated Use `include` instead. Path to the TypeScript schema entry point */
-  schema?: string;
-  /** API token (supports ${ENV_VAR} interpolation) */
-  token: string;
-  /** Tinybird API base URL (optional, defaults to EU region) */
-  baseUrl?: string;
-  /** Development mode: "branch" (default) or "local" */
-  devMode?: DevMode;
-}
+// Re-export types from config-types.ts (separate file to avoid bundling esbuild)
+export type { DevMode, TinybirdConfig } from "./config-types.js";
+import type { DevMode, TinybirdConfig } from "./config-types.js";
 
 /**
  * Resolved configuration with all values expanded

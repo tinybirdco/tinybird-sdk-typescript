@@ -1,0 +1,29 @@
+/**
+ * Configuration types for tinybird.config.{ts,js,json}
+ *
+ * This file is separate from config.ts to avoid pulling in esbuild
+ * when these types are imported by client code.
+ */
+
+/**
+ * Development mode options
+ * - "branch": Use Tinybird cloud with branches (default)
+ * - "local": Use local Tinybird container at localhost:7181
+ */
+export type DevMode = "branch" | "local";
+
+/**
+ * Tinybird configuration file structure
+ */
+export interface TinybirdConfig {
+  /** Array of TypeScript files to scan for datasources and pipes */
+  include?: string[];
+  /** @deprecated Use `include` instead. Path to the TypeScript schema entry point */
+  schema?: string;
+  /** API token (supports ${ENV_VAR} interpolation) */
+  token: string;
+  /** Tinybird API base URL (optional, defaults to EU region) */
+  baseUrl?: string;
+  /** Development mode: "branch" (default) or "local" */
+  devMode?: DevMode;
+}
