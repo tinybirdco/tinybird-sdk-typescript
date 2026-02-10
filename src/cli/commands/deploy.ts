@@ -2,7 +2,7 @@
  * Deploy command - deploys resources to main Tinybird workspace
  */
 
-import { loadConfig, type ResolvedConfig } from "../config.js";
+import { loadConfigAsync, type ResolvedConfig } from "../config.js";
 import { buildFromInclude, type BuildFromIncludeResult } from "../../generator/index.js";
 import { deployToMain, type DeployCallbacks } from "../../api/deploy.js";
 import type { BuildApiResult } from "../../api/build.js";
@@ -52,7 +52,7 @@ export async function runDeploy(options: DeployCommandOptions = {}): Promise<Dep
   // Load config
   let config: ResolvedConfig;
   try {
-    config = loadConfig(cwd);
+    config = await loadConfigAsync(cwd);
   } catch (error) {
     return {
       success: false,

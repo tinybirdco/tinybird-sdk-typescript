@@ -2,7 +2,7 @@
  * Preview command - creates ephemeral preview branch and deploys resources
  */
 
-import { loadConfig, LOCAL_BASE_URL, type ResolvedConfig, type DevMode } from "../config.js";
+import { loadConfigAsync, LOCAL_BASE_URL, type ResolvedConfig, type DevMode } from "../config.js";
 import { buildFromInclude, type BuildFromIncludeResult } from "../../generator/index.js";
 import { createBranch, deleteBranch, getBranch, type TinybirdBranch } from "../../api/branches.js";
 import { deployToMain } from "../../api/deploy.js";
@@ -90,7 +90,7 @@ export async function runPreview(options: PreviewCommandOptions = {}): Promise<P
   // Load config
   let config: ResolvedConfig;
   try {
-    config = loadConfig(cwd);
+    config = await loadConfigAsync(cwd);
   } catch (error) {
     return {
       success: false,

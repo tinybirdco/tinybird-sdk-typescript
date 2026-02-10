@@ -58,8 +58,15 @@ const LOCAL_BASE_URL = "http://localhost:7181";
 
 /**
  * Config file names in order of priority
+ * Supports the new tinybird.config.* format and legacy tinybird.json
  */
-const CONFIG_FILES = ["tinybird.json", ".tinyb"];
+const CONFIG_FILES = [
+  "tinybird.config.ts",
+  "tinybird.config.js",
+  "tinybird.config.json",
+  "tinybird.json",
+  ".tinyb",
+];
 
 /**
  * Interpolate environment variables in a string
@@ -75,11 +82,13 @@ function interpolateEnvVars(value: string): string {
   });
 }
 
+type ConfigFileType = (typeof CONFIG_FILES)[number];
+
 /**
  * Find a config file by walking up the directory tree
- * Checks for tinybird.json first, then .tinyb
+ * Checks for config files in priority order
  */
-export function findConfigFile(startDir: string): { path: string; type: "tinybird.json" | ".tinyb" } | null {
+export function findConfigFile(startDir: string): { path: string; type: ConfigFileType } | null {
   let currentDir = startDir;
 
   while (true) {
@@ -87,7 +96,7 @@ export function findConfigFile(startDir: string): { path: string; type: "tinybir
     for (const configFile of CONFIG_FILES) {
       const configPath = path.join(currentDir, configFile);
       if (fs.existsSync(configPath)) {
-        return { path: configPath, type: configFile as "tinybird.json" | ".tinyb" };
+        return { path: configPath, type: configFile as ConfigFileType };
       }
     }
 
@@ -190,12 +199,91 @@ function loadTinybConfigFile(configPath: string): ResolvedConfig {
 }
 
 /**
- * Load and resolve the configuration
+ * Load a JS/TS config file using dynamic import
+ */
+async function loadJsConfig(configPath: string): Promise<ResolvedConfig> {
+  try {
+    // Use file:// URL for dynamic import
+    const fileUrl = `file://${configPath}`;
+    const module = await import(fileUrl);
+
+    // Support both default export and named 'config' export
+    const config = module.default ?? module.config;
+
+    if (!config) {
+      throw new Error(
+        `Config file must export a default config object or named 'config' export`
+      );
+    }
+
+    // If it's a function, call it to get the config
+    const resolvedConfig = typeof config === "function" ? await config() : config;
+
+    if (!resolvedConfig.token) {
+      throw new Error(`Missing 'token' field in ${configPath}`);
+    }
+
+    // Resolve token
+    let resolvedToken: string;
+    try {
+      resolvedToken = interpolateEnvVars(resolvedConfig.token);
+    } catch (error) {
+      throw new Error(
+        `Failed to resolve token in ${configPath}: ${(error as Error).message}`
+      );
+    }
+
+    // Resolve base URL
+    let resolvedBaseUrl = DEFAULT_BASE_URL;
+    if (resolvedConfig.baseUrl) {
+      try {
+        resolvedBaseUrl = interpolateEnvVars(resolvedConfig.baseUrl);
+      } catch (error) {
+        throw new Error(
+          `Failed to resolve baseUrl in ${configPath}: ${(error as Error).message}`
+        );
+      }
+    }
+
+    return {
+      token: resolvedToken,
+      baseUrl: resolvedBaseUrl,
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ERR_UNKNOWN_FILE_EXTENSION") {
+      throw new Error(
+        `Cannot load ${configPath}. For TypeScript config files, ensure tsx or ts-node is available, ` +
+        `or use a .js or .json config file instead.`
+      );
+    }
+    throw new Error(`Failed to load ${configPath}: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Check if a config type is a JSON file
+ */
+function isJsonConfig(type: ConfigFileType): boolean {
+  return type === "tinybird.config.json" || type === "tinybird.json";
+}
+
+/**
+ * Check if a config type is a JS/TS file
+ */
+function isJsTsConfig(type: ConfigFileType): boolean {
+  return type === "tinybird.config.ts" || type === "tinybird.config.js";
+}
+
+/**
+ * Load and resolve the configuration (sync version)
  *
  * Priority order:
  * 1. Environment variables (TINYBIRD_TOKEN, TINYBIRD_URL)
- * 2. tinybird.json file
+ * 2. tinybird.config.json / tinybird.json file
  * 3. .tinyb file
+ *
+ * Note: This sync version does not support JS/TS config files.
+ * Use loadConfigAsync() if you need to load JS/TS config files.
  */
 export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
   // First, check for direct environment variables
@@ -213,12 +301,60 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
 
   if (!configResult) {
     throw new Error(
-      `TINYBIRD_TOKEN environment variable not set and could not find tinybird.json or .tinyb. ` +
+      `TINYBIRD_TOKEN environment variable not set and could not find a config file. ` +
       `Either set TINYBIRD_TOKEN or run 'npx @tinybirdco/sdk init' / 'tb login' to create a config file.`
     );
   }
 
-  if (configResult.type === "tinybird.json") {
+  if (isJsTsConfig(configResult.type)) {
+    throw new Error(
+      `Config file ${configResult.path} is a ${configResult.type.endsWith(".ts") ? "TypeScript" : "JavaScript"} file. ` +
+      `Use loadConfigAsync() instead of loadConfig() to load JS/TS config files.`
+    );
+  }
+
+  if (isJsonConfig(configResult.type)) {
+    return loadTinybirdJsonConfig(configResult.path);
+  } else {
+    return loadTinybConfigFile(configResult.path);
+  }
+}
+
+/**
+ * Load and resolve the configuration (async version)
+ *
+ * Priority order:
+ * 1. Environment variables (TINYBIRD_TOKEN, TINYBIRD_URL)
+ * 2. tinybird.config.ts / tinybird.config.js file
+ * 3. tinybird.config.json / tinybird.json file
+ * 4. .tinyb file
+ */
+export async function loadConfigAsync(cwd: string = process.cwd()): Promise<ResolvedConfig> {
+  // First, check for direct environment variables
+  const envToken = process.env.TINYBIRD_TOKEN;
+  if (envToken) {
+    const envBaseUrl = process.env.TINYBIRD_URL || DEFAULT_BASE_URL;
+    return {
+      token: envToken,
+      baseUrl: envBaseUrl,
+    };
+  }
+
+  // Fall back to config file lookup
+  const configResult = findConfigFile(cwd);
+
+  if (!configResult) {
+    throw new Error(
+      `TINYBIRD_TOKEN environment variable not set and could not find a config file. ` +
+      `Either set TINYBIRD_TOKEN or run 'npx @tinybirdco/sdk init' / 'tb login' to create a config file.`
+    );
+  }
+
+  if (isJsTsConfig(configResult.type)) {
+    return loadJsConfig(configResult.path);
+  }
+
+  if (isJsonConfig(configResult.type)) {
     return loadTinybirdJsonConfig(configResult.path);
   } else {
     return loadTinybConfigFile(configResult.path);

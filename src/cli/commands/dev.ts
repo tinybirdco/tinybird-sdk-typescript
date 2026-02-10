@@ -5,7 +5,7 @@
 import * as path from "path";
 import { watch } from "chokidar";
 import {
-  loadConfig,
+  loadConfigAsync,
   configExists,
   findConfigFile,
   hasValidToken,
@@ -121,14 +121,14 @@ export async function runDev(
   // Check if project is initialized
   if (!configExists(cwd)) {
     throw new Error(
-      "No tinybird.json found. Run 'npx tinybird init' to initialize a project."
+      "No tinybird config found. Run 'npx tinybird init' to initialize a project."
     );
   }
 
   // Load config first to determine devMode
   let config: ResolvedConfig;
   try {
-    config = loadConfig(cwd);
+    config = await loadConfigAsync(cwd);
   } catch (error) {
     throw error;
   }
@@ -150,18 +150,18 @@ export async function runDev(
     }
 
     // Find the config file (may be in parent directory)
-    const configPath = findConfigFile(cwd);
-    if (!configPath) {
-      throw new Error("No tinybird.json found. Run 'npx tinybird init' first.");
+    const configResult = findConfigFile(cwd);
+    if (!configResult) {
+      throw new Error("No tinybird config found. Run 'npx tinybird init' first.");
     }
 
-    // Save token to .env.local (in same directory as tinybird.json)
-    const configDir = path.dirname(configPath);
+    // Save token to .env.local (in same directory as config file)
+    const configDir = path.dirname(configResult.path);
     saveTinybirdToken(configDir, authResult.token);
 
-    // Update baseUrl in tinybird.json if it changed
-    if (authResult.baseUrl) {
-      updateConfig(configPath, {
+    // Update baseUrl in config file if it changed (only for JSON configs)
+    if (authResult.baseUrl && configResult.path.endsWith(".json")) {
+      updateConfig(configResult.path, {
         baseUrl: authResult.baseUrl,
       });
     }
@@ -175,7 +175,7 @@ export async function runDev(
     });
 
     // Reload config after login
-    config = loadConfig(cwd);
+    config = await loadConfigAsync(cwd);
   }
 
   // Determine effective token and branch info based on devMode

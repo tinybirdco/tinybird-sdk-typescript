@@ -82,21 +82,19 @@ describe("E2E: Init + Build Happy Path", () => {
       expect(initResult.clientPath).toBe("lib/tinybird.ts");
 
       // Verify files created
-      expect(initResult.created).toContain("tinybird.json");
+      expect(initResult.created).toContain("tinybird.config.ts");
       expect(initResult.created).toContain("lib/tinybird.ts");
 
       // Verify files exist on disk
-      expect(fs.existsSync(path.join(tempDir, "tinybird.json"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, "tinybird.config.ts"))).toBe(true);
       expect(fs.existsSync(path.join(tempDir, "lib/tinybird.ts"))).toBe(true);
 
-      // Verify tinybird.json content
-      const config = JSON.parse(
-        fs.readFileSync(path.join(tempDir, "tinybird.json"), "utf-8")
-      );
-      expect(config.include).toEqual(["lib/tinybird.ts"]);
-      expect(config.token).toBe("${TINYBIRD_TOKEN}");
-      expect(config.baseUrl).toBe("https://api.tinybird.co");
-      expect(config.devMode).toBe("branch");
+      // Verify tinybird.config.ts content
+      const content = fs.readFileSync(path.join(tempDir, "tinybird.config.ts"), "utf-8");
+      expect(content).toContain('"lib/tinybird.ts"');
+      expect(content).toContain("process.env.TINYBIRD_TOKEN");
+      expect(content).toContain("https://api.tinybird.co");
+      expect(content).toContain('devMode: "branch"');
     });
 
     it("init then build succeeds with mocked API", async () => {
@@ -270,10 +268,8 @@ describe("E2E: Init + Build Happy Path", () => {
       expect(initResult.created).toContain("src/lib/tinybird.ts");
 
       // Verify config has correct paths
-      const config = JSON.parse(
-        fs.readFileSync(path.join(tempDir, "tinybird.json"), "utf-8")
-      );
-      expect(config.include).toEqual(["src/lib/tinybird.ts"]);
+      const content = fs.readFileSync(path.join(tempDir, "tinybird.config.ts"), "utf-8");
+      expect(content).toContain('"src/lib/tinybird.ts"');
     });
 
     it("init + build works with src/lib/tinybird.ts structure", async () => {
@@ -410,12 +406,12 @@ describe("E2E: Init + Build Happy Path", () => {
   });
 
   describe("build error handling", () => {
-    it("fails when tinybird.json is missing", async () => {
+    it("fails when config file is missing", async () => {
       // Don't run init - no config file
       const buildResult = await runBuild({ cwd: tempDir });
 
       expect(buildResult.success).toBe(false);
-      expect(buildResult.error).toContain("tinybird.json");
+      expect(buildResult.error).toContain("Could not find config file");
     });
 
     it("fails when include file does not exist", async () => {
@@ -427,7 +423,7 @@ describe("E2E: Init + Build Happy Path", () => {
         devMode: "branch",
       };
       fs.writeFileSync(
-        path.join(tempDir, "tinybird.json"),
+        path.join(tempDir, "tinybird.config.json"),
         JSON.stringify(config, null, 2)
       );
 

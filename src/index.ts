@@ -245,3 +245,6 @@ export {
   getLocalDashboardUrl,
 } from "./api/dashboard.js";
 export type { RegionInfo } from "./api/dashboard.js";
+
+// ============ Config Types ============
+export type { TinybirdConfig, DevMode } from "./cli/config.js";

@@ -35,7 +35,7 @@ describe("Login Command", () => {
       const result = await runLogin({ cwd: tempDir });
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("No tinybird.json found");
+      expect(result.error).toContain("No tinybird config found");
       expect(result.error).toContain("npx tinybird init");
     });
 
