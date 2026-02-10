@@ -192,8 +192,10 @@ function loadJsonConfig(configPath: string): TinybirdConfig {
  * Load a JS/TS config file using esbuild to bundle and execute
  */
 async function loadJsConfig(configPath: string): Promise<TinybirdConfig> {
-  // Dynamic import of esbuild to prevent bundlers from including it
-  const esbuild = await import("esbuild");
+  // Dynamic import of esbuild with obfuscated module name to prevent bundlers from including it
+  // The string concatenation prevents static analysis from detecting the module
+  const esbuildModule = "es" + "build";
+  const esbuild = await import(/* webpackIgnore: true */ esbuildModule) as typeof import("esbuild");
 
   const configDir = path.dirname(configPath);
 
