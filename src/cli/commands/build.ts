@@ -133,10 +133,25 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
 
       const localTokens = await getLocalTokens();
 
-      // Get or create workspace based on branch name
-      const workspaceName = getLocalWorkspaceName(config.tinybirdBranch, config.cwd);
-      if (debug) {
-        console.log(`[debug] Using local workspace: ${workspaceName}`);
+      // Determine workspace name: use authenticated workspace name on main branch,
+      // otherwise use branch name (for trunk-based development support)
+      let workspaceName: string;
+      if (config.isMainBranch || !config.tinybirdBranch) {
+        // On main branch: use the authenticated workspace name
+        const authenticatedWorkspace = await getWorkspace({
+          baseUrl: config.baseUrl,
+          token: config.token,
+        });
+        workspaceName = authenticatedWorkspace.name;
+        if (debug) {
+          console.log(`[debug] Using authenticated workspace name: ${workspaceName}`);
+        }
+      } else {
+        // On feature branch: use branch name as before
+        workspaceName = getLocalWorkspaceName(config.tinybirdBranch, config.cwd);
+        if (debug) {
+          console.log(`[debug] Using branch workspace: ${workspaceName}`);
+        }
       }
 
       const { workspace, wasCreated } = await getOrCreateLocalWorkspace(localTokens, workspaceName);
