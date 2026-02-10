@@ -189,10 +189,22 @@ export async function runDev(
   if (devMode === "local") {
     // Local mode: get tokens from local container and set up workspace
     const localTokens = await getLocalTokens();
-    const workspaceName = getLocalWorkspaceName(
-      config.tinybirdBranch,
-      config.cwd
-    );
+
+    // Determine workspace name: use authenticated workspace name on main branch,
+    // otherwise use branch name (for trunk-based development support)
+    let workspaceName: string;
+    if (config.isMainBranch || !config.tinybirdBranch) {
+      // On main branch: use the authenticated workspace name
+      const authenticatedWorkspace = await getWorkspace({
+        baseUrl: config.baseUrl,
+        token: config.token,
+      });
+      workspaceName = authenticatedWorkspace.name;
+    } else {
+      // On feature branch: use branch name
+      workspaceName = getLocalWorkspaceName(config.tinybirdBranch, config.cwd);
+    }
+
     const { workspace, wasCreated } = await getOrCreateLocalWorkspace(
       localTokens,
       workspaceName
