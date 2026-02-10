@@ -4,7 +4,6 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import * as esbuild from "esbuild";
 import { getCurrentGitBranch, isMainBranch, getTinybirdBranchName } from "./git.js";
 
 // Re-export types from config-types.ts (separate file to avoid bundling esbuild)
@@ -193,6 +192,9 @@ function loadJsonConfig(configPath: string): TinybirdConfig {
  * Load a JS/TS config file using esbuild to bundle and execute
  */
 async function loadJsConfig(configPath: string): Promise<TinybirdConfig> {
+  // Dynamic import of esbuild to prevent bundlers from including it
+  const esbuild = await import("esbuild");
+
   const configDir = path.dirname(configPath);
 
   // Create a temporary output file for the bundle
