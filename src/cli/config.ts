@@ -189,41 +189,17 @@ function loadJsonConfig(configPath: string): TinybirdConfig {
 }
 
 /**
- * Load a JS/TS config file using esbuild to bundle and execute
+ * Load a JS/TS config file using native Node.js import
+ * Node.js 22+ supports TypeScript via --experimental-strip-types
  */
 async function loadJsConfig(configPath: string): Promise<TinybirdConfig> {
-  // Dynamic import of esbuild with obfuscated module name to prevent bundlers from including it
-  // The string concatenation prevents static analysis from detecting the module
-  const esbuildModule = "es" + "build";
-  const esbuild = await import(/* webpackIgnore: true */ esbuildModule) as typeof import("esbuild");
-
-  const configDir = path.dirname(configPath);
-
-  // Create a temporary output file for the bundle
-  const outfile = path.join(
-    configDir,
-    `.tinybird-config-${Date.now()}.mjs`
-  );
-
   try {
-    // Bundle the config with esbuild
-    await esbuild.build({
-      entryPoints: [configPath],
-      outfile,
-      bundle: true,
-      platform: "node",
-      format: "esm",
-      target: "node18",
-      // Mark @tinybirdco/sdk as external - it should already be installed
-      external: ["@tinybirdco/sdk"],
-      // Enable source maps for better error messages
-      sourcemap: "inline",
-      minify: false,
-    });
+    // Use pathToFileURL for proper cross-platform file URL handling
+    const { pathToFileURL } = await import("url");
+    const fileUrl = pathToFileURL(configPath).href;
 
-    // Import the bundled module
-    const moduleUrl = `file://${outfile}`;
-    const module = await import(/* webpackIgnore: true */ moduleUrl);
+    // Native dynamic import - Node.js 22+ supports TypeScript files
+    const module = await import(fileUrl);
 
     // Support both default export and named 'config' export
     const config = module.default ?? module.config;
@@ -242,15 +218,6 @@ async function loadJsConfig(configPath: string): Promise<TinybirdConfig> {
     return config as TinybirdConfig;
   } catch (error) {
     throw new Error(`Failed to load ${configPath}: ${(error as Error).message}`);
-  } finally {
-    // Clean up the temporary bundle file
-    try {
-      if (fs.existsSync(outfile)) {
-        fs.unlinkSync(outfile);
-      }
-    } catch {
-      // Ignore cleanup errors
-    }
   }
 }
 
