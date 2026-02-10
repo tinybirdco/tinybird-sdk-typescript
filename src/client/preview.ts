@@ -105,6 +105,7 @@ function sanitizeBranchName(branchName: string): string {
 
 /**
  * Fetch branch token from Tinybird API
+ * Looks for branches with the tmp_ci_ prefix (created by tinybird preview)
  */
 async function fetchBranchToken(
   baseUrl: string,
@@ -112,7 +113,9 @@ async function fetchBranchToken(
   branchName: string
 ): Promise<string | null> {
   const sanitizedName = sanitizeBranchName(branchName);
-  const url = new URL(`/v0/environments/${encodeURIComponent(sanitizedName)}`, baseUrl);
+  // Look for the preview branch with tmp_ci_ prefix (matches what tinybird preview creates)
+  const previewBranchName = `tmp_ci_${sanitizedName}`;
+  const url = new URL(`/v0/environments/${encodeURIComponent(previewBranchName)}`, baseUrl);
   url.searchParams.set("with_token", "true");
 
   try {
@@ -189,8 +192,9 @@ export async function resolveToken(options?: {
 
       // Branch doesn't exist - fall back to workspace token
       // This allows the app to still work, just using main workspace
+      const expectedBranchName = `tmp_ci_${sanitizeBranchName(branchName)}`;
       console.warn(
-        `[tinybird] Preview branch "${branchName}" not found. ` +
+        `[tinybird] Preview branch "${expectedBranchName}" not found. ` +
           `Run "tinybird preview" to create it. Falling back to workspace token.`
       );
     }

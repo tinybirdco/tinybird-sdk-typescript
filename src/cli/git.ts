@@ -9,6 +9,11 @@ import { execSync } from "child_process";
  * Returns null if not in a known CI environment
  */
 function getBranchFromCIEnv(): string | null {
+  // Vercel
+  if (process.env.VERCEL_GIT_COMMIT_REF) {
+    return process.env.VERCEL_GIT_COMMIT_REF;
+  }
+
   // GitHub Actions
   // GITHUB_HEAD_REF is set for pull requests, GITHUB_REF_NAME for pushes
   const githubBranch = process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME;

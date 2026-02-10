@@ -4,7 +4,7 @@
 
 import { loadConfig, LOCAL_BASE_URL, type ResolvedConfig, type DevMode } from "../config.js";
 import { buildFromInclude, type BuildFromIncludeResult } from "../../generator/index.js";
-import { createBranch, type TinybirdBranch } from "../../api/branches.js";
+import { createBranch, deleteBranch, getBranch, type TinybirdBranch } from "../../api/branches.js";
 import { deployToMain } from "../../api/deploy.js";
 import { buildToTinybird } from "../../api/build.js";
 import {
@@ -61,15 +61,17 @@ export interface PreviewCommandResult {
 }
 
 /**
- * Generate preview branch name with format: tmp_ci_${branch}_${timestamp}
+ * Generate preview branch name with format: tmp_ci_${branch}
+ *
+ * Uses a deterministic name based on the git branch so that Vercel preview
+ * deployments can find the branch by name.
  *
  * @param gitBranch - Current git branch name (or null)
  * @returns Preview branch name
  */
 export function generatePreviewBranchName(gitBranch: string | null): string {
-  const timestamp = Math.floor(Date.now() / 1000);
   const branchPart = gitBranch ? sanitizeBranchName(gitBranch) : "unknown";
-  return `tmp_ci_${branchPart}_${timestamp}`;
+  return `tmp_ci_${branchPart}`;
 }
 
 /**
@@ -220,17 +222,35 @@ export async function runPreview(options: PreviewCommandOptions = {}): Promise<P
     }
   }
 
-  // Cloud mode - create branch and deploy using /v1/deploy
+  // Cloud mode - delete existing branch if it exists, then create fresh and deploy
   let branch: TinybirdBranch;
   try {
+    const apiConfig = { baseUrl: config.baseUrl, token: config.token };
+
+    // Check if branch already exists and delete it for a fresh start
+    try {
+      const existingBranch = await getBranch(apiConfig, previewBranchName);
+      if (existingBranch) {
+        if (debug) {
+          console.log(`[debug] Deleting existing preview branch: ${previewBranchName}`);
+        }
+        await deleteBranch(apiConfig, previewBranchName);
+        if (debug) {
+          console.log(`[debug] Existing branch deleted`);
+        }
+      }
+    } catch {
+      // Branch doesn't exist, that's fine
+      if (debug) {
+        console.log(`[debug] No existing branch to delete`);
+      }
+    }
+
     if (debug) {
       console.log(`[debug] Creating preview branch: ${previewBranchName}`);
     }
 
-    branch = await createBranch(
-      { baseUrl: config.baseUrl, token: config.token },
-      previewBranchName
-    );
+    branch = await createBranch(apiConfig, previewBranchName);
 
     if (debug) {
       console.log(`[debug] Branch created: ${branch.name} (${branch.id})`);
