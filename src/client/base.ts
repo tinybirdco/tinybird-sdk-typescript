@@ -132,6 +132,24 @@ export class TinybirdClient {
       // out of the client bundle when not using dev mode
       const { loadConfig } = await import("../cli/config.js");
       const { getOrCreateBranch } = await import("../api/branches.js");
+      const { isPreviewEnvironment, getPreviewBranchName } = await import("./preview.js");
+
+      // In preview environments (Vercel preview, CI), the token was already resolved
+      // by resolveToken() in project.ts - skip branch creation to avoid conflicts
+      if (isPreviewEnvironment()) {
+        const gitBranchName = getPreviewBranchName();
+        // Preview branches use the tmp_ci_ prefix (matches what tinybird preview creates)
+        const sanitized = gitBranchName
+          ? gitBranchName.replace(/[^a-zA-Z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "")
+          : undefined;
+        const tinybirdBranchName = sanitized ? `tmp_ci_${sanitized}` : undefined;
+        return this.buildContext({
+          token: this.config.token,
+          isBranchToken: !!tinybirdBranchName,
+          branchName: tinybirdBranchName,
+          gitBranch: gitBranchName ?? undefined,
+        });
+      }
 
       // Use configDir if provided (important for monorepo setups where process.cwd()
       // may not be in the same directory tree as tinybird.json)
