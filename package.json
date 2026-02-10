@@ -17,6 +17,22 @@
     "./api": {
       "import": "./dist/api/api.js",
       "types": "./dist/api/api.d.ts"
+    },
+    "./cli/commands/build": {
+      "import": "./dist/cli/commands/build.js",
+      "types": "./dist/cli/commands/build.d.ts"
+    },
+    "./cli/commands/login": {
+      "import": "./dist/cli/commands/login.js",
+      "types": "./dist/cli/commands/login.d.ts"
+    },
+    "./cli/config": {
+      "import": "./dist/cli/config.js",
+      "types": "./dist/cli/config.d.ts"
+    },
+    "./api/workspaces": {
+      "import": "./dist/api/workspaces.js",
+      "types": "./dist/api/workspaces.d.ts"
     }
   },
   "files": [
