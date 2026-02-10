@@ -4,6 +4,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import * as esbuild from "esbuild";
 import { getCurrentGitBranch, isMainBranch, getTinybirdBranchName } from "./git.js";
 
 /**
@@ -208,15 +209,36 @@ function loadJsonConfig(configPath: string): TinybirdConfig {
 }
 
 /**
- * Load a JS/TS config file using dynamic import
+ * Load a JS/TS config file using esbuild to bundle and execute
  */
 async function loadJsConfig(configPath: string): Promise<TinybirdConfig> {
+  const configDir = path.dirname(configPath);
+
+  // Create a temporary output file for the bundle
+  const outfile = path.join(
+    configDir,
+    `.tinybird-config-${Date.now()}.mjs`
+  );
+
   try {
-    // Convert path to file URL for proper handling on all platforms
-    const { pathToFileURL } = await import("url");
-    const fileUrl = pathToFileURL(configPath).href;
-    // Direct dynamic import - works in Node.js and bundlers that support external modules
-    const module = await import(/* webpackIgnore: true */ fileUrl);
+    // Bundle the config with esbuild
+    await esbuild.build({
+      entryPoints: [configPath],
+      outfile,
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      target: "node18",
+      // Mark @tinybirdco/sdk as external - it should already be installed
+      external: ["@tinybirdco/sdk"],
+      // Enable source maps for better error messages
+      sourcemap: "inline",
+      minify: false,
+    });
+
+    // Import the bundled module
+    const moduleUrl = `file://${outfile}`;
+    const module = await import(/* webpackIgnore: true */ moduleUrl);
 
     // Support both default export and named 'config' export
     const config = module.default ?? module.config;
@@ -234,13 +256,16 @@ async function loadJsConfig(configPath: string): Promise<TinybirdConfig> {
 
     return config as TinybirdConfig;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ERR_UNKNOWN_FILE_EXTENSION") {
-      throw new Error(
-        `Cannot load ${configPath}. For TypeScript config files, ensure tsx or ts-node is available, ` +
-        `or use a .js or .json config file instead.`
-      );
-    }
     throw new Error(`Failed to load ${configPath}: ${(error as Error).message}`);
+  } finally {
+    // Clean up the temporary bundle file
+    try {
+      if (fs.existsSync(outfile)) {
+        fs.unlinkSync(outfile);
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
   }
 }
 

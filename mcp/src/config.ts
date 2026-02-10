@@ -206,8 +206,8 @@ async function loadJsConfig(configPath: string): Promise<ResolvedConfig> {
     // Convert path to file URL for proper handling on all platforms
     const { pathToFileURL } = await import("url");
     const fileUrl = pathToFileURL(configPath).href;
-    // Direct dynamic import - works in Node.js and bundlers that support external modules
-    const module = await import(/* webpackIgnore: true */ fileUrl);
+    // Dynamic import - Node.js 22+ supports TypeScript with --experimental-strip-types
+    const module = await import(fileUrl);
 
     // Support both default export and named 'config' export
     const config = module.default ?? module.config;
