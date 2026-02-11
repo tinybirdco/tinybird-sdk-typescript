@@ -143,35 +143,7 @@ export async function runInfo(
     isMainBranch: config.isMainBranch,
   };
 
-  // Get local info if in local mode
-  let localInfo: LocalInfo | undefined;
-  if (config.devMode === "local") {
-    const localRunning = await isLocalRunning();
-    localInfo = {
-      running: localRunning,
-      apiHost: LOCAL_BASE_URL,
-    };
-
-    if (localRunning) {
-      try {
-        const tokens = await getLocalTokens();
-        const workspaceName = getLocalWorkspaceName(config.tinybirdBranch, config.cwd);
-        const { workspace } = await getOrCreateLocalWorkspace(tokens, workspaceName);
-        localInfo = {
-          running: true,
-          workspaceName: workspace.name,
-          workspaceId: workspace.id,
-          apiHost: LOCAL_BASE_URL,
-          dashboardUrl: getLocalDashboardUrl(workspace.name),
-          token: workspace.token,
-        };
-      } catch {
-        // Local is running but couldn't get workspace info
-      }
-    }
-  }
-
-  // Always get cloud/workspace info
+  // Always get cloud/workspace info first (needed for local workspace name on main branch)
   let workspace: TinybirdWorkspace;
   try {
     workspace = await getWorkspace({
@@ -194,6 +166,43 @@ export async function runInfo(
     dashboardUrl: getDashboardUrl(config.baseUrl, workspace.name) ?? undefined,
     token: config.token,
   };
+
+  // Get local info if in local mode
+  let localInfo: LocalInfo | undefined;
+  if (config.devMode === "local") {
+    const localRunning = await isLocalRunning();
+    localInfo = {
+      running: localRunning,
+      apiHost: LOCAL_BASE_URL,
+    };
+
+    if (localRunning) {
+      try {
+        const tokens = await getLocalTokens();
+        // Determine workspace name: use authenticated workspace name on main branch,
+        // otherwise use branch name (for trunk-based development support)
+        let workspaceName: string;
+        if (config.isMainBranch || !config.tinybirdBranch) {
+          // On main branch: use the authenticated workspace name
+          workspaceName = workspace.name;
+        } else {
+          // On feature branch: use branch name
+          workspaceName = getLocalWorkspaceName(config.tinybirdBranch, config.cwd);
+        }
+        const { workspace: localWorkspace } = await getOrCreateLocalWorkspace(tokens, workspaceName);
+        localInfo = {
+          running: true,
+          workspaceName: localWorkspace.name,
+          workspaceId: localWorkspace.id,
+          apiHost: LOCAL_BASE_URL,
+          dashboardUrl: getLocalDashboardUrl(localWorkspace.name),
+          token: localWorkspace.token,
+        };
+      } catch {
+        // Local is running but couldn't get workspace info
+      }
+    }
+  }
 
   // Get current branch info only if we're in branch mode (not local mode)
   let branchInfo: BranchInfo | undefined;

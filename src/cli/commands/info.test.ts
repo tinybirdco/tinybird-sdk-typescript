@@ -82,6 +82,7 @@ describe("Info Command", () => {
       isMainBranch: false,
       baseUrl: "https://api.tinybird.co",
       token: "test-token",
+      include: [],
     };
 
     const mockWorkspace = {
@@ -198,6 +199,7 @@ describe("Info Command", () => {
       isMainBranch: false,
       baseUrl: "https://api.tinybird.co",
       token: "test-token",
+      include: [],
     };
 
     const mockWorkspace = {
@@ -292,6 +294,7 @@ describe("Info Command", () => {
         isMainBranch: true,
         baseUrl: "https://api.tinybird.co",
         token: "test-token",
+        include: [],
       });
       mockedGetWorkspace.mockRejectedValue(new Error("Unauthorized"));
 
@@ -312,6 +315,7 @@ describe("Info Command", () => {
         isMainBranch: false,
         baseUrl: "https://api.tinybird.co",
         token: "test-token",
+        include: [],
       });
       mockedGetWorkspace.mockResolvedValue({
         id: "ws-123",
@@ -341,6 +345,7 @@ describe("Info Command", () => {
         isMainBranch: true,
         baseUrl: "https://api.tinybird.co",
         token: "test-token",
+        include: [],
       });
       mockedGetWorkspace.mockResolvedValue({
         id: "ws-123",
@@ -369,6 +374,7 @@ describe("Info Command", () => {
         isMainBranch: false,
         baseUrl: "https://api.tinybird.co",
         token: "test-token",
+        include: [],
       });
       mockedGetWorkspace.mockResolvedValue({
         id: "ws-123",
