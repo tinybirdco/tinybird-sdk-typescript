@@ -2,7 +2,7 @@
  * Info command - shows information about the current project and workspace
  */
 
-import { loadConfig, LOCAL_BASE_URL, type ResolvedConfig } from "../config.js";
+import { loadConfigAsync, LOCAL_BASE_URL, type ResolvedConfig } from "../config.js";
 import { getWorkspace, type TinybirdWorkspace } from "../../api/workspaces.js";
 import { listBranches, getBranch, type TinybirdBranch } from "../../api/branches.js";
 import { getDashboardUrl, getBranchDashboardUrl, getLocalDashboardUrl } from "../../api/dashboard.js";
@@ -125,7 +125,7 @@ export async function runInfo(
   // Load config
   let config: ResolvedConfig;
   try {
-    config = loadConfig(cwd);
+    config = await loadConfigAsync(cwd);
   } catch (error) {
     return {
       success: false,

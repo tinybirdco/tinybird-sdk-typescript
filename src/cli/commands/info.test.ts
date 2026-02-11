@@ -3,7 +3,7 @@ import { runInfo } from "./info.js";
 
 // Mock the config module
 vi.mock("../config.js", () => ({
-  loadConfig: vi.fn(),
+  loadConfigAsync: vi.fn(),
   LOCAL_BASE_URL: "http://localhost:7181",
 }));
 
@@ -31,7 +31,7 @@ vi.mock("../../api/local.js", () => ({
 }));
 
 // Import mocked functions
-import { loadConfig } from "../config.js";
+import { loadConfigAsync } from "../config.js";
 import { getWorkspace } from "../../api/workspaces.js";
 import { listBranches, getBranch } from "../../api/branches.js";
 import { getDashboardUrl, getBranchDashboardUrl, getLocalDashboardUrl } from "../../api/dashboard.js";
@@ -42,7 +42,7 @@ import {
   getLocalWorkspaceName,
 } from "../../api/local.js";
 
-const mockedLoadConfig = vi.mocked(loadConfig);
+const mockedLoadConfigAsync = vi.mocked(loadConfigAsync);
 const mockedGetWorkspace = vi.mocked(getWorkspace);
 const mockedListBranches = vi.mocked(listBranches);
 const mockedGetBranch = vi.mocked(getBranch);
@@ -61,9 +61,7 @@ describe("Info Command", () => {
 
   describe("config loading", () => {
     it("returns error when config loading fails", async () => {
-      mockedLoadConfig.mockImplementation(() => {
-        throw new Error("No tinybird.json found");
-      });
+      mockedLoadConfigAsync.mockRejectedValue(new Error("No tinybird.json found"));
 
       const result = await runInfo();
 
@@ -95,7 +93,7 @@ describe("Info Command", () => {
     };
 
     beforeEach(() => {
-      mockedLoadConfig.mockReturnValue(mockConfig);
+      mockedLoadConfigAsync.mockResolvedValue(mockConfig);
       mockedGetWorkspace.mockResolvedValue(mockWorkspace);
       mockedListBranches.mockResolvedValue([]);
       mockedGetDashboardUrl.mockReturnValue("https://cloud.tinybird.co/gcp/europe-west3/test-workspace");
@@ -161,7 +159,7 @@ describe("Info Command", () => {
     });
 
     it("does not return branch info when on main branch", async () => {
-      mockedLoadConfig.mockReturnValue({
+      mockedLoadConfigAsync.mockResolvedValue({
         ...mockConfig,
         gitBranch: "main",
         tinybirdBranch: null,
@@ -212,7 +210,7 @@ describe("Info Command", () => {
     };
 
     beforeEach(() => {
-      mockedLoadConfig.mockReturnValue(mockConfig);
+      mockedLoadConfigAsync.mockResolvedValue(mockConfig);
       mockedGetWorkspace.mockResolvedValue(mockWorkspace);
       mockedGetDashboardUrl.mockReturnValue("https://cloud.tinybird.co/gcp/europe-west3/test-workspace");
     });
@@ -285,7 +283,7 @@ describe("Info Command", () => {
 
   describe("error handling", () => {
     it("returns error when workspace fetch fails", async () => {
-      mockedLoadConfig.mockReturnValue({
+      mockedLoadConfigAsync.mockResolvedValue({
         cwd: "/test",
         configPath: "/test/tinybird.json",
         devMode: "branch" as const,
@@ -306,7 +304,7 @@ describe("Info Command", () => {
     });
 
     it("handles branch fetch error gracefully", async () => {
-      mockedLoadConfig.mockReturnValue({
+      mockedLoadConfigAsync.mockResolvedValue({
         cwd: "/test",
         configPath: "/test/tinybird.json",
         devMode: "branch" as const,
@@ -336,7 +334,7 @@ describe("Info Command", () => {
     });
 
     it("handles branches list fetch error gracefully", async () => {
-      mockedLoadConfig.mockReturnValue({
+      mockedLoadConfigAsync.mockResolvedValue({
         cwd: "/test",
         configPath: "/test/tinybird.json",
         devMode: "branch" as const,
@@ -365,7 +363,7 @@ describe("Info Command", () => {
     });
 
     it("handles local workspace fetch error gracefully", async () => {
-      mockedLoadConfig.mockReturnValue({
+      mockedLoadConfigAsync.mockResolvedValue({
         cwd: "/test",
         configPath: "/test/tinybird.json",
         devMode: "local" as const,
