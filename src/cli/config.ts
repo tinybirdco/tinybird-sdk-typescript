@@ -46,9 +46,9 @@ export const LOCAL_BASE_URL = "http://localhost:7181";
 
 /**
  * Config file names in priority order
- * - tinybird.config.mjs: ESM config with dynamic logic (new default)
+ * - tinybird.config.mjs: ESM config with dynamic logic
  * - tinybird.config.cjs: CommonJS config with dynamic logic
- * - tinybird.config.json: Standard JSON config
+ * - tinybird.config.json: Standard JSON config (default for new projects)
  * - tinybird.json: Legacy JSON config (backward compatible)
  */
 const CONFIG_FILES = [
@@ -63,7 +63,7 @@ type ConfigFileType = (typeof CONFIG_FILES)[number];
 /**
  * Default config file name for new projects
  */
-const DEFAULT_CONFIG_FILE = "tinybird.config.mjs";
+const DEFAULT_CONFIG_FILE = "tinybird.config.json";
 
 /**
  * Tinybird file path within lib folder
@@ -247,9 +247,9 @@ function resolveConfig(config: TinybirdConfig, configPath: string): ResolvedConf
  * Load and resolve the Tinybird configuration
  *
  * Supports the following config file formats (in priority order):
- * - tinybird.config.js: TypeScript config with dynamic logic
- * - tinybird.config.js: JavaScript config with dynamic logic
- * - tinybird.config.json: Standard JSON config (new default)
+ * - tinybird.config.mjs: ESM config with dynamic logic
+ * - tinybird.config.cjs: CommonJS config with dynamic logic
+ * - tinybird.config.json: Standard JSON config
  * - tinybird.json: Legacy JSON config (backward compatible)
  *
  * @param cwd - Working directory to start searching from (defaults to process.cwd())
@@ -293,17 +293,17 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
     return resolveConfig(config, configPath);
   }
 
-  // For JS/TS files, we need to throw an error asking to use the async version
+  // For JS files, we need to throw an error asking to use the async version
   throw new Error(
-    `Config file ${configPath} is a ${configType.endsWith(".ts") ? "TypeScript" : "JavaScript"} file. ` +
-    `Use loadConfigAsync() instead of loadConfig() to load JS/TS config files.`
+    `Config file ${configPath} is a JavaScript file. ` +
+    `Use loadConfigAsync() instead of loadConfig() to load .mjs/.cjs config files.`
   );
 }
 
 /**
  * Load and resolve the Tinybird configuration (async version)
  *
- * This async version supports all config file formats including JS/TS files
+ * This async version supports all config file formats including JS files
  * that may contain dynamic logic.
  *
  * @param cwd - Working directory to start searching from (defaults to process.cwd())
@@ -346,7 +346,7 @@ export function getExistingOrNewConfigPath(cwd: string = process.cwd()): string 
 
 /**
  * Get the expected config file path for a directory
- * Returns the path for the new default config file name (tinybird.config.json)
+ * Returns the path for the default config file name (tinybird.config.json)
  */
 export function getConfigPath(cwd: string = process.cwd()): string {
   return path.join(cwd, DEFAULT_CONFIG_FILE);
@@ -369,7 +369,7 @@ export function findExistingConfigPath(cwd: string = process.cwd()): string | nu
 /**
  * Update specific fields in a JSON config file
  *
- * Note: Only works with JSON config files (.json). For JS/TS config files,
+ * Note: Only works with JSON config files (.json). For JS config files,
  * the user needs to update them manually.
  *
  * Throws an error if the config file doesn't exist to prevent creating
@@ -405,7 +405,7 @@ export function updateConfig(
 /**
  * Check if a valid token is configured (either in file or via env var)
  *
- * Note: For JS/TS config files, this only works if the token is a static value
+ * Note: For JS config files, this only works if the token is a static value
  * or environment variable reference in the file.
  *
  * @param cwd - Working directory to search from
@@ -418,7 +418,7 @@ export function hasValidToken(cwd: string = process.cwd()): boolean {
       return false;
     }
 
-    // For JS/TS files, we can't easily check without loading them
+    // For JS files, we can't easily check without loading them
     // Return true and let loadConfig handle validation
     if (!configResult.path.endsWith(".json")) {
       return true;

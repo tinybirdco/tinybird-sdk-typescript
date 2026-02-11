@@ -82,19 +82,19 @@ describe("E2E: Init + Build Happy Path", () => {
       expect(initResult.clientPath).toBe("lib/tinybird.ts");
 
       // Verify files created
-      expect(initResult.created).toContain("tinybird.config.mjs");
+      expect(initResult.created).toContain("tinybird.config.json");
       expect(initResult.created).toContain("lib/tinybird.ts");
 
       // Verify files exist on disk
-      expect(fs.existsSync(path.join(tempDir, "tinybird.config.mjs"))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, "tinybird.config.json"))).toBe(true);
       expect(fs.existsSync(path.join(tempDir, "lib/tinybird.ts"))).toBe(true);
 
-      // Verify tinybird.config.mjs content
-      const content = fs.readFileSync(path.join(tempDir, "tinybird.config.mjs"), "utf-8");
+      // Verify tinybird.config.json content
+      const content = fs.readFileSync(path.join(tempDir, "tinybird.config.json"), "utf-8");
       expect(content).toContain('"lib/tinybird.ts"');
-      expect(content).toContain("process.env.TINYBIRD_TOKEN");
+      expect(content).toContain("${TINYBIRD_TOKEN}");
       expect(content).toContain("https://api.tinybird.co");
-      expect(content).toContain('devMode: "branch"');
+      expect(content).toContain('"devMode": "branch"');
     });
 
     it("init then build succeeds with mocked API", async () => {
@@ -268,7 +268,7 @@ describe("E2E: Init + Build Happy Path", () => {
       expect(initResult.created).toContain("src/lib/tinybird.ts");
 
       // Verify config has correct paths
-      const content = fs.readFileSync(path.join(tempDir, "tinybird.config.mjs"), "utf-8");
+      const content = fs.readFileSync(path.join(tempDir, "tinybird.config.json"), "utf-8");
       expect(content).toContain('"src/lib/tinybird.ts"');
     });
 

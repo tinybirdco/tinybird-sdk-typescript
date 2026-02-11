@@ -280,29 +280,6 @@ function createDefaultConfig(
 }
 
 /**
- * Generate JavaScript config file content
- */
-function createJsConfigContent(
-  tinybirdFilePath: string,
-  devMode: DevMode,
-  additionalIncludes: string[] = []
-): string {
-  const include = [tinybirdFilePath, ...additionalIncludes];
-  const includeStr = include.map(p => `    "${p}",`).join("\n");
-
-  return `/** @type {import("@tinybirdco/sdk").TinybirdConfig} */
-export default {
-  include: [
-${includeStr}
-  ],
-  token: process.env.TINYBIRD_TOKEN,
-  baseUrl: "https://api.tinybird.co",
-  devMode: "${devMode}",
-};
-`;
-}
-
-/**
  * Init command options
  */
 export interface InitOptions {
@@ -646,25 +623,25 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         };
       }
     } else {
-      // JS/TS config file exists - skip and let user update manually
-      skipped.push(`${configFileName} (JS/TS config files must be updated manually)`);
+      // JS config file exists - skip and let user update manually
+      skipped.push(`${configFileName} (JS config files must be updated manually)`);
     }
   } else {
-    // Create new config file with TypeScript format
+    // Create new config file with JSON format
     try {
-      const configContent = createJsConfigContent(
+      const config = createDefaultConfig(
         relativeTinybirdDir,
         devMode,
         existingDatafiles
       );
-      fs.writeFileSync(newConfigPath, configContent);
-      created.push("tinybird.config.mjs");
+      fs.writeFileSync(newConfigPath, JSON.stringify(config, null, 2) + "\n");
+      created.push("tinybird.config.json");
     } catch (error) {
       return {
         success: false,
         created,
         skipped,
-        error: `Failed to create tinybird.config.mjs: ${(error as Error).message}`,
+        error: `Failed to create tinybird.config.json: ${(error as Error).message}`,
       };
     }
   }

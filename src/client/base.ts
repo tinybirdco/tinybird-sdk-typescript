@@ -132,7 +132,9 @@ export class TinybirdClient {
       // out of the client bundle when not using dev mode
       const { loadConfigAsync } = await import("../cli/config.js");
       const { getOrCreateBranch } = await import("../api/branches.js");
-      const { isPreviewEnvironment, getPreviewBranchName } = await import("./preview.js");
+      const { isPreviewEnvironment, getPreviewBranchName } = await import(
+        "./preview.js"
+      );
 
       // In preview environments (Vercel preview, CI), the token was already resolved
       // by resolveToken() in project.ts - skip branch creation to avoid conflicts
@@ -140,9 +142,14 @@ export class TinybirdClient {
         const gitBranchName = getPreviewBranchName();
         // Preview branches use the tmp_ci_ prefix (matches what tinybird preview creates)
         const sanitized = gitBranchName
-          ? gitBranchName.replace(/[^a-zA-Z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "")
+          ? gitBranchName
+              .replace(/[^a-zA-Z0-9_]/g, "_")
+              .replace(/_+/g, "_")
+              .replace(/^_|_$/g, "")
           : undefined;
-        const tinybirdBranchName = sanitized ? `tmp_ci_${sanitized}` : undefined;
+        const tinybirdBranchName = sanitized
+          ? `tmp_ci_${sanitized}`
+          : undefined;
         return this.buildContext({
           token: this.config.token,
           isBranchToken: !!tinybirdBranchName,
@@ -158,7 +165,11 @@ export class TinybirdClient {
 
       // If on main branch, use the workspace token
       if (config.isMainBranch || !config.tinybirdBranch) {
-        return this.buildContext({ token: this.config.token, isBranchToken: false, gitBranch });
+        return this.buildContext({
+          token: this.config.token,
+          isBranchToken: false,
+          gitBranch,
+        });
       }
 
       const branchName = config.tinybirdBranch;
@@ -171,7 +182,11 @@ export class TinybirdClient {
 
       if (!branch.token) {
         // Fall back to workspace token if no branch token
-        return this.buildContext({ token: this.config.token, isBranchToken: false, gitBranch });
+        return this.buildContext({
+          token: this.config.token,
+          isBranchToken: false,
+          gitBranch,
+        });
       }
 
       return this.buildContext({
@@ -180,9 +195,11 @@ export class TinybirdClient {
         branchName,
         gitBranch,
       });
-    } catch {
-      // If anything fails, fall back to the workspace token
-      return this.buildContext({ token: this.config.token, isBranchToken: false });
+    } catch (error) {
+      throw new TinybirdError(
+        `Failed to resolve branch context: ${(error as Error).message}`,
+        500
+      );
     }
   }
 
@@ -240,7 +257,11 @@ export class TinybirdClient {
     const token = await this.getToken();
 
     try {
-      return await this.getApi(token).ingestBatch(datasourceName, events, options);
+      return await this.getApi(token).ingestBatch(
+        datasourceName,
+        events,
+        options
+      );
     } catch (error) {
       this.rethrowApiError(error);
     }
@@ -310,11 +331,7 @@ export class TinybirdClient {
 
   private rethrowApiError(error: unknown): never {
     if (error instanceof TinybirdApiError) {
-      throw new TinybirdError(
-        error.message,
-        error.statusCode,
-        error.response
-      );
+      throw new TinybirdError(error.message, error.statusCode, error.response);
     }
 
     throw error;

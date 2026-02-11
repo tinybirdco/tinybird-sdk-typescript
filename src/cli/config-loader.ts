@@ -6,7 +6,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { createRequire } from "node:module";
 
 export type MaybePromise<T> = T | Promise<T>;
 
@@ -63,25 +62,14 @@ export async function loadConfigFile<T = unknown>(
     return { config, filepath };
   }
 
-  if (ext === ".mjs") {
-    // ESM - use dynamic import
+  if (ext === ".mjs" || ext === ".cjs") {
+    // Load JS modules via runtime import for bundler compatibility
     const url = pathToFileURL(filepath).href;
-    const mod = await import(url);
-    const config = await resolveConfigExport(mod);
-
-    if (!isObject(config)) {
-      throw new Error(
-        `Config in ${filepath} must export an object (or a function returning an object).`
-      );
-    }
-
-    return { config: config as T, filepath };
-  }
-
-  if (ext === ".cjs") {
-    // CommonJS - use require
-    const require = createRequire(import.meta.url);
-    const mod = require(filepath);
+    const mod = await import(
+      /* webpackIgnore: true */
+      /* @vite-ignore */
+      url
+    );
     const config = await resolveConfigExport(mod);
 
     if (!isObject(config)) {

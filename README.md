@@ -311,7 +311,7 @@ Shows:
 
 ## Configuration
 
-Create a `tinybird.config.json` (or `tinybird.config.ts` / `tinybird.config.js` for dynamic logic) in your project root:
+Create a `tinybird.config.json` (or `tinybird.config.mjs` / `tinybird.config.cjs` for dynamic logic) in your project root:
 
 ```json
 {
@@ -335,23 +335,22 @@ The SDK supports multiple config file formats (in priority order):
 
 | File | Description |
 |------|-------------|
-| `tinybird.config.ts` | TypeScript config with dynamic logic |
-| `tinybird.config.js` | JavaScript config with dynamic logic |
+| `tinybird.config.mjs` | ESM JavaScript config with dynamic logic |
+| `tinybird.config.cjs` | CommonJS JavaScript config with dynamic logic |
 | `tinybird.config.json` | Standard JSON config (default for new projects) |
 | `tinybird.json` | Legacy JSON config (backward compatible) |
 
-For TypeScript/JavaScript configs, export a default config object or function:
+For JavaScript configs, export a default config object or function:
 
-```typescript
-// tinybird.config.ts
-import type { TinybirdConfig } from "@tinybirdco/sdk";
-
+```javascript
+// tinybird.config.mjs
+/** @type {import("@tinybirdco/sdk").TinybirdConfig} */
 export default {
   include: ["src/lib/tinybird.ts"],
-  token: process.env.TINYBIRD_TOKEN!,
+  token: process.env.TINYBIRD_TOKEN,
   baseUrl: "https://api.tinybird.co",
   devMode: "branch",
-} satisfies TinybirdConfig;
+};
 ```
 
 ### Configuration Options
