@@ -14,6 +14,7 @@ import { registerListBranchesTool } from "./tools/list-branches.js";
 import { registerLoginTool } from "./tools/login.js";
 import { registerBuildTool } from "./tools/build.js";
 import { registerInfoTool } from "./tools/info.js";
+import { registerOpenDashboardTool } from "./tools/open-dashboard.js";
 import pkg from "../package.json" with { type: "json" }
 
 /**
@@ -44,6 +45,7 @@ export function createMcpServer(): McpServer {
   registerLoginTool(server, config);
   registerBuildTool(server, config);
   registerInfoTool(server, config);
+  registerOpenDashboardTool(server, config);
 
   return server;
 }
