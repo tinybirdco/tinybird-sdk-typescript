@@ -886,28 +886,6 @@ function createCli(): Command {
         return { header: pc.dim(headerStr), rows: formattedRows };
       }
 
-      // Colorize source based on type
-      function colorizeSource(value: string, source: string): string {
-        if (source === "endpoint_errors") return pc.red(value);
-        if (source.includes("stats")) return pc.blue(value);
-        if (source === "block_log" || source === "datasources_ops_log") return pc.green(value);
-        if (source === "kafka_ops_log" || source === "sinks_ops_log") return pc.magenta(value);
-        if (source === "jobs_log") return pc.yellow(value);
-        if (source === "llm_usage") return pc.cyan(value);
-        return pc.dim(value);
-      }
-
-      // Get source icon
-      function getSourceIcon(source: string): string {
-        if (source.includes("stats")) return "λ";
-        if (source === "endpoint_errors") return "✗";
-        if (source === "block_log") return "↓";
-        if (source.includes("ops_log")) return "⚙";
-        if (source === "jobs_log") return "⏱";
-        if (source === "llm_usage") return "◇";
-        return " ";
-      }
-
       // Parse data JSON to extract key info
       function extractDataSummary(dataStr: string, source: string): string {
         try {
@@ -942,7 +920,6 @@ function createCli(): Command {
       type RowData = {
         time: string;
         source: string;
-        icon: string;
         summary: string;
       };
 
@@ -952,7 +929,6 @@ function createCli(): Command {
         return {
           time,
           source: entry.source,
-          icon: getSourceIcon(entry.source),
           summary: extractDataSummary(entry.data, entry.source),
         };
       });
@@ -965,16 +941,9 @@ function createCli(): Command {
           format: (v) => pc.dim(v),
         },
         {
-          label: "",
-          width: 2,
-          getValue: (row) => row.icon,
-          format: (v, row) => colorizeSource(v, row.source),
-        },
-        {
           label: "SOURCE",
           width: 20,
           getValue: (row) => row.source,
-          format: (v, row) => colorizeSource(v, row.source),
         },
         {
           label: "DETAILS",
