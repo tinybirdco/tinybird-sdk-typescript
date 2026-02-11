@@ -11,6 +11,9 @@ import { registerPreviewKafkaTopicTool } from "./tools/preview-kafka-topic.js";
 import { registerListResourcesTool } from "./tools/list-resources.js";
 import { registerGetResourceTool } from "./tools/get-resource.js";
 import { registerListBranchesTool } from "./tools/list-branches.js";
+import { registerLoginTool } from "./tools/login.js";
+import { registerBuildTool } from "./tools/build.js";
+import { registerInfoTool } from "./tools/info.js";
 import pkg from "../package.json" with { type: "json" }
 
 /**
@@ -36,6 +39,11 @@ export function createMcpServer(): McpServer {
   registerListBranchesTool(server, config);
   registerListKafkaTopicsTool(server, config);
   registerPreviewKafkaTopicTool(server, config);
+
+  // SDK command tools
+  registerLoginTool(server, config);
+  registerBuildTool(server, config);
+  registerInfoTool(server, config);
 
   return server;
 }

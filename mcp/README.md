@@ -114,6 +114,18 @@ Tinybird, list all my Kafka connections
 Tinybird, preview data from my Kafka topic
 ```
 
+```
+Tinybird, build and deploy my resources
+```
+
+```
+Tinybird, log me in to Tinybird
+```
+
+```
+Tinybird, show me my workspace info
+```
+
 ## MCP Tools
 
 <details>
@@ -256,6 +268,85 @@ Preview data from a Kafka topic to understand its schema and content.
 **Example prompts:**
 - "Tinybird, preview data from the events topic"
 - "Tinybird, show me the schema of my Kafka messages"
+
+</details>
+
+<details>
+<summary><code>login</code></summary>
+
+Authenticate with Tinybird via browser OAuth flow.
+
+**When to use:**
+- Set up authentication for a new project
+- Re-authenticate after token expiration
+- Switch to a different Tinybird workspace
+
+**Input:**
+- `cwd` (optional) - Working directory containing tinybird.json (defaults to current directory)
+- `api_host` (optional) - API host/region override (e.g., `https://api.us-east.tinybird.co`)
+
+**Output:**
+- JSON with `success`, `workspaceName`, `userEmail`, `baseUrl`, or error details
+
+**Example prompts:**
+- "Tinybird, log me in"
+- "Tinybird, authenticate with the US region"
+- "Tinybird, set up authentication for this project"
+
+</details>
+
+<details>
+<summary><code>build</code></summary>
+
+Build and deploy Tinybird resources from TypeScript definitions to a development branch.
+
+**When to use:**
+- Deploy datasources and pipes defined in your TypeScript code
+- Preview what would be deployed with dry run mode
+- Deploy to a local Tinybird instance for testing
+
+**Input:**
+- `cwd` (optional) - Working directory containing tinybird.json (defaults to current directory)
+- `dry_run` (optional) - If true, generate resources without pushing to API
+- `dev_mode` (optional) - Override devMode: `'branch'` (Tinybird cloud) or `'local'` (localhost)
+
+**Output:**
+- JSON with build results including:
+  - `success` - Whether the build succeeded
+  - `durationMs` - Build duration in milliseconds
+  - `resources` - Count of datasources, pipes, and connections generated
+  - `branch` - Git and Tinybird branch info, dashboard URL
+  - `deploy` - Deployment results with counts and changes
+
+**Example prompts:**
+- "Tinybird, build and deploy my resources"
+- "Tinybird, do a dry run build to see what would be deployed"
+- "Tinybird, build to local"
+- "Tinybird, deploy my datasources and pipes"
+
+</details>
+
+<details>
+<summary><code>get_info</code></summary>
+
+Get information about the current Tinybird project and workspace.
+
+**When to use:**
+- View workspace details (name, ID, user email)
+- Check API configuration and endpoints
+- List available branches
+- Understand current project context
+
+**Input:**
+- None
+
+**Output:**
+- JSON with workspace info, API configuration, and available branches
+
+**Example prompts:**
+- "Tinybird, show me my workspace info"
+- "Tinybird, what workspace am I connected to?"
+- "Tinybird, get project information"
 
 </details>
 
