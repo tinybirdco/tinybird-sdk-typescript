@@ -130,7 +130,7 @@ function getCallbackHtml(authHost: string): string {
       fetch('/?code=' + encodeURIComponent(code), { method: 'POST' })
         .then(() => {
           if (provider && region && workspace) {
-            window.location.href = host + "/" + provider + "/" + region + "/cli-login?workspace=" + workspace;
+            window.location.href = host + "/" + provider + "/" + region + "/cli-login?workspace=" + workspace + "&origin=ts-sdk";
           } else {
             document.querySelector('.container').innerHTML = '<p>Authentication successful! You can close this tab.</p>';
           }
@@ -159,7 +159,10 @@ function startAuthServer(
 ): Promise<http.Server> {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
-      const url = new URL(req.url ?? "/", `http://localhost:${AUTH_SERVER_PORT}`);
+      const url = new URL(
+        req.url ?? "/",
+        `http://localhost:${AUTH_SERVER_PORT}`
+      );
 
       if (req.method === "GET") {
         // Serve the callback HTML page
@@ -294,26 +297,25 @@ export async function browserLogin(
 
   try {
     // Start the server first
-    const serverPromise = new Promise<{ server: http.Server; code: string }>((resolve, reject) => {
-      // Set up timeout
-      timeoutId = setTimeout(() => {
-        reject(new Error("Authentication timed out after 180 seconds"));
-      }, SERVER_MAX_WAIT_TIME * 1000);
+    const serverPromise = new Promise<{ server: http.Server; code: string }>(
+      (resolve, reject) => {
+        // Set up timeout
+        timeoutId = setTimeout(() => {
+          reject(new Error("Authentication timed out after 180 seconds"));
+        }, SERVER_MAX_WAIT_TIME * 1000);
 
-      startAuthServer(
-        (code) => {
+        startAuthServer((code) => {
           if (timeoutId) clearTimeout(timeoutId);
           if (server) {
             resolve({ server, code });
           }
-        },
-        authHost
-      )
-        .then((srv) => {
-          server = srv;
-        })
-        .catch(reject);
-    });
+        }, authHost)
+          .then((srv) => {
+            server = srv;
+          })
+          .catch(reject);
+      }
+    );
 
     // Wait for server to start
     await new Promise<void>((resolve) => setTimeout(resolve, 100));
