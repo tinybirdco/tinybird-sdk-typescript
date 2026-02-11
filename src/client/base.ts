@@ -130,7 +130,7 @@ export class TinybirdClient {
     try {
       // Dynamic import to avoid circular dependencies and to keep CLI code
       // out of the client bundle when not using dev mode
-      const { loadConfig } = await import("../cli/config.js");
+      const { loadConfigAsync } = await import("../cli/config.js");
       const { getOrCreateBranch } = await import("../api/branches.js");
       const { isPreviewEnvironment, getPreviewBranchName } = await import("./preview.js");
 
@@ -153,7 +153,7 @@ export class TinybirdClient {
 
       // Use configDir if provided (important for monorepo setups where process.cwd()
       // may not be in the same directory tree as tinybird.json)
-      const config = loadConfig(this.config.configDir);
+      const config = await loadConfigAsync(this.config.configDir);
       const gitBranch = config.gitBranch ?? undefined;
 
       // If on main branch, use the workspace token
