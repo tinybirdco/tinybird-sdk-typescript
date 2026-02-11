@@ -58,6 +58,7 @@ describe("Build Command", () => {
         include: ["test.ts"],
         token: "p.test-token",
         baseUrl: "https://api.tinybird.co",
+        configPath: "/test/tinybird.config.json",
         devMode: "branch", // Config says branch
         cwd: "/test",
         gitBranch: "feature-test",
@@ -71,23 +72,40 @@ describe("Build Command", () => {
           pipes: [],
           connections: [],
         },
-        files: [],
+        entities: {
+          datasources: {},
+          pipes: {},
+          connections: {},
+          rawDatasources: [],
+          rawPipes: [],
+          sourceFiles: [],
+        },
+        stats: {
+          datasourceCount: 0,
+          pipeCount: 0,
+          connectionCount: 0,
+        },
       });
 
       vi.mocked(getLocalTokens).mockResolvedValue({
-        adminToken: "admin-token",
-        userToken: "user-token",
+        admin_token: "admin-token",
+        user_token: "user-token",
+        workspace_admin_token: "workspace-admin-token",
       });
 
       vi.mocked(getWorkspace).mockResolvedValue({
         id: "ws-id",
         name: "test-workspace",
+        user_id: "user-id",
+        user_email: "user@test.com",
+        scope: "USER",
+        main: null,
       });
 
       vi.mocked(getLocalWorkspaceName).mockReturnValue("feature_test_workspace");
 
       vi.mocked(getOrCreateLocalWorkspace).mockResolvedValue({
-        workspace: { name: "feature_test_workspace", token: "local-token" },
+        workspace: { id: "local-ws-id", name: "feature_test_workspace", token: "local-token" },
         wasCreated: false,
       });
 
@@ -132,6 +150,7 @@ describe("Build Command", () => {
         include: ["test.ts"],
         token: "p.test-token",
         baseUrl: "https://api.tinybird.co",
+        configPath: "/test/tinybird.config.json",
         devMode: "local", // Config says local
         cwd: "/test",
         gitBranch: "feature-test",
@@ -145,7 +164,19 @@ describe("Build Command", () => {
           pipes: [],
           connections: [],
         },
-        files: [],
+        entities: {
+          datasources: {},
+          pipes: {},
+          connections: {},
+          rawDatasources: [],
+          rawPipes: [],
+          sourceFiles: [],
+        },
+        stats: {
+          datasourceCount: 0,
+          pipeCount: 0,
+          connectionCount: 0,
+        },
       });
 
       vi.mocked(getOrCreateBranch).mockResolvedValue({
@@ -159,6 +190,10 @@ describe("Build Command", () => {
       vi.mocked(getWorkspace).mockResolvedValue({
         id: "ws-id",
         name: "test-workspace",
+        user_id: "user-id",
+        user_email: "user@test.com",
+        scope: "USER",
+        main: null,
       });
 
       vi.mocked(getBranchDashboardUrl).mockReturnValue("https://app.tinybird.co/dashboard");
@@ -201,6 +236,7 @@ describe("Build Command", () => {
         include: ["test.ts"],
         token: "p.test-token",
         baseUrl: "https://api.tinybird.co",
+        configPath: "/test/tinybird.config.json",
         devMode: "local", // Config says local
         cwd: "/test",
         gitBranch: "feature-test",
@@ -214,23 +250,40 @@ describe("Build Command", () => {
           pipes: [],
           connections: [],
         },
-        files: [],
+        entities: {
+          datasources: {},
+          pipes: {},
+          connections: {},
+          rawDatasources: [],
+          rawPipes: [],
+          sourceFiles: [],
+        },
+        stats: {
+          datasourceCount: 0,
+          pipeCount: 0,
+          connectionCount: 0,
+        },
       });
 
       vi.mocked(getLocalTokens).mockResolvedValue({
-        adminToken: "admin-token",
-        userToken: "user-token",
+        admin_token: "admin-token",
+        user_token: "user-token",
+        workspace_admin_token: "workspace-admin-token",
       });
 
       vi.mocked(getWorkspace).mockResolvedValue({
         id: "ws-id",
         name: "test-workspace",
+        user_id: "user-id",
+        user_email: "user@test.com",
+        scope: "USER",
+        main: null,
       });
 
       vi.mocked(getLocalWorkspaceName).mockReturnValue("feature_test_workspace");
 
       vi.mocked(getOrCreateLocalWorkspace).mockResolvedValue({
-        workspace: { name: "feature_test_workspace", token: "local-token" },
+        workspace: { id: "local-ws-id", name: "feature_test_workspace", token: "local-token" },
         wasCreated: false,
       });
 
