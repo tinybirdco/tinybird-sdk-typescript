@@ -321,6 +321,7 @@ export async function browserLogin(
     // Build auth URL
     const authUrl = new URL("/api/cli-login", authHost);
     authUrl.searchParams.set("apiHost", apiHost);
+    authUrl.searchParams.set("origin", "ts-sdk");
 
     console.log("Opening browser for authentication...");
 
