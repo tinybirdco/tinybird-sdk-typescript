@@ -29,6 +29,7 @@ import {
 import { runClear } from "./commands/clear.js";
 import { runInfo } from "./commands/info.js";
 import { runLogs, LOG_SOURCES, type LogSource, type LogsEnvironment } from "./commands/logs.js";
+import { runOpenDashboard, type Environment } from "./commands/open-dashboard.js";
 import {
   detectPackageManagerInstallCmd,
   detectPackageManagerRunCmd,
@@ -203,6 +204,40 @@ function createCli(): Command {
           branch: result.branch,
           project: result.project,
         });
+      }
+    });
+
+  // Open command
+  program
+    .command("open")
+    .description("Open the Tinybird dashboard in the default browser")
+    .option(
+      "-e, --env <env>",
+      "Which environment to open: 'cloud', 'local', or 'branch'"
+    )
+    .action(async (options) => {
+      const validEnvs = ["cloud", "local", "branch"];
+      if (options.env && !validEnvs.includes(options.env)) {
+        console.error(
+          `Error: Invalid environment '${options.env}'. Use one of: ${validEnvs.join(", ")}`
+        );
+        process.exit(1);
+      }
+
+      const result = await runOpenDashboard({
+        environment: options.env as Environment | undefined,
+      });
+
+      if (!result.success) {
+        console.error(`Error: ${result.error}`);
+        process.exit(1);
+      }
+
+      console.log(`Opening ${result.environment} dashboard...`);
+      if (result.browserOpened) {
+        console.log(`Dashboard: ${result.url}`);
+      } else {
+        console.log(`Could not open browser. Please visit: ${result.url}`);
       }
     });
 

@@ -1,6 +1,6 @@
 {
   "name": "@tinybirdco/sdk",
-  "version": "0.0.29",
+  "version": "0.0.30",
   "description": "TypeScript SDK for Tinybird Forward - define datasources and pipes as TypeScript",
   "type": "module",
   "main": "./dist/index.js",
@@ -37,6 +37,10 @@
     "./api/workspaces": {
       "import": "./dist/api/workspaces.js",
       "types": "./dist/api/workspaces.d.ts"
+    },
+    "./cli/commands/open-dashboard": {
+      "import": "./dist/cli/commands/open-dashboard.js",
+      "types": "./dist/cli/commands/open-dashboard.d.ts"
     }
   },
   "files": [
