@@ -319,7 +319,18 @@ tinybird logs -s -1d                   # Last 24 hours
 tinybird logs --source tinybird.endpoint_errors  # Filter by source
 tinybird logs -n 500                   # Limit to 500 rows
 tinybird logs --json                   # Output raw JSON
+tinybird logs --environment cloud      # Query main workspace
+tinybird logs --environment local      # Query local container
+tinybird logs --environment my_branch  # Query specific branch
 ```
+
+**Environment options:**
+- `cloud` - Query main workspace (production)
+- `local` - Query local Tinybird container
+- `branch` - Auto-detect from git branch (default)
+- `<branch_name>` - Query a specific branch by name
+
+By default, the environment is auto-resolved based on `devMode` in `tinybird.json` and the current git branch, matching the behavior of `tinybird build`.
 
 **Available sources:**
 - `tinybird.pipe_stats_rt` - API call metrics

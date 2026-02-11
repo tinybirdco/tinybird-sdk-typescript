@@ -3,7 +3,15 @@
  * Query Tinybird service datasources for observability data
  */
 
-import { loadConfig, type ResolvedConfig } from "../config.js";
+import { loadConfig, LOCAL_BASE_URL, type ResolvedConfig } from "../config.js";
+import { getBranch } from "../../api/branches.js";
+import {
+  getLocalTokens,
+  getOrCreateLocalWorkspace,
+  getLocalWorkspaceName,
+  LocalNotRunningError,
+} from "../../api/local.js";
+import { getWorkspace } from "../../api/workspaces.js";
 
 /**
  * Available log sources (Tinybird service datasources)
@@ -37,12 +45,23 @@ const TIMESTAMP_COLUMNS: Record<LogSource, string> = {
   "tinybird.llm_usage": "start_time",
 };
 
+/**
+ * Environment target for logs query
+ * - "cloud": Main workspace (explicit production)
+ * - "local": Local Tinybird container
+ * - "branch": Auto-detect from git branch
+ * - string: Specific branch name
+ */
+export type LogsEnvironment = "cloud" | "local" | "branch" | string;
+
 export interface LogsOptions {
   cwd?: string;
   startTime?: string;
   endTime?: string;
   sources?: LogSource[];
   limit?: number;
+  /** Environment target override */
+  environment?: LogsEnvironment;
 }
 
 export interface LogsResult {
@@ -54,6 +73,13 @@ export interface LogsResult {
     endTime: string;
     sources: readonly LogSource[];
     limit: number;
+  };
+  /** Resolved environment info */
+  environment?: {
+    /** Target type: cloud, local, or branch name */
+    target: string;
+    /** Whether this is local mode */
+    isLocal: boolean;
   };
   statistics?: Record<string, unknown>;
   rows?: number;
@@ -145,6 +171,97 @@ FORMAT JSON`;
 }
 
 /**
+ * Resolve the effective token and baseUrl based on environment option
+ */
+async function resolveEnvironment(
+  config: ResolvedConfig,
+  environment?: LogsEnvironment
+): Promise<{
+  token: string;
+  baseUrl: string;
+  target: string;
+  isLocal: boolean;
+}> {
+  // If explicitly cloud, use main workspace
+  if (environment === "cloud") {
+    return {
+      token: config.token,
+      baseUrl: config.baseUrl,
+      target: "cloud",
+      isLocal: false,
+    };
+  }
+
+  // If explicitly local or devMode is local (and not overridden)
+  if (environment === "local" || (!environment && config.devMode === "local")) {
+    const localTokens = await getLocalTokens();
+
+    // Determine workspace name
+    let workspaceName: string;
+    if (config.isMainBranch || !config.tinybirdBranch) {
+      // On main branch: use the authenticated workspace name
+      const authenticatedWorkspace = await getWorkspace({
+        baseUrl: config.baseUrl,
+        token: config.token,
+      });
+      workspaceName = authenticatedWorkspace.name;
+    } else {
+      // On feature branch: use branch name
+      workspaceName = getLocalWorkspaceName(config.tinybirdBranch, config.cwd);
+    }
+
+    const { workspace } = await getOrCreateLocalWorkspace(localTokens, workspaceName);
+
+    return {
+      token: workspace.token,
+      baseUrl: LOCAL_BASE_URL,
+      target: workspaceName,
+      isLocal: true,
+    };
+  }
+
+  // Determine branch name
+  let branchName: string | null = null;
+  if (environment === "branch" || !environment) {
+    // Auto-detect from git branch
+    branchName = config.tinybirdBranch;
+  } else if (environment) {
+    // Explicit branch name provided
+    branchName = environment;
+  }
+
+  // If we have a branch name and we're not on main, use the branch
+  if (branchName && !config.isMainBranch) {
+    try {
+      const branch = await getBranch(
+        { baseUrl: config.baseUrl, token: config.token },
+        branchName
+      );
+
+      if (branch.token) {
+        return {
+          token: branch.token,
+          baseUrl: config.baseUrl,
+          target: branchName,
+          isLocal: false,
+        };
+      }
+    } catch (error) {
+      // Branch doesn't exist - fall back to main workspace
+      // This is acceptable for logs as they might want to query before branch exists
+    }
+  }
+
+  // Fall back to main workspace
+  return {
+    token: config.token,
+    baseUrl: config.baseUrl,
+    target: "cloud",
+    isLocal: false,
+  };
+}
+
+/**
  * Run the logs command
  */
 export async function runLogs(options: LogsOptions = {}): Promise<LogsResult> {
@@ -158,6 +275,25 @@ export async function runLogs(options: LogsOptions = {}): Promise<LogsResult> {
     return {
       success: false,
       error: (error as Error).message,
+      durationMs: Date.now() - startTime,
+    };
+  }
+
+  // Resolve environment (token and baseUrl)
+  let envConfig: { token: string; baseUrl: string; target: string; isLocal: boolean };
+  try {
+    envConfig = await resolveEnvironment(config, options.environment);
+  } catch (error) {
+    if (error instanceof LocalNotRunningError) {
+      return {
+        success: false,
+        error: error.message,
+        durationMs: Date.now() - startTime,
+      };
+    }
+    return {
+      success: false,
+      error: `Failed to resolve environment: ${(error as Error).message}`,
       durationMs: Date.now() - startTime,
     };
   }
@@ -178,13 +314,13 @@ export async function runLogs(options: LogsOptions = {}): Promise<LogsResult> {
     resolvedLimit
   );
 
-  const url = `${config.baseUrl}/v0/sql?q=${encodeURIComponent(query)}`;
+  const url = `${envConfig.baseUrl}/v0/sql?q=${encodeURIComponent(query)}`;
 
   try {
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${config.token}`,
+        Authorization: `Bearer ${envConfig.token}`,
       },
     });
 
@@ -208,6 +344,10 @@ export async function runLogs(options: LogsOptions = {}): Promise<LogsResult> {
         endTime: resolvedEndTime,
         sources: resolvedSources,
         limit: resolvedLimit,
+      },
+      environment: {
+        target: envConfig.target,
+        isLocal: envConfig.isLocal,
       },
       statistics: jsonResult.statistics ?? {},
       rows: jsonResult.rows ?? jsonResult.data?.length ?? 0,

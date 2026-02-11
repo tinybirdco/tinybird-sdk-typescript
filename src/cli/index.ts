@@ -28,7 +28,7 @@ import {
 } from "./commands/branch.js";
 import { runClear } from "./commands/clear.js";
 import { runInfo } from "./commands/info.js";
-import { runLogs, LOG_SOURCES, type LogSource } from "./commands/logs.js";
+import { runLogs, LOG_SOURCES, type LogSource, type LogsEnvironment } from "./commands/logs.js";
 import {
   detectPackageManagerInstallCmd,
   detectPackageManagerRunCmd,
@@ -794,6 +794,10 @@ function createCli(): Command {
       `Comma-separated list of sources: ${LOG_SOURCES.join(", ")}`
     )
     .option("-n, --limit <number>", "Maximum rows to return (1-1000)", "100")
+    .option(
+      "--environment <env>",
+      "Target environment: cloud (main workspace), local (container), branch (auto-detect), or a specific branch name"
+    )
     .option("--json", "Output raw JSON instead of formatted table")
     .action(async (options) => {
       const sources = options.source
@@ -806,11 +810,14 @@ function createCli(): Command {
         process.exit(1);
       }
 
+      const environment = options.environment as LogsEnvironment | undefined;
+
       const result = await runLogs({
         startTime: options.start,
         endTime: options.end,
         sources,
         limit,
+        environment,
       });
 
       if (!result.success) {
@@ -910,8 +917,11 @@ function createCli(): Command {
 
       // Human-readable output
       if (!result.data || result.data.length === 0) {
+        const envLabel = result.environment?.isLocal
+          ? `local:${result.environment.target}`
+          : result.environment?.target ?? "cloud";
         console.log(pc.dim(`No logs found for the specified time range.`));
-        console.log(pc.dim(`\nQueried ${result.query?.sources.length} source(s) in ${(result.durationMs / 1000).toFixed(1)}s`));
+        console.log(pc.dim(`\nQueried ${result.query?.sources.length} source(s) from ${envLabel} in ${(result.durationMs / 1000).toFixed(1)}s`));
         return;
       }
 
@@ -960,7 +970,11 @@ function createCli(): Command {
         console.log(row);
       }
 
-      console.log(pc.dim(`\nFetched ${result.rows} logs in ${(result.durationMs / 1000).toFixed(1)}s`));
+      // Show environment info and fetch summary
+      const envLabel = result.environment?.isLocal
+        ? `local:${result.environment.target}`
+        : result.environment?.target ?? "cloud";
+      console.log(pc.dim(`\nFetched ${result.rows} logs from ${envLabel} in ${(result.durationMs / 1000).toFixed(1)}s`));
     });
 
   return program;
