@@ -893,23 +893,44 @@ function createCli(): Command {
         return { header: pc.dim(headerStr), rows: formattedRows };
       }
 
-      // Parse data JSON to extract key info
+      // Parse data JSON to extract key info as key=value pairs
       function extractDataSummary(dataStr: string, source: string): string {
         try {
-          const data = JSON.parse(dataStr);
-          // Different sources have different key fields
-          if (source === "pipe_stats_rt" && data[1]) {
-            return `${data[1]} ${data[3] || ""} ${data[4] ? data[4] + "ms" : ""}`.trim();
+          const data = JSON.parse(dataStr) as Record<string, unknown>;
+
+          // Key fields to prioritize for each source type
+          const priorityFields: Record<string, string[]> = {
+            "tinybird.pipe_stats_rt": ["pipe_name", "status_code", "elapsed_time", "read_rows"],
+            "tinybird.bi_stats_rt": ["pipe_name", "elapsed_time", "read_rows", "read_bytes"],
+            "tinybird.block_log": ["datasource_name", "rows", "bytes", "quarantine_rows"],
+            "tinybird.datasources_ops_log": ["datasource_name", "operation", "rows"],
+            "tinybird.endpoint_errors": ["pipe_name", "error_code", "error_message"],
+            "tinybird.kafka_ops_log": ["datasource_name", "operation", "messages"],
+            "tinybird.sinks_ops_log": ["sink_name", "operation", "rows"],
+            "tinybird.jobs_log": ["job_name", "status", "duration_ms"],
+            "tinybird.llm_usage": ["model", "prompt_tokens", "completion_tokens"],
+          };
+
+          // Get priority fields for this source, or use all keys
+          const fields = priorityFields[source] || Object.keys(data).slice(0, 4);
+
+          // Build key=value pairs for available fields
+          const pairs: string[] = [];
+          for (const key of fields) {
+            const value = data[key];
+            if (value !== undefined && value !== null && value !== "") {
+              // Format the value (truncate strings, format numbers)
+              let formatted: string;
+              if (typeof value === "string") {
+                formatted = value.length > 30 ? value.slice(0, 27) + "..." : value;
+              } else {
+                formatted = String(value);
+              }
+              pairs.push(`${key}=${formatted}`);
+            }
           }
-          if (source === "endpoint_errors" && data[3]) {
-            return `${data[3]}: ${data[4] || ""}`.slice(0, 80);
-          }
-          if (source === "block_log" && data[1]) {
-            return `${data[1]} ${data[3] || ""} rows`;
-          }
-          // Fallback: show first few meaningful values
-          const values = Object.values(data).filter((v) => v && typeof v !== "object").slice(0, 4);
-          return values.join(" ").slice(0, 80);
+
+          return pairs.join(" ") || dataStr.slice(0, 80);
         } catch {
           return dataStr.slice(0, 80);
         }

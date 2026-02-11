@@ -79,6 +79,7 @@ function parseRelativeTime(
 
 /**
  * Build SQL query for a single source
+ * Uses formatRowNoNewline to get JSON with column names
  */
 function buildSourceQuery(
   source: LogSource,
@@ -91,7 +92,7 @@ function buildSourceQuery(
     SELECT
       '${source}' AS source,
       ${tsCol} AS timestamp,
-      toJSONString(tuple(*)) AS data
+      formatRowNoNewline('JSONEachRow', *) AS data
     FROM ${source}
     WHERE ${tsCol} >= parseDateTimeBestEffort('${startTime}')
       AND ${tsCol} < parseDateTimeBestEffort('${endTime}')`;
