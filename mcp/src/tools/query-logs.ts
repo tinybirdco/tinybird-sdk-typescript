@@ -32,7 +32,9 @@ export function registerQueryLogsTool(
 ): void {
   server.tool(
     "query_logs",
-    `Query Tinybird service logs for observability data. Returns unified logs from multiple sources: ${LOG_SOURCES.join(", ")}. Use this to debug API calls, data ingestion, query execution, and errors.`,
+    `Query Tinybird service logs for observability data. Returns unified logs from multiple sources: ${LOG_SOURCES.join(
+      ", "
+    )}. Use this to debug API calls, data ingestion, query execution, and errors.`,
     {
       start_time: z
         .string()
@@ -50,7 +52,9 @@ export function registerQueryLogsTool(
         .array(z.enum(LOG_SOURCES))
         .optional()
         .describe(
-          `Filter by source. Available: ${LOG_SOURCES.join(", ")}. Default: all sources`
+          `Filter by source. Available: ${LOG_SOURCES.join(
+            ", "
+          )}. Default: all sources`
         ),
       limit: z
         .number()
