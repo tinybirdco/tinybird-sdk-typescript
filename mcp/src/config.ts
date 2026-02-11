@@ -61,8 +61,8 @@ const LOCAL_BASE_URL = "http://localhost:7181";
  * Supports the new tinybird.config.* format and legacy tinybird.json
  */
 const CONFIG_FILES = [
-  "tinybird.config.ts",
-  "tinybird.config.js",
+  "tinybird.config.mjs",
+  "tinybird.config.cjs",
   "tinybird.config.json",
   "tinybird.json",
   ".tinyb",
@@ -199,20 +199,32 @@ function loadTinybConfigFile(configPath: string): ResolvedConfig {
 }
 
 /**
- * Load a JS/TS config file using dynamic import
+ * Load a JS config file (.mjs or .cjs)
  */
 async function loadJsConfig(configPath: string): Promise<ResolvedConfig> {
   try {
-    // Convert path to file URL for proper handling on all platforms
-    const { pathToFileURL } = await import("url");
-    const fileUrl = pathToFileURL(configPath).href;
-    // Dynamic import - Node.js 22+ supports TypeScript with --experimental-strip-types
-    const module = await import(fileUrl);
+    let module: unknown;
+    const ext = path.extname(configPath).toLowerCase();
+
+    if (ext === ".mjs") {
+      // ESM - use dynamic import with file URL
+      const { pathToFileURL } = await import("url");
+      const fileUrl = pathToFileURL(configPath).href;
+      module = await import(fileUrl);
+    } else if (ext === ".cjs") {
+      // CommonJS - use createRequire
+      const { createRequire } = await import("module");
+      const require = createRequire(import.meta.url);
+      module = require(configPath);
+    } else {
+      throw new Error(`Unsupported config file extension: ${ext}`);
+    }
 
     // Support both default export and named 'config' export
-    const config = module.default ?? module.config;
+    const moduleObj = module as Record<string, unknown>;
+    const config = moduleObj.default ?? moduleObj.config ?? module;
 
-    if (!config) {
+    if (!config || typeof config !== "object") {
       throw new Error(
         `Config file must export a default config object or named 'config' export`
       );
@@ -221,14 +233,15 @@ async function loadJsConfig(configPath: string): Promise<ResolvedConfig> {
     // If it's a function, call it to get the config
     const resolvedConfig = typeof config === "function" ? await config() : config;
 
-    if (!resolvedConfig.token) {
+    const configObj = resolvedConfig as Record<string, unknown>;
+    if (!configObj.token) {
       throw new Error(`Missing 'token' field in ${configPath}`);
     }
 
     // Resolve token
     let resolvedToken: string;
     try {
-      resolvedToken = interpolateEnvVars(resolvedConfig.token);
+      resolvedToken = interpolateEnvVars(configObj.token as string);
     } catch (error) {
       throw new Error(
         `Failed to resolve token in ${configPath}: ${(error as Error).message}`
@@ -237,9 +250,9 @@ async function loadJsConfig(configPath: string): Promise<ResolvedConfig> {
 
     // Resolve base URL
     let resolvedBaseUrl = DEFAULT_BASE_URL;
-    if (resolvedConfig.baseUrl) {
+    if (configObj.baseUrl) {
       try {
-        resolvedBaseUrl = interpolateEnvVars(resolvedConfig.baseUrl);
+        resolvedBaseUrl = interpolateEnvVars(configObj.baseUrl as string);
       } catch (error) {
         throw new Error(
           `Failed to resolve baseUrl in ${configPath}: ${(error as Error).message}`
@@ -252,12 +265,6 @@ async function loadJsConfig(configPath: string): Promise<ResolvedConfig> {
       baseUrl: resolvedBaseUrl,
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ERR_UNKNOWN_FILE_EXTENSION") {
-      throw new Error(
-        `Cannot load ${configPath}. For TypeScript config files, ensure tsx or ts-node is available, ` +
-        `or use a .js or .json config file instead.`
-      );
-    }
     throw new Error(`Failed to load ${configPath}: ${(error as Error).message}`);
   }
 }
@@ -270,10 +277,10 @@ function isJsonConfig(type: ConfigFileType): boolean {
 }
 
 /**
- * Check if a config type is a JS/TS file
+ * Check if a config type is a JS file (.mjs or .cjs)
  */
-function isJsTsConfig(type: ConfigFileType): boolean {
-  return type === "tinybird.config.ts" || type === "tinybird.config.js";
+function isJsConfig(type: ConfigFileType): boolean {
+  return type === "tinybird.config.mjs" || type === "tinybird.config.cjs";
 }
 
 /**
@@ -284,8 +291,8 @@ function isJsTsConfig(type: ConfigFileType): boolean {
  * 2. tinybird.config.json / tinybird.json file
  * 3. .tinyb file
  *
- * Note: This sync version does not support JS/TS config files.
- * Use loadConfigAsync() if you need to load JS/TS config files.
+ * Note: This sync version does not support .mjs/.cjs config files.
+ * Use loadConfigAsync() if you need to load JS config files.
  */
 export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
   // First, check for direct environment variables
@@ -308,10 +315,10 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
     );
   }
 
-  if (isJsTsConfig(configResult.type)) {
+  if (isJsConfig(configResult.type)) {
     throw new Error(
-      `Config file ${configResult.path} is a ${configResult.type.endsWith(".ts") ? "TypeScript" : "JavaScript"} file. ` +
-      `Use loadConfigAsync() instead of loadConfig() to load JS/TS config files.`
+      `Config file ${configResult.path} is a JavaScript file. ` +
+      `Use loadConfigAsync() instead of loadConfig() to load .mjs/.cjs config files.`
     );
   }
 
@@ -327,7 +334,7 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
  *
  * Priority order:
  * 1. Environment variables (TINYBIRD_TOKEN, TINYBIRD_URL)
- * 2. tinybird.config.ts / tinybird.config.js file
+ * 2. tinybird.config.mjs / tinybird.config.cjs file
  * 3. tinybird.config.json / tinybird.json file
  * 4. .tinyb file
  */
@@ -352,7 +359,7 @@ export async function loadConfigAsync(cwd: string = process.cwd()): Promise<Reso
     );
   }
 
-  if (isJsTsConfig(configResult.type)) {
+  if (isJsConfig(configResult.type)) {
     return loadJsConfig(configResult.path);
   }
 
