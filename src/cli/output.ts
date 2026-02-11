@@ -293,6 +293,116 @@ export function showBranchInfo(info: BranchDisplayInfo): void {
 }
 
 /**
+ * Info display data
+ */
+export interface InfoDisplayData {
+  cloud?: {
+    workspaceName: string;
+    workspaceId: string;
+    userEmail: string;
+    apiHost: string;
+    dashboardUrl?: string;
+    token: string;
+  };
+  local?: {
+    running: boolean;
+    workspaceName?: string;
+    workspaceId?: string;
+    apiHost: string;
+    dashboardUrl?: string;
+    token?: string;
+  };
+  project?: {
+    cwd: string;
+    configPath: string;
+    devMode: string;
+    gitBranch: string | null;
+    tinybirdBranch: string | null;
+    isMainBranch: boolean;
+  };
+  branch?: {
+    name: string;
+    id: string;
+    token: string;
+    dashboardUrl?: string;
+  };
+}
+
+/**
+ * Show project and workspace info
+ */
+export function showInfo(data: InfoDisplayData): void {
+  // Cloud section
+  if (data.cloud) {
+    highlight("» Workspace:");
+    console.log(`  Name:      ${data.cloud.workspaceName}`);
+    console.log(`  ID:        ${data.cloud.workspaceId}`);
+    console.log(`  User:      ${data.cloud.userEmail}`);
+    console.log(`  API:       ${data.cloud.apiHost}`);
+    if (data.cloud.dashboardUrl) {
+      console.log(`  Dashboard: ${data.cloud.dashboardUrl}`);
+    }
+    console.log(`  Token:     ${data.cloud.token}`);
+    console.log();
+  }
+
+  // Local section
+  if (data.local) {
+    highlight("» Local:");
+    if (!data.local.running) {
+      warning("  Tinybird local is not running.");
+      console.log("  Start with: docker run -d -p 7181:7181 tinybirdco/tinybird-local");
+    } else if (data.local.workspaceName) {
+      console.log(`  Name:      ${data.local.workspaceName}`);
+      console.log(`  ID:        ${data.local.workspaceId}`);
+      console.log(`  API:       ${data.local.apiHost}`);
+      if (data.local.dashboardUrl) {
+        console.log(`  Dashboard: ${data.local.dashboardUrl}`);
+      }
+      console.log(`  Token:     ${data.local.token}`);
+    } else {
+      console.log(`  API:       ${data.local.apiHost}`);
+      warning("  Could not get workspace info.");
+    }
+    console.log();
+  }
+
+  // Branch section (current branch when working on a branch)
+  if (data.branch) {
+    highlight("» Branch:");
+    console.log(`  Name:      ${data.branch.name}`);
+    console.log(`  ID:        ${data.branch.id}`);
+    if (data.branch.dashboardUrl) {
+      console.log(`  Dashboard: ${data.branch.dashboardUrl}`);
+    }
+    console.log(`  Token:     ${data.branch.token}`);
+    console.log();
+  } else if (data.project?.devMode === "branch") {
+    // Show message when in branch mode but no branch (on main or no git)
+    highlight("» Branch:");
+    if (!data.project.gitBranch) {
+      warning("  Git branch not detected. Switch to a git branch first.");
+    } else if (data.project.isMainBranch) {
+      warning("  On main branch. Switch to a feature branch first.");
+    }
+    console.log();
+  }
+
+  // Project section
+  if (data.project) {
+    highlight("» Project:");
+    console.log(`  Directory: ${data.project.cwd}`);
+    console.log(`  Config:    ${data.project.configPath}`);
+    console.log(`  Dev mode:  ${data.project.devMode}`);
+    if (data.project.gitBranch) {
+      console.log(`  Git:       ${data.project.gitBranch}${data.project.isMainBranch ? " (main)" : ""}`);
+    }
+    console.log();
+  }
+
+}
+
+/**
  * Output object containing all output functions
  */
 export const output = {
@@ -319,4 +429,5 @@ export const output = {
   showDeploySuccess,
   showDeployFailure,
   showBranchInfo,
+  showInfo,
 };
