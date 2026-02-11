@@ -256,6 +256,7 @@ Build and push resources to a Tinybird branch (not main).
 tinybird build
 tinybird build --dry-run  # Preview without pushing
 tinybird build --local    # Build to local Tinybird container
+tinybird build --branch   # Explicitly use Tinybird cloud with branches
 ```
 
 **Note:** `build` is blocked on the main branch. Use `tinybird deploy` for production deployments.

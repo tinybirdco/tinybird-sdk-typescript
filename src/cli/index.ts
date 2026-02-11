@@ -247,6 +247,7 @@ function createCli(): Command {
     .option("--dry-run", "Generate without pushing to API")
     .option("--debug", "Show debug output including API requests/responses")
     .option("--local", "Use local Tinybird container")
+    .option("--branch", "Use Tinybird cloud with branches")
     .action(async (options) => {
       if (options.debug) {
         process.env.TINYBIRD_DEBUG = "1";
@@ -256,6 +257,8 @@ function createCli(): Command {
       let devModeOverride: DevMode | undefined;
       if (options.local) {
         devModeOverride = "local";
+      } else if (options.branch) {
+        devModeOverride = "branch";
       }
 
       const result = await runBuild({
