@@ -122,6 +122,10 @@ Tinybird, build and deploy my resources
 Tinybird, log me in to Tinybird
 ```
 
+```
+Tinybird, show me my workspace info
+```
+
 ## MCP Tools
 
 <details>
@@ -319,6 +323,30 @@ Build and deploy Tinybird resources from TypeScript definitions to a development
 - "Tinybird, do a dry run build to see what would be deployed"
 - "Tinybird, build to local"
 - "Tinybird, deploy my datasources and pipes"
+
+</details>
+
+<details>
+<summary><code>get_info</code></summary>
+
+Get information about the current Tinybird project and workspace.
+
+**When to use:**
+- View workspace details (name, ID, user email)
+- Check API configuration and endpoints
+- List available branches
+- Understand current project context
+
+**Input:**
+- None
+
+**Output:**
+- JSON with workspace info, API configuration, and available branches
+
+**Example prompts:**
+- "Tinybird, show me my workspace info"
+- "Tinybird, what workspace am I connected to?"
+- "Tinybird, get project information"
 
 </details>
 
