@@ -823,34 +823,175 @@ function createCli(): Command {
         return;
       }
 
-      // Human-readable output
-      console.log(
-        pc.dim(
-          `Queried ${result.query?.sources.length} source(s) from ${result.query?.startTime} to ${result.query?.endTime}`
-        )
-      );
-      console.log(pc.dim(`Found ${result.rows} log entries\n`));
-
-      if (result.data && result.data.length > 0) {
-        for (const entry of result.data) {
-          const ts = new Date(entry.timestamp).toISOString();
-          const sourceColor =
-            entry.source === "endpoint_errors"
-              ? pc.red
-              : entry.source.includes("stats")
-                ? pc.blue
-                : pc.cyan;
-          console.log(
-            `${pc.dim(ts)} ${sourceColor(entry.source.padEnd(20))} ${pc.dim(entry.data.substring(0, 100))}${entry.data.length > 100 ? "..." : ""}`
-          );
-        }
-      } else {
-        console.log("No logs found for the specified time range.");
+      // Table rendering helpers (inspired by Vercel CLI)
+      interface ColumnDef<T> {
+        label: string;
+        width?: number | "stretch";
+        getValue: (row: T) => string;
+        format?: (value: string, row: T) => string;
       }
 
-      console.log(
-        pc.dim(`\nCompleted in ${(result.durationMs / 1000).toFixed(1)}s`)
-      );
+      function renderTable<T>(columns: ColumnDef<T>[], rows: T[], tableWidth: number): { header: string; rows: string[] } {
+        const maxWidths = columns.map((col) => {
+          const headerWidth = col.label.length;
+          const maxContent = Math.max(headerWidth, ...rows.map((row) => col.getValue(row).length));
+          return maxContent;
+        });
+
+        const finalWidths: number[] = [];
+        let usedWidth = 0;
+        let stretchIndex = -1;
+
+        for (let i = 0; i < columns.length; i++) {
+          const col = columns[i];
+          if (col.width === "stretch") {
+            stretchIndex = i;
+            finalWidths.push(0);
+          } else if (typeof col.width === "number") {
+            finalWidths.push(col.width);
+            usedWidth += col.width;
+          } else {
+            finalWidths.push(maxWidths[i]);
+            usedWidth += maxWidths[i];
+          }
+        }
+
+        usedWidth += (columns.length - 1) * 2;
+
+        if (stretchIndex >= 0) {
+          finalWidths[stretchIndex] = Math.max(20, tableWidth - usedWidth);
+        }
+
+        const pad = (value: string, width: number): string => {
+          if (value.length > width) {
+            return value.slice(0, width - 1) + "…";
+          }
+          return value.padEnd(width);
+        };
+
+        const headerStr = columns
+          .map((col, i) => pad(col.label, finalWidths[i]))
+          .join("  ");
+
+        const formattedRows = rows.map((row) => {
+          return columns
+            .map((col, i) => {
+              const value = col.getValue(row);
+              const padded = pad(value, finalWidths[i]);
+              return col.format ? col.format(padded, row) : padded;
+            })
+            .join("  ");
+        });
+
+        return { header: pc.dim(headerStr), rows: formattedRows };
+      }
+
+      // Colorize source based on type
+      function colorizeSource(value: string, source: string): string {
+        if (source === "endpoint_errors") return pc.red(value);
+        if (source.includes("stats")) return pc.blue(value);
+        if (source === "block_log" || source === "datasources_ops_log") return pc.green(value);
+        if (source === "kafka_ops_log" || source === "sinks_ops_log") return pc.magenta(value);
+        if (source === "jobs_log") return pc.yellow(value);
+        if (source === "llm_usage") return pc.cyan(value);
+        return pc.dim(value);
+      }
+
+      // Get source icon
+      function getSourceIcon(source: string): string {
+        if (source.includes("stats")) return "λ";
+        if (source === "endpoint_errors") return "✗";
+        if (source === "block_log") return "↓";
+        if (source.includes("ops_log")) return "⚙";
+        if (source === "jobs_log") return "⏱";
+        if (source === "llm_usage") return "◇";
+        return " ";
+      }
+
+      // Parse data JSON to extract key info
+      function extractDataSummary(dataStr: string, source: string): string {
+        try {
+          const data = JSON.parse(dataStr);
+          // Different sources have different key fields
+          if (source === "pipe_stats_rt" && data[1]) {
+            return `${data[1]} ${data[3] || ""} ${data[4] ? data[4] + "ms" : ""}`.trim();
+          }
+          if (source === "endpoint_errors" && data[3]) {
+            return `${data[3]}: ${data[4] || ""}`.slice(0, 80);
+          }
+          if (source === "block_log" && data[1]) {
+            return `${data[1]} ${data[3] || ""} rows`;
+          }
+          // Fallback: show first few meaningful values
+          const values = Object.values(data).filter((v) => v && typeof v !== "object").slice(0, 4);
+          return values.join(" ").slice(0, 80);
+        } catch {
+          return dataStr.slice(0, 80);
+        }
+      }
+
+      // Human-readable output
+      if (!result.data || result.data.length === 0) {
+        console.log(pc.dim(`No logs found for the specified time range.`));
+        console.log(pc.dim(`\nQueried ${result.query?.sources.length} source(s) in ${(result.durationMs / 1000).toFixed(1)}s`));
+        return;
+      }
+
+      const terminalWidth = process.stdout.columns || 120;
+
+      type RowData = {
+        time: string;
+        source: string;
+        icon: string;
+        summary: string;
+      };
+
+      const rowData: RowData[] = result.data.map((entry) => {
+        const date = new Date(entry.timestamp);
+        const time = date.toISOString().slice(11, 23); // HH:mm:ss.SSS
+        return {
+          time,
+          source: entry.source,
+          icon: getSourceIcon(entry.source),
+          summary: extractDataSummary(entry.data, entry.source),
+        };
+      });
+
+      const columns: ColumnDef<RowData>[] = [
+        {
+          label: "TIME",
+          width: 12,
+          getValue: (row) => row.time,
+          format: (v) => pc.dim(v),
+        },
+        {
+          label: "",
+          width: 2,
+          getValue: (row) => row.icon,
+          format: (v, row) => colorizeSource(v, row.source),
+        },
+        {
+          label: "SOURCE",
+          width: 20,
+          getValue: (row) => row.source,
+          format: (v, row) => colorizeSource(v, row.source),
+        },
+        {
+          label: "DETAILS",
+          width: "stretch",
+          getValue: (row) => row.summary,
+          format: (v) => pc.dim(v),
+        },
+      ];
+
+      const table = renderTable(columns, rowData, terminalWidth);
+
+      console.log(table.header);
+      for (const row of table.rows) {
+        console.log(row);
+      }
+
+      console.log(pc.dim(`\nFetched ${result.rows} logs in ${(result.durationMs / 1000).toFixed(1)}s`));
     });
 
   return program;
