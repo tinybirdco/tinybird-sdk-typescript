@@ -9,6 +9,7 @@ import type { ResolvedConfig } from "../config.js";
 
 /**
  * Available log sources (Tinybird service datasources)
+ * Must match the SDK's LOG_SOURCES
  */
 const LOG_SOURCES = [
   "tinybird.pipe_stats_rt",
@@ -22,110 +23,12 @@ const LOG_SOURCES = [
   "tinybird.llm_usage",
 ] as const;
 
-type LogSource = (typeof LOG_SOURCES)[number];
-
-/**
- * Mapping of datasource to its timestamp column name
- */
-const TIMESTAMP_COLUMNS: Record<LogSource, string> = {
-  "tinybird.pipe_stats_rt": "start_datetime",
-  "tinybird.bi_stats_rt": "start_datetime",
-  "tinybird.block_log": "timestamp",
-  "tinybird.datasources_ops_log": "timestamp",
-  "tinybird.endpoint_errors": "start_datetime",
-  "tinybird.kafka_ops_log": "timestamp",
-  "tinybird.sinks_ops_log": "timestamp",
-  "tinybird.jobs_log": "created_at",
-  "tinybird.llm_usage": "start_time",
-};
-
-/**
- * Parse relative time string to ISO datetime
- * Supports: -1h, -30m, -1d, -7d, -1w, etc.
- */
-function parseRelativeTime(
-  relativeTime: string,
-  now: Date = new Date()
-): string {
-  const match = relativeTime.match(/^-(\d+)([mhdw])$/);
-  if (!match) {
-    return relativeTime;
-  }
-
-  const [, amount, unit] = match;
-  const ms = now.getTime();
-  const value = parseInt(amount, 10);
-
-  let offsetMs: number;
-  switch (unit) {
-    case "m":
-      offsetMs = value * 60 * 1000;
-      break;
-    case "h":
-      offsetMs = value * 60 * 60 * 1000;
-      break;
-    case "d":
-      offsetMs = value * 24 * 60 * 60 * 1000;
-      break;
-    case "w":
-      offsetMs = value * 7 * 24 * 60 * 60 * 1000;
-      break;
-    default:
-      offsetMs = 0;
-  }
-
-  return new Date(ms - offsetMs).toISOString();
-}
-
-/**
- * Build SQL query for a single source
- * Uses formatRowNoNewline to get JSON with column names
- */
-function buildSourceQuery(
-  source: LogSource,
-  startTime: string,
-  endTime: string
-): string {
-  const tsCol = TIMESTAMP_COLUMNS[source];
-
-  return `
-    SELECT
-      '${source}' AS source,
-      ${tsCol} AS timestamp,
-      formatRowNoNewline('JSONEachRow', *) AS data
-    FROM ${source}
-    WHERE ${tsCol} >= parseDateTimeBestEffort('${startTime}')
-      AND ${tsCol} < parseDateTimeBestEffort('${endTime}')`;
-}
-
-/**
- * Build the complete UNION ALL query
- */
-function buildQuery(
-  sources: readonly LogSource[],
-  startTime: string,
-  endTime: string,
-  limit: number
-): string {
-  const sourceQueries = sources.map((source) =>
-    buildSourceQuery(source, startTime, endTime)
-  );
-
-  return `
-SELECT * FROM (
-${sourceQueries.join("\n  UNION ALL\n")}
-)
-ORDER BY timestamp DESC
-LIMIT ${limit}
-FORMAT JSON`;
-}
-
 /**
  * Register the query_logs tool
  */
 export function registerQueryLogsTool(
   server: McpServer,
-  config: ResolvedConfig
+  _config: ResolvedConfig
 ): void {
   server.tool(
     "query_logs",
@@ -155,65 +58,56 @@ export function registerQueryLogsTool(
         .max(1000)
         .optional()
         .describe("Maximum rows to return (1-1000). Default: 100"),
+      environment: z
+        .string()
+        .optional()
+        .describe(
+          "Target environment: 'cloud' (main workspace), 'local' (container), 'branch' (auto-detect), or a specific branch name"
+        ),
     },
-    async ({ start_time, end_time, source, limit }) => {
-      const now = new Date();
-
-      const resolvedStartTime = parseRelativeTime(start_time ?? "-1h", now);
-      const resolvedEndTime = end_time
-        ? parseRelativeTime(end_time, now)
-        : now.toISOString();
-      const resolvedSources = source?.length ? source : LOG_SOURCES;
-      const resolvedLimit = limit ?? 100;
-
-      const query = buildQuery(
-        resolvedSources,
-        resolvedStartTime,
-        resolvedEndTime,
-        resolvedLimit
-      );
-
-      const url = `${config.baseUrl}/v0/sql?q=${encodeURIComponent(query)}`;
-
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${config.token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error querying logs: ${response.status} ${response.statusText}\n${errorText}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      const result = await response.text();
-
+    async ({ start_time, end_time, source, limit, environment }) => {
       try {
-        const jsonResult = JSON.parse(result);
+        const { runLogs } = await import("@tinybirdco/sdk/cli/commands/logs");
+
+        const result = await runLogs({
+          startTime: start_time,
+          endTime: end_time,
+          sources: source,
+          limit,
+          environment,
+        });
+
+        if (!result.success) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    success: false,
+                    error: result.error,
+                    durationMs: result.durationMs,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+
         return {
           content: [
             {
               type: "text" as const,
               text: JSON.stringify(
                 {
-                  query: {
-                    start_time: resolvedStartTime,
-                    end_time: resolvedEndTime,
-                    sources: resolvedSources,
-                    limit: resolvedLimit,
-                  },
-                  statistics: jsonResult.statistics ?? {},
-                  rows: jsonResult.rows ?? jsonResult.data?.length ?? 0,
-                  data: jsonResult.data ?? [],
+                  query: result.query,
+                  environment: result.environment,
+                  statistics: result.statistics,
+                  rows: result.rows,
+                  data: result.data,
                 },
                 null,
                 2
@@ -221,9 +115,22 @@ export function registerQueryLogsTool(
             },
           ],
         };
-      } catch {
+      } catch (error) {
         return {
-          content: [{ type: "text" as const, text: result }],
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  success: false,
+                  error: (error as Error).message,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+          isError: true,
         };
       }
     }
