@@ -925,7 +925,7 @@ function createCli(): Command {
 
       const rowData: RowData[] = result.data.map((entry) => {
         const date = new Date(entry.timestamp);
-        const time = date.toISOString().slice(11, 23); // HH:mm:ss.SSS
+        const time = date.toISOString().slice(11, 19); // HH:mm:ss
         return {
           time,
           source: entry.source,
@@ -936,7 +936,7 @@ function createCli(): Command {
       const columns: ColumnDef<RowData>[] = [
         {
           label: "TIME",
-          width: 12,
+          width: 8,
           getValue: (row) => row.time,
           format: (v) => pc.dim(v),
         },
