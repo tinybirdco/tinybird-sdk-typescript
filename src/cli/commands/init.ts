@@ -280,9 +280,9 @@ function createDefaultConfig(
 }
 
 /**
- * Generate TypeScript config file content
+ * Generate JavaScript config file content
  */
-function createTsConfigContent(
+function createJsConfigContent(
   tinybirdFilePath: string,
   devMode: DevMode,
   additionalIncludes: string[] = []
@@ -290,16 +290,15 @@ function createTsConfigContent(
   const include = [tinybirdFilePath, ...additionalIncludes];
   const includeStr = include.map(p => `    "${p}",`).join("\n");
 
-  return `import type { TinybirdConfig } from "@tinybirdco/sdk";
-
+  return `/** @type {import("@tinybirdco/sdk").TinybirdConfig} */
 export default {
   include: [
 ${includeStr}
   ],
-  token: process.env.TINYBIRD_TOKEN!,
+  token: process.env.TINYBIRD_TOKEN,
   baseUrl: "https://api.tinybird.co",
   devMode: "${devMode}",
-} satisfies TinybirdConfig;
+};
 `;
 }
 
@@ -653,19 +652,19 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   } else {
     // Create new config file with TypeScript format
     try {
-      const configContent = createTsConfigContent(
+      const configContent = createJsConfigContent(
         relativeTinybirdDir,
         devMode,
         existingDatafiles
       );
       fs.writeFileSync(newConfigPath, configContent);
-      created.push("tinybird.config.ts");
+      created.push("tinybird.config.js");
     } catch (error) {
       return {
         success: false,
         created,
         skipped,
-        error: `Failed to create tinybird.config.ts: ${(error as Error).message}`,
+        error: `Failed to create tinybird.config.js: ${(error as Error).message}`,
       };
     }
   }

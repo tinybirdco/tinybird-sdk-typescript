@@ -1,6 +1,6 @@
 /**
  * Universal config file loader
- * Supports .json, .js, .cjs, .mjs, and .ts files
+ * Supports .json and .js files
  */
 
 import * as fs from "node:fs/promises";
@@ -29,36 +29,8 @@ async function readJsonFile<T>(filepath: string): Promise<T> {
 }
 
 /**
- * Convert JavaScript code to a data URL for dynamic import
- */
-function toDataUrl(jsCode: string): string {
-  const base64 = Buffer.from(jsCode, "utf8").toString("base64");
-  return `data:text/javascript;base64,${base64}`;
-}
-
-/**
- * Import a TypeScript file using esbuild transform (in-memory, no temp files)
- */
-async function importTypeScript(filepath: string): Promise<unknown> {
-  // Dynamic import to avoid bundler issues
-  const esbuildModule = "es" + "build";
-  const esbuild = (await import(esbuildModule)) as typeof import("esbuild");
-
-  const source = await fs.readFile(filepath, "utf8");
-
-  const result = await esbuild.transform(source, {
-    loader: "ts",
-    format: "esm",
-    target: "node18",
-    sourcemap: "inline",
-  });
-
-  return await import(toDataUrl(result.code));
-}
-
-/**
- * Import a module file (.js, .cjs, .mjs, .ts)
- * Tries ESM import first, falls back to CJS require or esbuild for .ts
+ * Import a module file (.js, .cjs, .mjs)
+ * Tries ESM import first, falls back to CJS require
  */
 async function importModule(filepath: string): Promise<unknown> {
   const url = pathToFileURL(filepath).href;
@@ -66,11 +38,7 @@ async function importModule(filepath: string): Promise<unknown> {
   try {
     return await import(url);
   } catch {
-    // If it's a .ts file and native import failed, use esbuild transform
-    if (filepath.endsWith(".ts")) {
-      return await importTypeScript(filepath);
-    }
-    // Fallback to CJS require for .js/.cjs files
+    // Fallback to CJS require
     const require = createRequire(import.meta.url);
     return require(filepath);
   }
@@ -93,7 +61,7 @@ async function resolveConfigExport(mod: unknown): Promise<unknown> {
 
 /**
  * Load a config file from disk
- * Supports .json, .js, .cjs, .mjs, and .ts files
+ * Supports .json and .js files
  */
 export async function loadConfigFile<T = unknown>(
   configPath: string,
@@ -111,7 +79,7 @@ export async function loadConfigFile<T = unknown>(
     return { config, filepath };
   }
 
-  if (ext === ".js" || ext === ".cjs" || ext === ".mjs" || ext === ".ts") {
+  if (ext === ".js" || ext === ".cjs" || ext === ".mjs") {
     const mod = await importModule(filepath);
     const config = await resolveConfigExport(mod);
 
@@ -125,6 +93,6 @@ export async function loadConfigFile<T = unknown>(
   }
 
   throw new Error(
-    `Unsupported config extension "${ext}". Use .json, .js, .cjs, .mjs, or .ts`
+    `Unsupported config extension "${ext}". Use .json or .js`
   );
 }

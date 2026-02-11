@@ -1,5 +1,4 @@
-import type { TinybirdConfig } from "@tinybirdco/sdk";
-
+/** @type {import("@tinybirdco/sdk").TinybirdConfig} */
 export default {
   include: [
     "src/tinybird/datasources.ts",
@@ -9,6 +8,6 @@ export default {
     "src/tinybird/copies.ts",
     "src/tinybird/dummy.datasource",
   ],
-  token: process.env.TINYBIRD_TOKEN!,
+  token: process.env.TINYBIRD_TOKEN,
   baseUrl: "https://api.tinybird.co",
-} satisfies TinybirdConfig;
+};

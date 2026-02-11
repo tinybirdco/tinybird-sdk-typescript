@@ -46,13 +46,12 @@ export const LOCAL_BASE_URL = "http://localhost:7181";
 
 /**
  * Config file names in priority order
- * - tinybird.config.ts: TypeScript config with dynamic logic
- * - tinybird.config.js: JavaScript config with dynamic logic
- * - tinybird.config.json: Standard JSON config (new default)
+ * - tinybird.config.js: TypeScript config with dynamic logic
+ * - tinybird.config.js: JavaScript config with dynamic logic (new default)
+ * - tinybird.config.json: Standard JSON config
  * - tinybird.json: Legacy JSON config (backward compatible)
  */
 const CONFIG_FILES = [
-  "tinybird.config.ts",
   "tinybird.config.js",
   "tinybird.config.json",
   "tinybird.json",
@@ -63,7 +62,7 @@ type ConfigFileType = (typeof CONFIG_FILES)[number];
 /**
  * Default config file name for new projects
  */
-const DEFAULT_CONFIG_FILE = "tinybird.config.ts";
+const DEFAULT_CONFIG_FILE = "tinybird.config.js";
 
 /**
  * Tinybird file path within lib folder
@@ -247,7 +246,7 @@ function resolveConfig(config: TinybirdConfig, configPath: string): ResolvedConf
  * Load and resolve the Tinybird configuration
  *
  * Supports the following config file formats (in priority order):
- * - tinybird.config.ts: TypeScript config with dynamic logic
+ * - tinybird.config.js: TypeScript config with dynamic logic
  * - tinybird.config.js: JavaScript config with dynamic logic
  * - tinybird.config.json: Standard JSON config (new default)
  * - tinybird.json: Legacy JSON config (backward compatible)
