@@ -795,7 +795,7 @@ function createCli(): Command {
     )
     .option("-n, --limit <number>", "Maximum rows to return (1-1000)", "100")
     .option(
-      "--environment <env>",
+      "--env <env>",
       "Target environment: cloud (main workspace), local (container), branch (auto-detect), or a specific branch name"
     )
     .option("--json", "Output raw JSON instead of formatted table")
@@ -810,7 +810,7 @@ function createCli(): Command {
         process.exit(1);
       }
 
-      const environment = options.environment as LogsEnvironment | undefined;
+      const environment = options.env as LogsEnvironment | undefined;
 
       const result = await runLogs({
         startTime: options.start,

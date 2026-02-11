@@ -319,9 +319,9 @@ tinybird logs -s -1d                   # Last 24 hours
 tinybird logs --source tinybird.endpoint_errors  # Filter by source
 tinybird logs -n 500                   # Limit to 500 rows
 tinybird logs --json                   # Output raw JSON
-tinybird logs --environment cloud      # Query main workspace
-tinybird logs --environment local      # Query local container
-tinybird logs --environment my_branch  # Query specific branch
+tinybird logs --env cloud              # Query main workspace
+tinybird logs --env local              # Query local container
+tinybird logs --env my_branch          # Query specific branch
 ```
 
 **Environment options:**
