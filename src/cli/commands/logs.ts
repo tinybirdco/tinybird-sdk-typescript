@@ -9,15 +9,15 @@ import { loadConfig, type ResolvedConfig } from "../config.js";
  * Available log sources (Tinybird service datasources)
  */
 export const LOG_SOURCES = [
-  "pipe_stats_rt",
-  "bi_stats_rt",
-  "block_log",
-  "datasources_ops_log",
-  "endpoint_errors",
-  "kafka_ops_log",
-  "sinks_ops_log",
-  "jobs_log",
-  "llm_usage",
+  "tinybird.pipe_stats_rt",
+  "tinybird.bi_stats_rt",
+  "tinybird.block_log",
+  "tinybird.datasources_ops_log",
+  "tinybird.endpoint_errors",
+  "tinybird.kafka_ops_log",
+  "tinybird.sinks_ops_log",
+  "tinybird.jobs_log",
+  "tinybird.llm_usage",
 ] as const;
 
 export type LogSource = (typeof LOG_SOURCES)[number];
@@ -26,15 +26,15 @@ export type LogSource = (typeof LOG_SOURCES)[number];
  * Mapping of datasource to its timestamp column name
  */
 const TIMESTAMP_COLUMNS: Record<LogSource, string> = {
-  pipe_stats_rt: "start_datetime",
-  bi_stats_rt: "start_datetime",
-  block_log: "timestamp",
-  datasources_ops_log: "timestamp",
-  endpoint_errors: "start_datetime",
-  kafka_ops_log: "timestamp",
-  sinks_ops_log: "timestamp",
-  jobs_log: "created_at",
-  llm_usage: "start_time",
+  "tinybird.pipe_stats_rt": "start_datetime",
+  "tinybird.bi_stats_rt": "start_datetime",
+  "tinybird.block_log": "timestamp",
+  "tinybird.datasources_ops_log": "timestamp",
+  "tinybird.endpoint_errors": "start_datetime",
+  "tinybird.kafka_ops_log": "timestamp",
+  "tinybird.sinks_ops_log": "timestamp",
+  "tinybird.jobs_log": "created_at",
+  "tinybird.llm_usage": "start_time",
 };
 
 export interface LogsOptions {
@@ -117,7 +117,7 @@ function buildSourceQuery(
       '${source}' AS source,
       ${tsCol} AS timestamp,
       toJSONString(tuple(*)) AS data
-    FROM tinybird.${source}
+    FROM ${source}
     WHERE ${tsCol} >= parseDateTimeBestEffort('${startTime}')
       AND ${tsCol} < parseDateTimeBestEffort('${endTime}')`;
 }

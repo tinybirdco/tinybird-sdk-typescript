@@ -364,19 +364,19 @@ Query Tinybird service logs for observability data. Returns unified logs from mu
 **Input:**
 - `start_time` (optional) - Start time (relative: `-1h`, `-30m`, `-1d`, `-7d` or ISO 8601). Default: `-1h`
 - `end_time` (optional) - End time (relative or ISO 8601). Default: `now`
-- `sources` (optional) - Array of sources to filter. Default: all sources
+- `source` (optional) - Array of sources to filter. Default: all sources
 - `limit` (optional) - Maximum rows (1-1000). Default: `100`
 
 **Available sources:**
-- `pipe_stats_rt` - API call metrics
-- `bi_stats_rt` - Query execution details
-- `block_log` - Data ingestion blocks
-- `datasources_ops_log` - Datasource operations
-- `endpoint_errors` - Endpoint errors
-- `kafka_ops_log` - Kafka operations
-- `sinks_ops_log` - Sink operations
-- `jobs_log` - Job executions
-- `llm_usage` - LLM token usage
+- `tinybird.pipe_stats_rt` - API call metrics
+- `tinybird.bi_stats_rt` - Query execution details
+- `tinybird.block_log` - Data ingestion blocks
+- `tinybird.datasources_ops_log` - Datasource operations
+- `tinybird.endpoint_errors` - Endpoint errors
+- `tinybird.kafka_ops_log` - Kafka operations
+- `tinybird.sinks_ops_log` - Sink operations
+- `tinybird.jobs_log` - Job executions
+- `tinybird.llm_usage` - LLM token usage
 
 **Output:**
 - JSON with `source`, `timestamp`, and `data` (JSON containing all columns) for each log entry
@@ -385,7 +385,7 @@ Query Tinybird service logs for observability data. Returns unified logs from mu
 - "Tinybird, show me recent logs"
 - "Tinybird, what errors happened in the last 24 hours?"
 - "Tinybird, show me endpoint errors from the last hour"
-- "Tinybird, query logs for pipe_stats_rt and bi_stats_rt"
+- "Tinybird, query logs for tinybird.pipe_stats_rt"
 
 </details>
 

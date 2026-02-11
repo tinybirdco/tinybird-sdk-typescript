@@ -11,15 +11,15 @@ import type { ResolvedConfig } from "../config.js";
  * Available log sources (Tinybird service datasources)
  */
 const LOG_SOURCES = [
-  "pipe_stats_rt",
-  "bi_stats_rt",
-  "block_log",
-  "datasources_ops_log",
-  "endpoint_errors",
-  "kafka_ops_log",
-  "sinks_ops_log",
-  "jobs_log",
-  "llm_usage",
+  "tinybird.pipe_stats_rt",
+  "tinybird.bi_stats_rt",
+  "tinybird.block_log",
+  "tinybird.datasources_ops_log",
+  "tinybird.endpoint_errors",
+  "tinybird.kafka_ops_log",
+  "tinybird.sinks_ops_log",
+  "tinybird.jobs_log",
+  "tinybird.llm_usage",
 ] as const;
 
 type LogSource = (typeof LOG_SOURCES)[number];
@@ -28,15 +28,15 @@ type LogSource = (typeof LOG_SOURCES)[number];
  * Mapping of datasource to its timestamp column name
  */
 const TIMESTAMP_COLUMNS: Record<LogSource, string> = {
-  pipe_stats_rt: "start_datetime",
-  bi_stats_rt: "start_datetime",
-  block_log: "timestamp",
-  datasources_ops_log: "timestamp",
-  endpoint_errors: "start_datetime",
-  kafka_ops_log: "timestamp",
-  sinks_ops_log: "timestamp",
-  jobs_log: "created_at",
-  llm_usage: "start_time",
+  "tinybird.pipe_stats_rt": "start_datetime",
+  "tinybird.bi_stats_rt": "start_datetime",
+  "tinybird.block_log": "timestamp",
+  "tinybird.datasources_ops_log": "timestamp",
+  "tinybird.endpoint_errors": "start_datetime",
+  "tinybird.kafka_ops_log": "timestamp",
+  "tinybird.sinks_ops_log": "timestamp",
+  "tinybird.jobs_log": "created_at",
+  "tinybird.llm_usage": "start_time",
 };
 
 /**
@@ -92,7 +92,7 @@ function buildSourceQuery(
       '${source}' AS source,
       ${tsCol} AS timestamp,
       toJSONString(tuple(*)) AS data
-    FROM tinybird.${source}
+    FROM ${source}
     WHERE ${tsCol} >= parseDateTimeBestEffort('${startTime}')
       AND ${tsCol} < parseDateTimeBestEffort('${endTime}')`;
 }
@@ -142,11 +142,11 @@ export function registerQueryLogsTool(
         .describe(
           "End time. Supports relative times or ISO 8601 datetime. Default: now"
         ),
-      sources: z
+      source: z
         .array(z.enum(LOG_SOURCES))
         .optional()
         .describe(
-          `Filter by log sources. Available: ${LOG_SOURCES.join(", ")}. Default: all sources`
+          `Filter by source. Available: ${LOG_SOURCES.join(", ")}. Default: all sources`
         ),
       limit: z
         .number()
@@ -155,14 +155,14 @@ export function registerQueryLogsTool(
         .optional()
         .describe("Maximum rows to return (1-1000). Default: 100"),
     },
-    async ({ start_time, end_time, sources, limit }) => {
+    async ({ start_time, end_time, source, limit }) => {
       const now = new Date();
 
       const resolvedStartTime = parseRelativeTime(start_time ?? "-1h", now);
       const resolvedEndTime = end_time
         ? parseRelativeTime(end_time, now)
         : now.toISOString();
-      const resolvedSources = sources?.length ? sources : LOG_SOURCES;
+      const resolvedSources = source?.length ? source : LOG_SOURCES;
       const resolvedLimit = limit ?? 100;
 
       const query = buildQuery(

@@ -790,14 +790,14 @@ function createCli(): Command {
       undefined
     )
     .option(
-      "--sources <sources>",
+      "--source <source>",
       `Comma-separated list of sources: ${LOG_SOURCES.join(", ")}`
     )
     .option("-n, --limit <number>", "Maximum rows to return (1-1000)", "100")
     .option("--json", "Output raw JSON instead of formatted table")
     .action(async (options) => {
-      const sources = options.sources
-        ? (options.sources.split(",").map((s: string) => s.trim()) as LogSource[])
+      const sources = options.source
+        ? (options.source.split(",").map((s: string) => s.trim()) as LogSource[])
         : undefined;
 
       const limit = parseInt(options.limit, 10);
