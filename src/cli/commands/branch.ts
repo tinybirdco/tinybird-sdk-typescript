@@ -2,7 +2,7 @@
  * Branch management commands
  */
 
-import { loadConfig, type ResolvedConfig } from "../config.js";
+import { loadConfigAsync, type ResolvedConfig } from "../config.js";
 import {
   listBranches,
   getBranch,
@@ -83,7 +83,7 @@ export async function runBranchList(
 
   let config: ResolvedConfig;
   try {
-    config = loadConfig(cwd);
+    config = await loadConfigAsync(cwd);
   } catch (error) {
     return {
       success: false,
@@ -122,7 +122,7 @@ export async function runBranchStatus(
 
   let config: ResolvedConfig;
   try {
-    config = loadConfig(cwd);
+    config = await loadConfigAsync(cwd);
   } catch (error) {
     return {
       success: false,
@@ -239,7 +239,7 @@ export async function runBranchDelete(
 
   let config: ResolvedConfig;
   try {
-    config = loadConfig(cwd);
+    config = await loadConfigAsync(cwd);
   } catch (error) {
     return {
       success: false,
@@ -288,7 +288,7 @@ export async function runBranchListCached(
 
   let config: ResolvedConfig;
   try {
-    config = loadConfig(cwd);
+    config = await loadConfigAsync(cwd);
   } catch {
     return { branches: {} };
   }

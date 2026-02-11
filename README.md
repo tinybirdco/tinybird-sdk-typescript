@@ -38,7 +38,7 @@ npx tinybird init
 ```
 
 This creates:
-- `tinybird.json` - Configuration file
+- `tinybird.config.json` - Configuration file
 - `src/tinybird/datasources.ts` - Define your datasources
 - `src/tinybird/pipes.ts` - Define your pipes/endpoints
 - `src/tinybird/client.ts` - Your typed Tinybird client
@@ -278,11 +278,11 @@ tinybird login
 ```
 
 This is useful when:
-- You cloned an existing project that has `tinybird.json` but no credentials
+- You cloned an existing project that has a `tinybird.config.json` but no credentials
 - Your token has expired or needs to be refreshed
 - You're switching to a different Tinybird workspace
 
-The command saves your token to `.env.local` and updates the `baseUrl` in `tinybird.json` if you select a different region.
+The command saves your token to `.env.local` and updates the `baseUrl` in your config file if you select a different region.
 
 ### `tinybird branch`
 
@@ -311,7 +311,7 @@ Shows:
 
 ## Configuration
 
-Create a `tinybird.json` in your project root:
+Create a `tinybird.config.json` (or `tinybird.config.mjs` / `tinybird.config.cjs` for dynamic logic) in your project root:
 
 ```json
 {
@@ -328,6 +328,30 @@ Create a `tinybird.json` in your project root:
 ```
 
 You can mix TypeScript files with raw `.datasource` and `.pipe` files for incremental migration.
+
+### Config File Formats
+
+The SDK supports multiple config file formats (in priority order):
+
+| File | Description |
+|------|-------------|
+| `tinybird.config.mjs` | ESM JavaScript config with dynamic logic |
+| `tinybird.config.cjs` | CommonJS JavaScript config with dynamic logic |
+| `tinybird.config.json` | Standard JSON config (default for new projects) |
+| `tinybird.json` | Legacy JSON config (backward compatible) |
+
+For JavaScript configs, export a default config object or function:
+
+```javascript
+// tinybird.config.mjs
+/** @type {import("@tinybirdco/sdk").TinybirdConfig} */
+export default {
+  include: ["src/lib/tinybird.ts"],
+  token: process.env.TINYBIRD_TOKEN,
+  baseUrl: "https://api.tinybird.co",
+  devMode: "branch",
+};
+```
 
 ### Configuration Options
 

@@ -245,3 +245,7 @@ export {
   getLocalDashboardUrl,
 } from "./api/dashboard.js";
 export type { RegionInfo } from "./api/dashboard.js";
+
+// ============ Config Types ============
+// Import from config-types.ts to avoid bundling esbuild in client code
+export type { TinybirdConfig, DevMode } from "./cli/config-types.js";

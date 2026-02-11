@@ -10,8 +10,9 @@ import {
   hasValidToken,
   getRelativeTinybirdDir,
   getConfigPath,
+  findExistingConfigPath,
   updateConfig,
-  loadConfig,
+  loadConfigAsync,
   type DevMode,
 } from "../config.js";
 import { browserLogin } from "../auth.js";
@@ -130,6 +131,7 @@ function generateGithubCiWorkflow(workingDirectory?: string): string {
 on:
   pull_request:
     paths:
+      - "${pathPrefix}tinybird.config.*"
       - "${pathPrefix}tinybird.json"
       - "${pathPrefix}**/*.ts"
 
@@ -176,6 +178,7 @@ on:
     branches:
       - main
     paths:
+      - "${pathPrefix}tinybird.config.*"
       - "${pathPrefix}tinybird.json"
       - "${pathPrefix}**/*.ts"
 
@@ -218,6 +221,7 @@ tinybird_ci:
   image: node:22
   rules:
     - changes:
+        - ${pathPrefix}tinybird.config.*
         - ${pathPrefix}tinybird.json
         - ${pathPrefix}**/*.ts
   script:
@@ -246,6 +250,7 @@ tinybird_cd:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       changes:
+        - ${pathPrefix}tinybird.config.*
         - ${pathPrefix}tinybird.json
         - ${pathPrefix}**/*.ts
   script:
@@ -258,7 +263,7 @@ tinybird_cd:
 }
 
 /**
- * Default config content generator
+ * Default config content generator (for JSON files)
  */
 function createDefaultConfig(
   tinybirdFilePath: string,
@@ -419,7 +424,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
 
   if (!options.devMode) {
     // Show interactive prompt for workflow selection
-    p.intro(pc.cyan("tinybird.json"));
+    p.intro(pc.cyan("tinybird.config.json"));
 
     const workflowChoice = await p.select({
       message: "How do you want to develop with Tinybird?",
@@ -589,43 +594,54 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   const tinybirdFilePath = path.join(cwd, relativeTinybirdDir);
   const tinybirdDir = path.dirname(tinybirdFilePath);
 
-  // Create config file (tinybird.json)
-  const configPath = getConfigPath(cwd);
-  if (fs.existsSync(configPath) && !force) {
-    try {
-      const config = createDefaultConfig(
-        relativeTinybirdDir,
-        devMode,
-        existingDatafiles
-      );
-      updateConfig(configPath, {
-        include: config.include,
-        devMode: config.devMode,
-      });
-      created.push("tinybird.json (updated)");
-    } catch (error) {
-      return {
-        success: false,
-        created,
-        skipped,
-        error: `Failed to update tinybird.json: ${(error as Error).message}`,
-      };
+  // Create or update config file
+  // Check for any existing config file first
+  const existingConfigPath = findExistingConfigPath(cwd);
+  const newConfigPath = getConfigPath(cwd);
+
+  if (existingConfigPath && !force) {
+    // Update existing config file (only if it's JSON)
+    const configFileName = path.basename(existingConfigPath);
+    if (existingConfigPath.endsWith(".json")) {
+      try {
+        const config = createDefaultConfig(
+          relativeTinybirdDir,
+          devMode,
+          existingDatafiles
+        );
+        updateConfig(existingConfigPath, {
+          include: config.include,
+          devMode: config.devMode,
+        });
+        created.push(`${configFileName} (updated)`);
+      } catch (error) {
+        return {
+          success: false,
+          created,
+          skipped,
+          error: `Failed to update ${configFileName}: ${(error as Error).message}`,
+        };
+      }
+    } else {
+      // JS config file exists - skip and let user update manually
+      skipped.push(`${configFileName} (JS config files must be updated manually)`);
     }
   } else {
+    // Create new config file with JSON format
     try {
       const config = createDefaultConfig(
         relativeTinybirdDir,
         devMode,
         existingDatafiles
       );
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
-      created.push("tinybird.json");
+      fs.writeFileSync(newConfigPath, JSON.stringify(config, null, 2) + "\n");
+      created.push("tinybird.config.json");
     } catch (error) {
       return {
         success: false,
         created,
         skipped,
-        error: `Failed to create tinybird.json: ${(error as Error).message}`,
+        error: `Failed to create tinybird.config.json: ${(error as Error).message}`,
       };
     }
   }
@@ -841,10 +857,13 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
           created.push(".env.local");
         }
 
-        // If custom base URL, update tinybird.json
+        // If custom base URL, update config file
         const baseUrl = authResult.baseUrl ?? "https://api.tinybird.co";
         if (baseUrl !== "https://api.tinybird.co") {
-          updateConfig(configPath, { baseUrl });
+          const currentConfigPath = findExistingConfigPath(cwd);
+          if (currentConfigPath && currentConfigPath.endsWith(".json")) {
+            updateConfig(currentConfigPath, { baseUrl });
+          }
         }
 
         // Generate TypeScript from existing Tinybird resources if requested
@@ -916,7 +935,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   // (when user is already logged in)
   if (datafileAction === "codegen" && hasValidToken(cwd)) {
     try {
-      const config = loadConfig(cwd);
+      const config = await loadConfigAsync(cwd);
       const tinybirdDir = path.join(cwd, relativeTinybirdDir);
       await runCodegen(
         config.baseUrl,

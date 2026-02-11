@@ -2,7 +2,7 @@
  * Build command - generates and pushes resources to Tinybird branches
  */
 
-import { loadConfig, LOCAL_BASE_URL, type ResolvedConfig, type DevMode } from "../config.js";
+import { loadConfigAsync, LOCAL_BASE_URL, type ResolvedConfig, type DevMode } from "../config.js";
 import { buildFromInclude, type BuildFromIncludeResult } from "../../generator/index.js";
 import { buildToTinybird, type BuildApiResult } from "../../api/build.js";
 import { getOrCreateBranch } from "../../api/branches.js";
@@ -79,7 +79,7 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
   // Load config
   let config: ResolvedConfig;
   try {
-    config = loadConfig(cwd);
+    config = await loadConfigAsync(cwd);
   } catch (error) {
     return {
       success: false,

@@ -45,14 +45,15 @@ export async function runLogin(options: RunLoginOptions = {}): Promise<LoginResu
   const cwd = options.cwd ?? process.cwd();
 
   // Find the actual config file (may be in parent directory)
-  const configPath = findConfigFile(cwd);
-  if (!configPath) {
+  const configResult = findConfigFile(cwd);
+  if (!configResult) {
     return {
       success: false,
-      error: "No tinybird.json found. Run 'npx tinybird init' first.",
+      error: "No tinybird config found. Run 'npx tinybird init' first.",
     };
   }
 
+  const configPath = configResult.path;
   // Get the directory containing the config file for .env.local
   const configDir = path.dirname(configPath);
 
@@ -72,12 +73,12 @@ export async function runLogin(options: RunLoginOptions = {}): Promise<LoginResu
     };
   }
 
-  // Save token to .env.local (in same directory as tinybird.json)
+  // Save token to .env.local (in same directory as config file)
   try {
     saveTinybirdToken(configDir, authResult.token);
 
-    // Update baseUrl in tinybird.json if it changed
-    if (authResult.baseUrl) {
+    // Update baseUrl in config file if it changed (only for JSON configs)
+    if (authResult.baseUrl && configPath.endsWith(".json")) {
       updateConfig(configPath, {
         baseUrl: authResult.baseUrl,
       });

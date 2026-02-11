@@ -8,6 +8,7 @@ import {
   getRelativeTinybirdDir,
   findConfigFile,
   loadConfig,
+  loadConfigAsync,
   getConfigPath,
   configExists,
   updateConfig,
@@ -73,20 +74,60 @@ describe("Config", () => {
   });
 
   describe("findConfigFile", () => {
-    it("finds tinybird.json in current directory", () => {
-      const configPath = path.join(tempDir, "tinybird.json");
+    it("finds tinybird.config.json in current directory", () => {
+      const configPath = path.join(tempDir, "tinybird.config.json");
       fs.writeFileSync(configPath, "{}");
 
-      expect(findConfigFile(tempDir)).toBe(configPath);
+      const result = findConfigFile(tempDir);
+      expect(result).not.toBe(null);
+      expect(result?.path).toBe(configPath);
+      expect(result?.type).toBe("tinybird.config.json");
     });
 
-    it("finds tinybird.json in parent directory", () => {
-      const nestedDir = path.join(tempDir, "src", "app");
-      fs.mkdirSync(nestedDir, { recursive: true });
+    it("finds tinybird.json in current directory (legacy)", () => {
       const configPath = path.join(tempDir, "tinybird.json");
       fs.writeFileSync(configPath, "{}");
 
-      expect(findConfigFile(nestedDir)).toBe(configPath);
+      const result = findConfigFile(tempDir);
+      expect(result).not.toBe(null);
+      expect(result?.path).toBe(configPath);
+      expect(result?.type).toBe("tinybird.json");
+    });
+
+    it("finds tinybird.config.json in parent directory", () => {
+      const nestedDir = path.join(tempDir, "src", "app");
+      fs.mkdirSync(nestedDir, { recursive: true });
+      const configPath = path.join(tempDir, "tinybird.config.json");
+      fs.writeFileSync(configPath, "{}");
+
+      const result = findConfigFile(nestedDir);
+      expect(result).not.toBe(null);
+      expect(result?.path).toBe(configPath);
+      expect(result?.type).toBe("tinybird.config.json");
+    });
+
+    it("prioritizes tinybird.config.json over tinybird.json", () => {
+      const newConfig = path.join(tempDir, "tinybird.config.json");
+      const legacyConfig = path.join(tempDir, "tinybird.json");
+      fs.writeFileSync(newConfig, "{}");
+      fs.writeFileSync(legacyConfig, "{}");
+
+      const result = findConfigFile(tempDir);
+      expect(result).not.toBe(null);
+      expect(result?.path).toBe(newConfig);
+      expect(result?.type).toBe("tinybird.config.json");
+    });
+
+    it("prioritizes tinybird.config.mjs over tinybird.config.cjs", () => {
+      const mjsConfig = path.join(tempDir, "tinybird.config.mjs");
+      const cjsConfig = path.join(tempDir, "tinybird.config.cjs");
+      fs.writeFileSync(mjsConfig, "export default {};");
+      fs.writeFileSync(cjsConfig, "module.exports = {};");
+
+      const result = findConfigFile(tempDir);
+      expect(result).not.toBe(null);
+      expect(result?.path).toBe(mjsConfig);
+      expect(result?.type).toBe("tinybird.config.mjs");
     });
 
     it("returns null when no config file exists", () => {
@@ -95,8 +136,10 @@ describe("Config", () => {
   });
 
   describe("getConfigPath", () => {
-    it("returns path to tinybird.json in directory", () => {
-      expect(getConfigPath(tempDir)).toBe(path.join(tempDir, "tinybird.json"));
+    it("returns path to tinybird.config.json (new default) in directory", () => {
+      expect(getConfigPath(tempDir)).toBe(
+        path.join(tempDir, "tinybird.config.json")
+      );
     });
   });
 
@@ -123,7 +166,7 @@ describe("Config", () => {
     });
 
     it("throws error when no config file exists", () => {
-      expect(() => loadConfig(tempDir)).toThrow("Could not find tinybird.json");
+      expect(() => loadConfig(tempDir)).toThrow("Could not find config file");
     });
 
     it("loads config with include array", () => {
@@ -284,6 +327,50 @@ describe("Config", () => {
 
       expect(result.devMode).toBe("local");
     });
+  });
+
+  describe("loadConfigAsync", () => {
+    beforeEach(() => {
+      // Mock git functions to avoid git dependency in tests
+      vi.mock("./git.js", () => ({
+        getCurrentGitBranch: () => "main",
+        isMainBranch: () => true,
+        getTinybirdBranchName: () => null,
+      }));
+    });
+
+    it("loads tinybird.config.mjs", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "tinybird.config.mjs"),
+        `export default {
+  include: ["lib/datasources.ts"],
+  token: "test-token"
+};`
+      );
+
+      const result = await loadConfigAsync(tempDir);
+
+      expect(result.include).toEqual(["lib/datasources.ts"]);
+      expect(result.token).toBe("test-token");
+      expect(result.baseUrl).toBe("https://api.tinybird.co");
+    });
+
+    it("loads tinybird.config.cjs", async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "tinybird.config.cjs"),
+        `module.exports = {
+  include: ["lib/datasources.ts"],
+  token: "test-token"
+};`
+      );
+
+      const result = await loadConfigAsync(tempDir);
+
+      expect(result.include).toEqual(["lib/datasources.ts"]);
+      expect(result.token).toBe("test-token");
+      expect(result.baseUrl).toBe("https://api.tinybird.co");
+    });
+
   });
 
   describe("updateConfig", () => {

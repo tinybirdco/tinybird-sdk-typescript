@@ -6,28 +6,9 @@ import * as fs from "fs";
 import * as path from "path";
 import { getCurrentGitBranch, isMainBranch, getTinybirdBranchName } from "./git.js";
 
-/**
- * Development mode options
- * - "branch": Use Tinybird cloud with branches (default)
- * - "local": Use local Tinybird container at localhost:7181
- */
-export type DevMode = "branch" | "local";
-
-/**
- * Tinybird configuration file structure
- */
-export interface TinybirdConfig {
-  /** Array of TypeScript files to scan for datasources and pipes */
-  include?: string[];
-  /** @deprecated Use `include` instead. Path to the TypeScript schema entry point */
-  schema?: string;
-  /** API token (supports ${ENV_VAR} interpolation) */
-  token: string;
-  /** Tinybird API base URL (optional, defaults to EU region) */
-  baseUrl?: string;
-  /** Development mode: "branch" (default) or "local" */
-  devMode?: DevMode;
-}
+// Re-export types from config-types.ts (separate file to avoid bundling esbuild)
+export type { DevMode, TinybirdConfig } from "./config-types.js";
+import type { DevMode, TinybirdConfig } from "./config-types.js";
 
 /**
  * Resolved configuration with all values expanded
@@ -64,9 +45,25 @@ const DEFAULT_BASE_URL = "https://api.tinybird.co";
 export const LOCAL_BASE_URL = "http://localhost:7181";
 
 /**
- * Config file name
+ * Config file names in priority order
+ * - tinybird.config.mjs: ESM config with dynamic logic
+ * - tinybird.config.cjs: CommonJS config with dynamic logic
+ * - tinybird.config.json: Standard JSON config (default for new projects)
+ * - tinybird.json: Legacy JSON config (backward compatible)
  */
-const CONFIG_FILE = "tinybird.json";
+const CONFIG_FILES = [
+  "tinybird.config.mjs",
+  "tinybird.config.cjs",
+  "tinybird.config.json",
+  "tinybird.json",
+] as const;
+
+type ConfigFileType = (typeof CONFIG_FILES)[number];
+
+/**
+ * Default config file name for new projects
+ */
+const DEFAULT_CONFIG_FILE = "tinybird.config.json";
 
 /**
  * Tinybird file path within lib folder
@@ -136,18 +133,32 @@ function interpolateEnvVars(value: string): string {
 }
 
 /**
+ * Result of finding a config file
+ */
+export interface ConfigFileResult {
+  /** Full path to the config file */
+  path: string;
+  /** Type of config file found */
+  type: ConfigFileType;
+}
+
+/**
  * Find the config file by walking up the directory tree
+ * Checks for all supported config file names in priority order
  *
  * @param startDir - Directory to start searching from
- * @returns Path to the config file, or null if not found
+ * @returns Path and type of the config file, or null if not found
  */
-export function findConfigFile(startDir: string): string | null {
+export function findConfigFile(startDir: string): ConfigFileResult | null {
   let currentDir = startDir;
 
   while (true) {
-    const configPath = path.join(currentDir, CONFIG_FILE);
-    if (fs.existsSync(configPath)) {
-      return configPath;
+    // Check each config file type in priority order
+    for (const configFile of CONFIG_FILES) {
+      const configPath = path.join(currentDir, configFile);
+      if (fs.existsSync(configPath)) {
+        return { path: configPath, type: configFile };
+      }
     }
 
     const parentDir = path.dirname(currentDir);
@@ -159,42 +170,13 @@ export function findConfigFile(startDir: string): string | null {
   }
 }
 
+// Import the universal config loader
+import { loadConfigFile } from "./config-loader.js";
+
 /**
- * Load and resolve the tinybird.json configuration
- *
- * @param cwd - Working directory to start searching from (defaults to process.cwd())
- * @returns Resolved configuration
- *
- * @example
- * ```ts
- * const config = loadConfig();
- * console.log(config.schema); // 'lib/tinybird.ts' or 'src/lib/tinybird.ts'
- * console.log(config.token);  // 'p.xxx' (resolved from ${TINYBIRD_TOKEN})
- * ```
+ * Resolve a TinybirdConfig to a ResolvedConfig
  */
-export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
-  const configPath = findConfigFile(cwd);
-
-  if (!configPath) {
-    throw new Error(
-      `Could not find ${CONFIG_FILE}. Run 'npx tinybird init' to create one.`
-    );
-  }
-
-  let rawContent: string;
-  try {
-    rawContent = fs.readFileSync(configPath, "utf-8");
-  } catch (error) {
-    throw new Error(`Failed to read ${configPath}: ${(error as Error).message}`);
-  }
-
-  let config: TinybirdConfig;
-  try {
-    config = JSON.parse(rawContent) as TinybirdConfig;
-  } catch (error) {
-    throw new Error(`Failed to parse ${configPath}: ${(error as Error).message}`);
-  }
-
+function resolveConfig(config: TinybirdConfig, configPath: string): ResolvedConfig {
   // Validate required fields - need either include or schema
   if (!config.include && !config.schema) {
     throw new Error(`Missing 'include' field in ${configPath}. Add an array of files to scan for datasources and pipes.`);
@@ -262,28 +244,140 @@ export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
 }
 
 /**
- * Check if a config file exists in the given directory
+ * Load and resolve the Tinybird configuration
+ *
+ * Supports the following config file formats (in priority order):
+ * - tinybird.config.mjs: ESM config with dynamic logic
+ * - tinybird.config.cjs: CommonJS config with dynamic logic
+ * - tinybird.config.json: Standard JSON config
+ * - tinybird.json: Legacy JSON config (backward compatible)
+ *
+ * @param cwd - Working directory to start searching from (defaults to process.cwd())
+ * @returns Resolved configuration
+ *
+ * @example
+ * ```ts
+ * const config = loadConfig();
+ * console.log(config.include); // ['lib/tinybird.ts']
+ * console.log(config.token);   // 'p.xxx' (resolved from ${TINYBIRD_TOKEN})
+ * ```
+ */
+export function loadConfig(cwd: string = process.cwd()): ResolvedConfig {
+  const configResult = findConfigFile(cwd);
+
+  if (!configResult) {
+    throw new Error(
+      `Could not find config file. Run 'npx tinybird init' to create one.\n` +
+      `Searched for: ${CONFIG_FILES.join(", ")}`
+    );
+  }
+
+  const { path: configPath, type: configType } = configResult;
+
+  // JSON files can be loaded synchronously
+  if (configType === "tinybird.config.json" || configType === "tinybird.json") {
+    let rawContent: string;
+    try {
+      rawContent = fs.readFileSync(configPath, "utf-8");
+    } catch (error) {
+      throw new Error(`Failed to read ${configPath}: ${(error as Error).message}`);
+    }
+
+    let config: TinybirdConfig;
+    try {
+      config = JSON.parse(rawContent) as TinybirdConfig;
+    } catch (error) {
+      throw new Error(`Failed to parse ${configPath}: ${(error as Error).message}`);
+    }
+
+    return resolveConfig(config, configPath);
+  }
+
+  // For JS files, we need to throw an error asking to use the async version
+  throw new Error(
+    `Config file ${configPath} is a JavaScript file. ` +
+    `Use loadConfigAsync() instead of loadConfig() to load .mjs/.cjs config files.`
+  );
+}
+
+/**
+ * Load and resolve the Tinybird configuration (async version)
+ *
+ * This async version supports all config file formats including JS files
+ * that may contain dynamic logic.
+ *
+ * @param cwd - Working directory to start searching from (defaults to process.cwd())
+ * @returns Promise resolving to the configuration
+ */
+export async function loadConfigAsync(cwd: string = process.cwd()): Promise<ResolvedConfig> {
+  const configResult = findConfigFile(cwd);
+
+  if (!configResult) {
+    throw new Error(
+      `Could not find config file. Run 'npx tinybird init' to create one.\n` +
+      `Searched for: ${CONFIG_FILES.join(", ")}`
+    );
+  }
+
+  const { path: configPath } = configResult;
+
+  // Use the universal config loader for all file types
+  const { config } = await loadConfigFile<TinybirdConfig>(configPath);
+
+  return resolveConfig(config, configPath);
+}
+
+/**
+ * Check if a config file exists in the given directory or its parents
  */
 export function configExists(cwd: string = process.cwd()): boolean {
   return findConfigFile(cwd) !== null;
 }
 
 /**
- * Get the expected config file path for a directory
+ * Get the path to an existing config file, or the default path for a new config
+ * This is useful for the init command which needs to either update an existing config
+ * or create a new one with the new default name
  */
-export function getConfigPath(cwd: string = process.cwd()): string {
-  return path.join(cwd, CONFIG_FILE);
+export function getExistingOrNewConfigPath(cwd: string = process.cwd()): string {
+  const existing = findExistingConfigPath(cwd);
+  return existing ?? path.join(cwd, DEFAULT_CONFIG_FILE);
 }
 
 /**
- * Update specific fields in tinybird.json
+ * Get the expected config file path for a directory
+ * Returns the path for the default config file name (tinybird.config.json)
+ */
+export function getConfigPath(cwd: string = process.cwd()): string {
+  return path.join(cwd, DEFAULT_CONFIG_FILE);
+}
+
+/**
+ * Find an existing config file in a directory
+ * Returns the path to the first matching config file, or null if none found
+ */
+export function findExistingConfigPath(cwd: string = process.cwd()): string | null {
+  for (const configFile of CONFIG_FILES) {
+    const configPath = path.join(cwd, configFile);
+    if (fs.existsSync(configPath)) {
+      return configPath;
+    }
+  }
+  return null;
+}
+
+/**
+ * Update specific fields in a JSON config file
+ *
+ * Note: Only works with JSON config files (.json). For JS config files,
+ * the user needs to update them manually.
  *
  * Throws an error if the config file doesn't exist to prevent creating
  * partial config files that would break loadConfig.
  *
  * @param configPath - Path to the config file
  * @param updates - Fields to update
- * @throws Error if config file doesn't exist
+ * @throws Error if config file doesn't exist or is not a JSON file
  */
 export function updateConfig(
   configPath: string,
@@ -291,6 +385,12 @@ export function updateConfig(
 ): void {
   if (!fs.existsSync(configPath)) {
     throw new Error(`Config not found at ${configPath}`);
+  }
+
+  if (!configPath.endsWith(".json")) {
+    throw new Error(
+      `Cannot update ${configPath}. Only JSON config files can be updated programmatically.`
+    );
   }
 
   const content = fs.readFileSync(configPath, "utf-8");
@@ -305,17 +405,26 @@ export function updateConfig(
 /**
  * Check if a valid token is configured (either in file or via env var)
  *
+ * Note: For JS config files, this only works if the token is a static value
+ * or environment variable reference in the file.
+ *
  * @param cwd - Working directory to search from
  * @returns true if a valid token exists
  */
 export function hasValidToken(cwd: string = process.cwd()): boolean {
   try {
-    const configPath = findConfigFile(cwd);
-    if (!configPath) {
+    const configResult = findConfigFile(cwd);
+    if (!configResult) {
       return false;
     }
 
-    const content = fs.readFileSync(configPath, "utf-8");
+    // For JS files, we can't easily check without loading them
+    // Return true and let loadConfig handle validation
+    if (!configResult.path.endsWith(".json")) {
+      return true;
+    }
+
+    const content = fs.readFileSync(configResult.path, "utf-8");
     const config = JSON.parse(content) as TinybirdConfig;
 
     if (!config.token) {

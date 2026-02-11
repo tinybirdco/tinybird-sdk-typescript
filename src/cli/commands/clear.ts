@@ -2,7 +2,7 @@
  * Clear command - clears a local workspace or branch by deleting and recreating it
  */
 
-import { loadConfig, type ResolvedConfig, type DevMode } from "../config.js";
+import { loadConfigAsync, type ResolvedConfig, type DevMode } from "../config.js";
 import {
   getLocalTokens,
   clearLocalWorkspace,
@@ -60,7 +60,7 @@ export async function runClear(
 
   let config: ResolvedConfig;
   try {
-    config = loadConfig(cwd);
+    config = await loadConfigAsync(cwd);
   } catch (error) {
     return {
       success: false,
