@@ -322,6 +322,45 @@ Build and deploy Tinybird resources from TypeScript definitions to a development
 
 </details>
 
+<details>
+<summary><code>query_logs</code></summary>
+
+Query Tinybird service logs for observability data. Returns unified logs from multiple service datasources.
+
+**When to use:**
+- Debug API calls, data ingestion, and query execution
+- Investigate endpoint errors
+- Monitor Kafka and sink operations
+- Track job executions and LLM usage
+
+**Input:**
+- `start_time` (optional) - Start time (relative: `-1h`, `-30m`, `-1d`, `-7d` or ISO 8601). Default: `-1h`
+- `end_time` (optional) - End time (relative or ISO 8601). Default: `now`
+- `sources` (optional) - Array of sources to filter. Default: all sources
+- `limit` (optional) - Maximum rows (1-1000). Default: `100`
+
+**Available sources:**
+- `pipe_stats_rt` - API call metrics
+- `bi_stats_rt` - Query execution details
+- `block_log` - Data ingestion blocks
+- `datasources_ops_log` - Datasource operations
+- `endpoint_errors` - Endpoint errors
+- `kafka_ops_log` - Kafka operations
+- `sinks_ops_log` - Sink operations
+- `jobs_log` - Job executions
+- `llm_usage` - LLM token usage
+
+**Output:**
+- JSON with `source`, `timestamp`, and `data` (JSON containing all columns) for each log entry
+
+**Example prompts:**
+- "Tinybird, show me recent logs"
+- "Tinybird, what errors happened in the last 24 hours?"
+- "Tinybird, show me endpoint errors from the last hour"
+- "Tinybird, query logs for pipe_stats_rt and bi_stats_rt"
+
+</details>
+
 ## Configuration
 
 The server resolves configuration in the following priority order:

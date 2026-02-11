@@ -294,6 +294,29 @@ tinybird branch status    # Show current branch status
 tinybird branch delete <name>  # Delete a branch
 ```
 
+### `tinybird logs`
+
+Query Tinybird service logs for observability data. Returns unified logs from multiple service datasources.
+
+```bash
+tinybird logs                          # Last hour, all sources
+tinybird logs -s -1d                   # Last 24 hours
+tinybird logs --sources endpoint_errors,pipe_stats_rt  # Filter sources
+tinybird logs -n 500                   # Limit to 500 rows
+tinybird logs --json                   # Output raw JSON
+```
+
+**Available sources:**
+- `pipe_stats_rt` - API call metrics
+- `bi_stats_rt` - Query execution details
+- `block_log` - Data ingestion blocks
+- `datasources_ops_log` - Datasource operations
+- `endpoint_errors` - Endpoint errors
+- `kafka_ops_log` - Kafka operations
+- `sinks_ops_log` - Sink operations
+- `jobs_log` - Job executions
+- `llm_usage` - LLM token usage
+
 ## Configuration
 
 Create a `tinybird.json` in your project root:

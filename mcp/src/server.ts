@@ -13,6 +13,7 @@ import { registerGetResourceTool } from "./tools/get-resource.js";
 import { registerListBranchesTool } from "./tools/list-branches.js";
 import { registerLoginTool } from "./tools/login.js";
 import { registerBuildTool } from "./tools/build.js";
+import { registerQueryLogsTool } from "./tools/query-logs.js";
 import pkg from "../package.json" with { type: "json" }
 
 /**
@@ -42,6 +43,9 @@ export function createMcpServer(): McpServer {
   // SDK command tools
   registerLoginTool(server, config);
   registerBuildTool(server, config);
+
+  // Observability tools
+  registerQueryLogsTool(server, config);
 
   return server;
 }

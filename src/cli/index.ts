@@ -27,6 +27,7 @@ import {
   runBranchDelete,
 } from "./commands/branch.js";
 import { runClear } from "./commands/clear.js";
+import { runLogs, LOG_SOURCES, type LogSource } from "./commands/logs.js";
 import {
   detectPackageManagerInstallCmd,
   detectPackageManagerRunCmd,
@@ -737,6 +738,84 @@ function createCli(): Command {
 
       const typeLabel = result.isLocal ? "Workspace" : "Branch";
       console.log(`${typeLabel} '${result.name}' cleared successfully.`);
+    });
+
+  // Logs command
+  program
+    .command("logs")
+    .description("Query Tinybird service logs for observability data")
+    .option(
+      "-s, --start <time>",
+      "Start time (relative: -1h, -30m, -1d, -7d or ISO 8601)",
+      "-1h"
+    )
+    .option(
+      "-e, --end <time>",
+      "End time (relative or ISO 8601)",
+      undefined
+    )
+    .option(
+      "--sources <sources>",
+      `Comma-separated list of sources: ${LOG_SOURCES.join(", ")}`
+    )
+    .option("-n, --limit <number>", "Maximum rows to return (1-1000)", "100")
+    .option("--json", "Output raw JSON instead of formatted table")
+    .action(async (options) => {
+      const sources = options.sources
+        ? (options.sources.split(",").map((s: string) => s.trim()) as LogSource[])
+        : undefined;
+
+      const limit = parseInt(options.limit, 10);
+      if (isNaN(limit) || limit < 1 || limit > 1000) {
+        console.error("Error: limit must be between 1 and 1000");
+        process.exit(1);
+      }
+
+      const result = await runLogs({
+        startTime: options.start,
+        endTime: options.end,
+        sources,
+        limit,
+      });
+
+      if (!result.success) {
+        console.error(`Error: ${result.error}`);
+        process.exit(1);
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      // Human-readable output
+      console.log(
+        pc.dim(
+          `Queried ${result.query?.sources.length} source(s) from ${result.query?.startTime} to ${result.query?.endTime}`
+        )
+      );
+      console.log(pc.dim(`Found ${result.rows} log entries\n`));
+
+      if (result.data && result.data.length > 0) {
+        for (const entry of result.data) {
+          const ts = new Date(entry.timestamp).toISOString();
+          const sourceColor =
+            entry.source === "endpoint_errors"
+              ? pc.red
+              : entry.source.includes("stats")
+                ? pc.blue
+                : pc.cyan;
+          console.log(
+            `${pc.dim(ts)} ${sourceColor(entry.source.padEnd(20))} ${pc.dim(entry.data.substring(0, 100))}${entry.data.length > 100 ? "..." : ""}`
+          );
+        }
+      } else {
+        console.log("No logs found for the specified time range.");
+      }
+
+      console.log(
+        pc.dim(`\nCompleted in ${(result.durationMs / 1000).toFixed(1)}s`)
+      );
     });
 
   return program;
