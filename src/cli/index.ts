@@ -27,6 +27,7 @@ import {
   runBranchDelete,
 } from "./commands/branch.js";
 import { runClear } from "./commands/clear.js";
+import { runInfo } from "./commands/info.js";
 import { runLogs, LOG_SOURCES, type LogSource } from "./commands/logs.js";
 import {
   detectPackageManagerInstallCmd,
@@ -168,6 +169,40 @@ function createCli(): Command {
       }
       if (result.baseUrl) {
         console.log(`  API Host: ${result.baseUrl}`);
+      }
+    });
+
+  // Info command
+  program
+    .command("info")
+    .description("Show information about the current project and workspace")
+    .option("--json", "Output as JSON")
+    .action(async (options) => {
+      const result = await runInfo({ json: options.json });
+
+      if (!result.success) {
+        console.error(`Error: ${result.error}`);
+        process.exit(1);
+      }
+
+      if (options.json) {
+        // JSON output
+        const jsonOutput = {
+          cloud: result.cloud,
+          local: result.local,
+          branch: result.branch,
+          project: result.project,
+          branches: result.branches,
+        };
+        console.log(JSON.stringify(jsonOutput, null, 2));
+      } else {
+        // Human-readable output
+        output.showInfo({
+          cloud: result.cloud,
+          local: result.local,
+          branch: result.branch,
+          project: result.project,
+        });
       }
     });
 

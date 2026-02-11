@@ -8,5 +8,6 @@
     "src/tinybird/dummy.datasource"
   ],
   "token": "${TINYBIRD_TOKEN}",
-  "baseUrl": "https://api.tinybird.co"
+  "baseUrl": "https://api.tinybird.co",
+  "devMode": "local"
 }

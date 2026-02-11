@@ -294,6 +294,21 @@ tinybird branch status    # Show current branch status
 tinybird branch delete <name>  # Delete a branch
 ```
 
+### `tinybird info`
+
+Display information about the current project and workspace.
+
+```bash
+tinybird info         # Show workspace, local, and project info
+tinybird info --json  # Output as JSON
+```
+
+Shows:
+- **Workspace**: Cloud workspace details (name, ID, user, API host, dashboard URL, token)
+- **Local**: Local Tinybird container info (when `devMode` is `local`)
+- **Branch**: Current branch details (when `devMode` is `branch` and on a feature branch)
+- **Project**: Configuration and git information
+
 ### `tinybird logs`
 
 Query Tinybird service logs for observability data. Returns unified logs from multiple service datasources.
