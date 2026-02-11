@@ -894,35 +894,37 @@ function createCli(): Command {
       }
 
       // Parse data JSON to extract key info as key=value pairs
-      function extractDataSummary(dataStr: string, source: string): string {
+      function extractDataSummary(dataStr: string, _source: string): string {
         try {
           const data = JSON.parse(dataStr) as Record<string, unknown>;
 
-          // Key fields to prioritize for each source type
-          const priorityFields: Record<string, string[]> = {
-            "tinybird.pipe_stats_rt": ["pipe_name", "status_code", "elapsed_time", "read_rows"],
-            "tinybird.bi_stats_rt": ["pipe_name", "elapsed_time", "read_rows", "read_bytes"],
-            "tinybird.block_log": ["datasource_name", "rows", "bytes", "quarantine_rows"],
-            "tinybird.datasources_ops_log": ["datasource_name", "operation", "rows"],
-            "tinybird.endpoint_errors": ["pipe_name", "error_code", "error_message"],
-            "tinybird.kafka_ops_log": ["datasource_name", "operation", "messages"],
-            "tinybird.sinks_ops_log": ["sink_name", "operation", "rows"],
-            "tinybird.jobs_log": ["job_name", "status", "duration_ms"],
-            "tinybird.llm_usage": ["model", "prompt_tokens", "completion_tokens"],
-          };
+          // Fields to exclude (timestamps and metadata already shown elsewhere)
+          const excludeFields = new Set([
+            "start_datetime", "timestamp", "created_at", "start_time",
+            "end_datetime", "end_time", "date", "source",
+          ]);
 
-          // Get priority fields for this source, or use all keys
-          const fields = priorityFields[source] || Object.keys(data).slice(0, 4);
+          // Get all meaningful fields, excluding timestamps
+          const allKeys = Object.keys(data).filter((key) => !excludeFields.has(key));
 
-          // Build key=value pairs for available fields
+          // Build key=value pairs for all available fields
           const pairs: string[] = [];
-          for (const key of fields) {
+          for (const key of allKeys) {
             const value = data[key];
-            if (value !== undefined && value !== null && value !== "") {
+            if (value !== undefined && value !== null && value !== "" && value !== 0) {
               // Format the value (truncate strings, format numbers)
               let formatted: string;
               if (typeof value === "string") {
-                formatted = value.length > 30 ? value.slice(0, 27) + "..." : value;
+                formatted = value.length > 25 ? value.slice(0, 22) + "..." : value;
+              } else if (typeof value === "number") {
+                // Format large numbers with K/M suffix
+                if (value >= 1000000) {
+                  formatted = (value / 1000000).toFixed(1) + "M";
+                } else if (value >= 1000) {
+                  formatted = (value / 1000).toFixed(1) + "K";
+                } else {
+                  formatted = String(value);
+                }
               } else {
                 formatted = String(value);
               }
