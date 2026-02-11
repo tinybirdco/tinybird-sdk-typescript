@@ -658,13 +658,13 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         existingDatafiles
       );
       fs.writeFileSync(newConfigPath, configContent);
-      created.push("tinybird.config.js");
+      created.push("tinybird.config.mjs");
     } catch (error) {
       return {
         success: false,
         created,
         skipped,
-        error: `Failed to create tinybird.config.js: ${(error as Error).message}`,
+        error: `Failed to create tinybird.config.mjs: ${(error as Error).message}`,
       };
     }
   }

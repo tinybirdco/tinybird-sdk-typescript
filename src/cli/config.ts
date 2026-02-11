@@ -46,13 +46,14 @@ export const LOCAL_BASE_URL = "http://localhost:7181";
 
 /**
  * Config file names in priority order
- * - tinybird.config.js: TypeScript config with dynamic logic
- * - tinybird.config.js: JavaScript config with dynamic logic (new default)
+ * - tinybird.config.mjs: ESM config with dynamic logic (new default)
+ * - tinybird.config.cjs: CommonJS config with dynamic logic
  * - tinybird.config.json: Standard JSON config
  * - tinybird.json: Legacy JSON config (backward compatible)
  */
 const CONFIG_FILES = [
-  "tinybird.config.js",
+  "tinybird.config.mjs",
+  "tinybird.config.cjs",
   "tinybird.config.json",
   "tinybird.json",
 ] as const;
@@ -62,7 +63,7 @@ type ConfigFileType = (typeof CONFIG_FILES)[number];
 /**
  * Default config file name for new projects
  */
-const DEFAULT_CONFIG_FILE = "tinybird.config.js";
+const DEFAULT_CONFIG_FILE = "tinybird.config.mjs";
 
 /**
  * Tinybird file path within lib folder

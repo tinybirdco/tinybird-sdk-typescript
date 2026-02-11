@@ -123,9 +123,9 @@ describe("Config", () => {
   });
 
   describe("getConfigPath", () => {
-    it("returns path to tinybird.config.js (new default) in directory", () => {
+    it("returns path to tinybird.config.mjs (new default) in directory", () => {
       expect(getConfigPath(tempDir)).toBe(
-        path.join(tempDir, "tinybird.config.js")
+        path.join(tempDir, "tinybird.config.mjs")
       );
     });
   });

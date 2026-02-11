@@ -1,6 +1,6 @@
 /**
  * Universal config file loader
- * Supports .json and .js files
+ * Supports .json, .cjs, and .mjs files
  */
 
 import * as fs from "node:fs/promises";
@@ -29,22 +29,6 @@ async function readJsonFile<T>(filepath: string): Promise<T> {
 }
 
 /**
- * Import a module file (.js, .cjs, .mjs)
- * Tries ESM import first, falls back to CJS require
- */
-async function importModule(filepath: string): Promise<unknown> {
-  const url = pathToFileURL(filepath).href;
-
-  try {
-    return await import(url);
-  } catch {
-    // Fallback to CJS require
-    const require = createRequire(import.meta.url);
-    return require(filepath);
-  }
-}
-
-/**
  * Resolve the config export from a module
  * Supports default export, module.exports, and function configs
  */
@@ -61,7 +45,7 @@ async function resolveConfigExport(mod: unknown): Promise<unknown> {
 
 /**
  * Load a config file from disk
- * Supports .json and .js files
+ * Supports .json, .cjs, and .mjs files
  */
 export async function loadConfigFile<T = unknown>(
   configPath: string,
@@ -79,8 +63,25 @@ export async function loadConfigFile<T = unknown>(
     return { config, filepath };
   }
 
-  if (ext === ".js" || ext === ".cjs" || ext === ".mjs") {
-    const mod = await importModule(filepath);
+  if (ext === ".mjs") {
+    // ESM - use dynamic import
+    const url = pathToFileURL(filepath).href;
+    const mod = await import(url);
+    const config = await resolveConfigExport(mod);
+
+    if (!isObject(config)) {
+      throw new Error(
+        `Config in ${filepath} must export an object (or a function returning an object).`
+      );
+    }
+
+    return { config: config as T, filepath };
+  }
+
+  if (ext === ".cjs") {
+    // CommonJS - use require
+    const require = createRequire(import.meta.url);
+    const mod = require(filepath);
     const config = await resolveConfigExport(mod);
 
     if (!isObject(config)) {
@@ -93,6 +94,6 @@ export async function loadConfigFile<T = unknown>(
   }
 
   throw new Error(
-    `Unsupported config extension "${ext}". Use .json or .js`
+    `Unsupported config extension "${ext}". Use .json, .mjs, or .cjs`
   );
 }
