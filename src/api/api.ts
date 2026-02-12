@@ -1,5 +1,7 @@
 import { createTinybirdFetcher, type TinybirdFetch } from "./fetcher.js";
 import type {
+  AppendOptions,
+  AppendResult,
   IngestOptions,
   IngestResult,
   QueryOptions,
@@ -37,6 +39,11 @@ export interface TinybirdApiQueryOptions extends QueryOptions {
 }
 
 export interface TinybirdApiIngestOptions extends IngestOptions {
+  /** Optional token override for this request */
+  token?: string;
+}
+
+export interface TinybirdApiAppendOptions extends Omit<AppendOptions, 'url' | 'file'> {
   /** Optional token override for this request */
   token?: string;
 }
@@ -240,6 +247,116 @@ export class TinybirdApi {
     }
 
     return (await response.json()) as QueryResult<T>;
+  }
+
+  /**
+   * Append data to a datasource from a URL or local file
+   */
+  async appendDatasource(
+    datasourceName: string,
+    options: AppendOptions,
+    apiOptions: TinybirdApiAppendOptions = {}
+  ): Promise<AppendResult> {
+    const { url: sourceUrl, file: filePath } = options;
+
+    if (!sourceUrl && !filePath) {
+      throw new Error("Either 'url' or 'file' must be provided in options");
+    }
+
+    if (sourceUrl && filePath) {
+      throw new Error("Only one of 'url' or 'file' can be provided, not both");
+    }
+
+    const url = new URL("/v0/datasources", `${this.baseUrl}/`);
+    url.searchParams.set("name", datasourceName);
+    url.searchParams.set("mode", "append");
+
+    // Auto-detect format from file/url extension
+    const format = this.detectFormat(sourceUrl ?? filePath!);
+    if (format) {
+      url.searchParams.set("format", format);
+    }
+
+    // Add CSV dialect options if applicable
+    if (options.csvDialect) {
+      if (options.csvDialect.delimiter) {
+        url.searchParams.set("dialect_delimiter", options.csvDialect.delimiter);
+      }
+      if (options.csvDialect.newLine) {
+        url.searchParams.set("dialect_new_line", options.csvDialect.newLine);
+      }
+      if (options.csvDialect.escapeChar) {
+        url.searchParams.set("dialect_escapechar", options.csvDialect.escapeChar);
+      }
+    }
+
+    let response: Response;
+
+    if (sourceUrl) {
+      // Remote URL: send as form-urlencoded with url parameter
+      response = await this.request(url.toString(), {
+        method: "POST",
+        token: apiOptions.token,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: `url=${encodeURIComponent(sourceUrl)}`,
+        signal: this.createAbortSignal(options.timeout ?? apiOptions.timeout, options.signal ?? apiOptions.signal),
+      });
+    } else {
+      // Local file: send as multipart form data
+      const formData = await this.createFileFormData(filePath!);
+      response = await this.request(url.toString(), {
+        method: "POST",
+        token: apiOptions.token,
+        body: formData,
+        signal: this.createAbortSignal(options.timeout ?? apiOptions.timeout, options.signal ?? apiOptions.signal),
+      });
+    }
+
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+
+    return (await response.json()) as AppendResult;
+  }
+
+  /**
+   * Detect format from file path or URL extension
+   */
+  private detectFormat(source: string): "csv" | "ndjson" | "parquet" | undefined {
+    // Remove query string if present
+    const pathOnly = source.split("?")[0];
+    const extension = pathOnly.split(".").pop()?.toLowerCase();
+
+    switch (extension) {
+      case "csv":
+        return "csv";
+      case "ndjson":
+      case "jsonl":
+        return "ndjson";
+      case "parquet":
+        return "parquet";
+      default:
+        return undefined;
+    }
+  }
+
+  /**
+   * Create FormData for file upload
+   */
+  private async createFileFormData(filePath: string): Promise<FormData> {
+    // Dynamic import for Node.js fs module (browser-safe)
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    const fileContent = await fs.promises.readFile(filePath);
+    const fileName = path.basename(filePath);
+
+    const formData = new FormData();
+    formData.append("csv", new Blob([fileContent]), fileName);
+
+    return formData;
   }
 
   private createAbortSignal(

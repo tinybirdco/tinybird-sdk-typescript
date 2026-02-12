@@ -189,3 +189,57 @@ export interface TypedDatasourceIngest<TRow> {
   /** Send multiple events in a batch */
   sendBatch(events: TRow[], options?: IngestOptions): Promise<IngestResult>;
 }
+
+/**
+ * Data format for append operations
+ */
+export type AppendFormat = "csv" | "ndjson" | "parquet";
+
+/**
+ * CSV dialect options for customizing CSV parsing
+ */
+export interface CsvDialectOptions {
+  /** Field delimiter character (default: ',') */
+  delimiter?: string;
+  /** New line character(s) (default: '\n') */
+  newLine?: string;
+  /** Escape character for special characters */
+  escapeChar?: string;
+}
+
+/**
+ * Options for append operation
+ * Exactly one of `url` or `file` must be provided
+ */
+export interface AppendOptions {
+  /** Remote URL to import data from */
+  url?: string;
+  /** Local file path to import data from */
+  file?: string;
+  /** CSV dialect options (only applicable for csv format) */
+  csvDialect?: CsvDialectOptions;
+  /** Request timeout in milliseconds */
+  timeout?: number;
+  /** AbortController signal for cancellation */
+  signal?: AbortSignal;
+}
+
+/**
+ * Result of an append operation
+ */
+export interface AppendResult {
+  /** Number of rows successfully appended */
+  successful_rows: number;
+  /** Number of rows that failed to append (quarantined) */
+  quarantined_rows: number;
+  /** Import ID for tracking */
+  import_id?: string;
+}
+
+/**
+ * Datasources namespace interface for raw client
+ */
+export interface DatasourcesNamespace {
+  /** Append data to a datasource from a URL or file */
+  append(datasourceName: string, options: AppendOptions): Promise<AppendResult>;
+}

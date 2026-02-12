@@ -3,8 +3,11 @@
  */
 
 import type {
+  AppendOptions,
+  AppendResult,
   ClientConfig,
   ClientContext,
+  DatasourcesNamespace,
   QueryResult,
   IngestResult,
   QueryOptions,
@@ -57,6 +60,11 @@ export class TinybirdClient {
   private contextPromise: Promise<ClientContext> | null = null;
   private resolvedContext: ClientContext | null = null;
 
+  /**
+   * Datasources namespace for import operations
+   */
+  readonly datasources: DatasourcesNamespace;
+
   constructor(config: ClientConfig) {
     // Validate required config
     if (!config.baseUrl) {
@@ -71,6 +79,46 @@ export class TinybirdClient {
       ...config,
       baseUrl: config.baseUrl.replace(/\/$/, ""),
     };
+
+    // Initialize datasources namespace
+    this.datasources = {
+      append: (datasourceName: string, options: AppendOptions): Promise<AppendResult> => {
+        return this.appendDatasource(datasourceName, options);
+      },
+    };
+  }
+
+  /**
+   * Append data to a datasource from a URL or local file
+   *
+   * @param datasourceName - Name of the datasource
+   * @param options - Append options including url or file source
+   * @returns Append result
+   *
+   * @example
+   * ```ts
+   * // Append from URL
+   * await client.datasources.append('events', {
+   *   url: 'https://example.com/data.csv',
+   * });
+   *
+   * // Append from local file
+   * await client.datasources.append('events', {
+   *   file: './data/events.ndjson',
+   * });
+   * ```
+   */
+  private async appendDatasource(
+    datasourceName: string,
+    options: AppendOptions
+  ): Promise<AppendResult> {
+    const token = await this.getToken();
+
+    try {
+      return await this.getApi(token).appendDatasource(datasourceName, options);
+    } catch (error) {
+      this.rethrowApiError(error);
+    }
   }
 
   /**

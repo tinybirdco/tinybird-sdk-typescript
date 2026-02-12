@@ -22,7 +22,6 @@ import { getGitRoot } from "../git.js";
 import { fetchAllResources } from "../../api/resources.js";
 import { generateCombinedFile } from "../../codegen/index.js";
 import { execSync } from "child_process";
-import { setTimeout as sleep } from "node:timers/promises";
 import {
   detectPackageManager,
   getPackageManagerAddCmd,
@@ -313,6 +312,8 @@ export interface InitOptions {
   includeCdWorkflow?: boolean;
   /** Git provider for workflow templates */
   workflowProvider?: "github" | "gitlab";
+  /** Skip auto-installing @tinybirdco/sdk dependency */
+  skipDependencyInstall?: boolean;
 }
 
 /**
@@ -415,6 +416,8 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   const cwd = options.cwd ?? process.cwd();
   const force = options.force ?? false;
   const skipLogin = options.skipLogin ?? false;
+  const skipDependencyInstall =
+    options.skipDependencyInstall ?? Boolean(process.env.VITEST);
 
   const created: string[] = [];
   const skipped: string[] = [];
@@ -739,14 +742,13 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   }
 
   // Install @tinybirdco/sdk if not already installed
-  if (!hasTinybirdSdkDependency(cwd)) {
+  if (!skipDependencyInstall && !hasTinybirdSdkDependency(cwd)) {
     const s = p.spinner();
     s.start("Installing dependencies");
     const packageManager = detectPackageManager(cwd);
     const addCmd = getPackageManagerAddCmd(packageManager);
     try {
       execSync(`${addCmd} @tinybirdco/sdk`, { cwd, stdio: "pipe" });
-      await sleep(1000);
       s.stop("Installed dependencies");
       created.push("@tinybirdco/sdk");
     } catch (error) {

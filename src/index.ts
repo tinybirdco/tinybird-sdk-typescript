@@ -202,8 +202,12 @@ export type {
 export { TinybirdClient, createClient } from "./client/base.js";
 export { TinybirdError } from "./client/types.js";
 export type {
+  AppendOptions,
+  AppendResult,
   ClientConfig,
   ClientContext,
+  CsvDialectOptions,
+  DatasourcesNamespace,
   QueryResult,
   IngestResult,
   QueryOptions,
@@ -226,6 +230,7 @@ export type {
   TinybirdApiConfig,
   TinybirdApiQueryOptions,
   TinybirdApiIngestOptions,
+  TinybirdApiAppendOptions,
   TinybirdApiRequestInit,
 } from "./api/api.js";
 

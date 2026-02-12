@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { TinybirdClient, createClient } from "./base.js";
+import type { DatasourcesNamespace } from "./types.js";
 
 describe("TinybirdClient", () => {
   describe("constructor", () => {
@@ -135,6 +136,37 @@ describe("TinybirdClient", () => {
       const context = await client.getContext();
       expect(context.token).toBe("my-token");
       expect(context.baseUrl).toBe("https://api.tinybird.co");
+    });
+  });
+
+  describe("datasources", () => {
+    it("exposes datasources namespace", () => {
+      const client = createClient({
+        baseUrl: "https://api.tinybird.co",
+        token: "test-token",
+      });
+
+      expect(client.datasources).toBeDefined();
+    });
+
+    it("datasources namespace has append method", () => {
+      const client = createClient({
+        baseUrl: "https://api.tinybird.co",
+        token: "test-token",
+      });
+
+      expect(typeof client.datasources.append).toBe("function");
+    });
+
+    it("datasources conforms to DatasourcesNamespace interface", () => {
+      const client = createClient({
+        baseUrl: "https://api.tinybird.co",
+        token: "test-token",
+      });
+
+      const datasources: DatasourcesNamespace = client.datasources;
+      expect(datasources).toBeDefined();
+      expect(typeof datasources.append).toBe("function");
     });
   });
 });
