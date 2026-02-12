@@ -31,8 +31,8 @@ describe("selectRegion", () => {
 
   it("fetches regions and shows selection prompt", async () => {
     mockedFetchRegions.mockResolvedValue([
-      { name: "EU (GCP)", api_host: "https://api.eu.tinybird.co", provider: "gcp" },
-      { name: "US (AWS)", api_host: "https://api.us.tinybird.co", provider: "aws" },
+      { name: "europe-west3", api_host: "https://api.eu.tinybird.co", provider: "gcp" },
+      { name: "us-east-1", api_host: "https://api.us.tinybird.co", provider: "aws" },
     ]);
     mockedSelect.mockResolvedValue("https://api.eu.tinybird.co");
 
@@ -40,13 +40,14 @@ describe("selectRegion", () => {
 
     expect(result.success).toBe(true);
     expect(result.apiHost).toBe("https://api.eu.tinybird.co");
-    expect(result.regionName).toBe("EU (GCP)");
+    expect(result.regionName).toBe("europe-west3");
     expect(mockedSelect).toHaveBeenCalledWith({
       message: "Select your Tinybird region",
       options: [
-        { value: "https://api.eu.tinybird.co", label: "EU (GCP)", hint: "api.eu.tinybird.co" },
-        { value: "https://api.us.tinybird.co", label: "US (AWS)", hint: "api.us.tinybird.co" },
+        { value: "https://api.eu.tinybird.co", label: "europe-west3 (GCP)", hint: "api.eu.tinybird.co" },
+        { value: "https://api.us.tinybird.co", label: "us-east-1 (AWS)", hint: "api.us.tinybird.co" },
       ],
+      initialValue: undefined,
     });
   });
 
