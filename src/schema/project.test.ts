@@ -93,6 +93,37 @@ describe("Project Schema", () => {
       expect(typeof project.tinybird.ingest.eventsBatch).toBe("function");
     });
 
+    it("creates datasource accessors with append method", () => {
+      const events = defineDatasource("events", {
+        schema: { timestamp: t.dateTime() },
+      });
+
+      const project = defineProject({
+        datasources: { events },
+      });
+
+      expect(project.tinybird.events).toBeDefined();
+      expect(typeof project.tinybird.events.append).toBe("function");
+    });
+
+    it("creates multiple datasource accessors", () => {
+      const events = defineDatasource("events", {
+        schema: { timestamp: t.dateTime() },
+      });
+      const pageViews = defineDatasource("page_views", {
+        schema: { pathname: t.string() },
+      });
+
+      const project = defineProject({
+        datasources: { events, pageViews },
+      });
+
+      expect(project.tinybird.events).toBeDefined();
+      expect(project.tinybird.pageViews).toBeDefined();
+      expect(typeof project.tinybird.events.append).toBe("function");
+      expect(typeof project.tinybird.pageViews.append).toBe("function");
+    });
+
     it("throws error when accessing client before initialization", () => {
       const project = defineProject({});
 
@@ -267,6 +298,39 @@ describe("Project Schema", () => {
       expect(typeof client.query.topEvents).toBe("function");
       expect(typeof client.ingest.events).toBe("function");
       expect(typeof client.ingest.eventsBatch).toBe("function");
+    });
+
+    it("creates datasource accessors with append method", () => {
+      const events = defineDatasource("events", {
+        schema: { id: t.string() },
+      });
+
+      const client = createTinybirdClient({
+        datasources: { events },
+        pipes: {},
+      });
+
+      expect(client.events).toBeDefined();
+      expect(typeof client.events.append).toBe("function");
+    });
+
+    it("creates multiple datasource accessors", () => {
+      const events = defineDatasource("events", {
+        schema: { id: t.string() },
+      });
+      const pageViews = defineDatasource("page_views", {
+        schema: { pathname: t.string() },
+      });
+
+      const client = createTinybirdClient({
+        datasources: { events, pageViews },
+        pipes: {},
+      });
+
+      expect(client.events).toBeDefined();
+      expect(client.pageViews).toBeDefined();
+      expect(typeof client.events.append).toBe("function");
+      expect(typeof client.pageViews.append).toBe("function");
     });
 
     it("accepts devMode option", () => {

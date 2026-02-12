@@ -8,7 +8,7 @@ import type { PipeDefinition, ParamsDefinition, OutputDefinition } from "./pipe.
 import type { ConnectionDefinition } from "./connection.js";
 import { getEndpointConfig } from "./pipe.js";
 import type { TinybirdClient } from "../client/base.js";
-import type { QueryResult } from "../client/types.js";
+import type { AppendOptions, AppendResult, QueryResult } from "../client/types.js";
 import type { InferRow, InferParams, InferOutputRow } from "../infer/index.js";
 
 // Symbol for brand typing - use Symbol.for() for global registry
@@ -72,9 +72,25 @@ type IngestMethods<T extends DatasourcesDefinition> = {
 };
 
 /**
- * Typed client interface for a project
+ * Type for a datasource accessor with append method
  */
-export interface ProjectClient<
+type DatasourceAccessor = {
+  /** Append data from a URL or file */
+  append(options: AppendOptions): Promise<AppendResult>;
+};
+
+/**
+ * Type for datasource accessors object
+ * Maps each datasource to an accessor with append method
+ */
+type DatasourceAccessors<T extends DatasourcesDefinition> = {
+  [K in keyof T]: DatasourceAccessor;
+};
+
+/**
+ * Base project client interface
+ */
+interface ProjectClientBase<
   TDatasources extends DatasourcesDefinition,
   TPipes extends PipesDefinition
 > {
@@ -85,6 +101,15 @@ export interface ProjectClient<
   /** Raw client for advanced usage */
   readonly client: TinybirdClient;
 }
+
+/**
+ * Typed client interface for a project
+ * Includes datasource accessors as top-level properties
+ */
+export type ProjectClient<
+  TDatasources extends DatasourcesDefinition,
+  TPipes extends PipesDefinition
+> = ProjectClientBase<TDatasources, TPipes> & DatasourceAccessors<TDatasources>;
 
 /**
  * Configuration for createTinybirdClient
@@ -294,8 +319,22 @@ function buildProjectClient<
     };
   }
 
+  // Build datasource accessors for top-level access
+  const datasourceAccessors: Record<string, DatasourceAccessor> = {};
+  for (const [name, datasource] of Object.entries(datasources)) {
+    const tinybirdName = datasource._name;
+
+    datasourceAccessors[name] = {
+      append: async (options: AppendOptions) => {
+        const client = await getClient();
+        return client.datasources.append(tinybirdName, options);
+      },
+    };
+  }
+
   // Create the typed client object
   return {
+    ...datasourceAccessors,
     query: queryMethods,
     ingest: ingestMethods,
     get client(): TinybirdClient {
