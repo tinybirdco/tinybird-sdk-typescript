@@ -28,7 +28,10 @@ import {
 } from "./commands/branch.js";
 import { runClear } from "./commands/clear.js";
 import { runInfo } from "./commands/info.js";
-import { runOpenDashboard, type Environment } from "./commands/open-dashboard.js";
+import {
+  runOpenDashboard,
+  type Environment,
+} from "./commands/open-dashboard.js";
 import { detectPackageManagerRunCmd } from "./utils/package-manager.js";
 import type { DevMode } from "./config.js";
 import { output, type ResourceChange } from "./output.js";
@@ -102,17 +105,17 @@ function createCli(): Command {
         }
         console.log("\nNext steps:");
         console.log(`  1. Edit your schema in ${clientPath}`);
-        console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
+        console.log(`  2. Run '${runCmd} tinybird:build' to start development`);
       } else if (result.loggedIn === false) {
         console.log("\nLogin was skipped or failed.");
         console.log("\nNext steps:");
         console.log(`  1. Run 'npx tinybird login' to authenticate`);
         console.log(`  2. Edit your schema in ${clientPath}`);
-        console.log(`  3. Run '${runCmd} tinybird:dev' to start development`);
+        console.log(`  3. Run '${runCmd} tinybird:build' to start development`);
       } else {
         console.log("\nNext steps:");
         console.log(`  1. Edit your schema in ${clientPath}`);
-        console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
+        console.log(`  2. Run '${runCmd} tinybird:build' to start development`);
       }
     });
 
@@ -188,7 +191,9 @@ function createCli(): Command {
       const validEnvs = ["cloud", "local", "branch"];
       if (options.env && !validEnvs.includes(options.env)) {
         console.error(
-          `Error: Invalid environment '${options.env}'. Use one of: ${validEnvs.join(", ")}`
+          `Error: Invalid environment '${
+            options.env
+          }'. Use one of: ${validEnvs.join(", ")}`
         );
         process.exit(1);
       }
@@ -417,7 +422,9 @@ function createCli(): Command {
   // Preview command
   program
     .command("preview")
-    .description("Create a preview branch and deploy resources (for CI/testing)")
+    .description(
+      "Create a preview branch and deploy resources (for CI/testing)"
+    )
     .option("--dry-run", "Generate without creating branch or deploying")
     .option("--check", "Validate deploy with Tinybird API without applying")
     .option("--debug", "Show debug output including API requests/responses")
@@ -483,7 +490,9 @@ function createCli(): Command {
 
       if (result.build) {
         console.log(
-          pc.green(`✓ Generated ${result.build.datasourceCount} datasource(s), ${result.build.pipeCount} pipe(s)`)
+          pc.green(
+            `✓ Generated ${result.build.datasourceCount} datasource(s), ${result.build.pipeCount} pipe(s)`
+          )
         );
       }
 
@@ -613,7 +622,9 @@ function createCli(): Command {
                 if (issue.type === "error") {
                   output.error(`  ERROR [${issue.pipeName}]: ${issue.message}`);
                 } else {
-                  output.warning(`  WARN [${issue.pipeName}]: ${issue.message}`);
+                  output.warning(
+                    `  WARN [${issue.pipeName}]: ${issue.message}`
+                  );
                 }
               }
             }
@@ -743,7 +754,8 @@ function createCli(): Command {
         devModeOverride = "branch";
       }
 
-      const modeLabel = devModeOverride === "local" ? "local workspace" : "branch";
+      const modeLabel =
+        devModeOverride === "local" ? "local workspace" : "branch";
 
       // Confirmation prompt unless --yes is passed
       if (!options.yes) {
