@@ -91,6 +91,20 @@ export function getPackageManagerInstallCmd(
   }
 }
 
+export function getPackageManagerAddCmd(packageManager: PackageManager): string {
+  switch (packageManager) {
+    case "pnpm":
+      return "pnpm add";
+    case "yarn":
+      return "yarn add";
+    case "bun":
+      return "bun add";
+    case "npm":
+    default:
+      return "npm install";
+  }
+}
+
 /**
  * Detect package manager (npm, pnpm, yarn, or bun)
  */

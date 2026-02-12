@@ -29,11 +29,7 @@ import {
 import { runClear } from "./commands/clear.js";
 import { runInfo } from "./commands/info.js";
 import { runOpenDashboard, type Environment } from "./commands/open-dashboard.js";
-import {
-  detectPackageManagerInstallCmd,
-  detectPackageManagerRunCmd,
-  hasTinybirdSdkDependency,
-} from "./utils/package-manager.js";
+import { detectPackageManagerRunCmd } from "./utils/package-manager.js";
 import type { DevMode } from "./config.js";
 import { output, type ResourceChange } from "./output.js";
 
@@ -89,8 +85,6 @@ function createCli(): Command {
         ? dirname(join(process.cwd(), clientPath))
         : process.cwd();
       const runCmd = detectPackageManagerRunCmd(sdkCheckDir);
-      const installCmd = detectPackageManagerInstallCmd(sdkCheckDir);
-      const needsInstallStep = !hasTinybirdSdkDependency(sdkCheckDir);
 
       if (result.loggedIn) {
         console.log(`\nLogged in successfully!`);
@@ -107,42 +101,18 @@ function createCli(): Command {
           );
         }
         console.log("\nNext steps:");
-        const steps = [
-          needsInstallStep
-            ? `Install dependencies with '${installCmd}'`
-            : undefined,
-          `Edit your schema in ${clientPath}`,
-          `Run '${runCmd} tinybird:dev' to start development`,
-        ].filter(Boolean);
-        steps.forEach((step, index) => {
-          console.log(`  ${index + 1}. ${step}`);
-        });
+        console.log(`  1. Edit your schema in ${clientPath}`);
+        console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
       } else if (result.loggedIn === false) {
         console.log("\nLogin was skipped or failed.");
         console.log("\nNext steps:");
-        const steps = [
-          "Run 'npx tinybird login' to authenticate",
-          needsInstallStep
-            ? `Install dependencies with '${installCmd}'`
-            : undefined,
-          `Edit your schema in ${clientPath}`,
-          `Run '${runCmd} tinybird:dev' to start development`,
-        ].filter(Boolean);
-        steps.forEach((step, index) => {
-          console.log(`  ${index + 1}. ${step}`);
-        });
+        console.log(`  1. Run 'npx tinybird login' to authenticate`);
+        console.log(`  2. Edit your schema in ${clientPath}`);
+        console.log(`  3. Run '${runCmd} tinybird:dev' to start development`);
       } else {
         console.log("\nNext steps:");
-        const steps = [
-          needsInstallStep
-            ? `Install dependencies with '${installCmd}'`
-            : undefined,
-          `Edit your schema in ${clientPath}`,
-          `Run '${runCmd} tinybird:dev' to start development`,
-        ].filter(Boolean);
-        steps.forEach((step, index) => {
-          console.log(`  ${index + 1}. ${step}`);
-        });
+        console.log(`  1. Edit your schema in ${clientPath}`);
+        console.log(`  2. Run '${runCmd} tinybird:dev' to start development`);
       }
     });
 
