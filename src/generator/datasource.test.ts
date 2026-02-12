@@ -492,4 +492,48 @@ describe('Datasource Generator', () => {
       expect(result.content).toContain('TOKEN ref_token APPEND');
     });
   });
+
+  describe('Shared with configuration', () => {
+    it('generates SHARED_WITH for single workspace', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: { id: t.string() },
+        sharedWith: ['other_workspace'],
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('SHARED_WITH >');
+      expect(result.content).toContain('    other_workspace');
+    });
+
+    it('generates SHARED_WITH for multiple workspaces', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: { id: t.string() },
+        sharedWith: ['workspace_a', 'workspace_b'],
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('SHARED_WITH >');
+      expect(result.content).toContain('    workspace_a,');
+      expect(result.content).toContain('    workspace_b');
+    });
+
+    it('does not include SHARED_WITH when not provided', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: { id: t.string() },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).not.toContain('SHARED_WITH');
+    });
+
+    it('does not include SHARED_WITH when empty array', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: { id: t.string() },
+        sharedWith: [],
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).not.toContain('SHARED_WITH');
+    });
+  });
 });
