@@ -6,6 +6,7 @@ import {
   detectPackageManager,
   detectPackageManagerInstallCmd,
   detectPackageManagerRunCmd,
+  getPackageManagerAddCmd,
   getPackageManagerInstallCmd,
   getPackageManagerRunCmd,
   hasTinybirdSdkDependency,
@@ -193,6 +194,24 @@ describe("getPackageManagerInstallCmd", () => {
 
   it("maps bun to bun install", () => {
     expect(getPackageManagerInstallCmd("bun")).toBe("bun install");
+  });
+});
+
+describe("getPackageManagerAddCmd", () => {
+  it("maps npm to npm install", () => {
+    expect(getPackageManagerAddCmd("npm")).toBe("npm install");
+  });
+
+  it("maps pnpm to pnpm add", () => {
+    expect(getPackageManagerAddCmd("pnpm")).toBe("pnpm add");
+  });
+
+  it("maps yarn to yarn add", () => {
+    expect(getPackageManagerAddCmd("yarn")).toBe("yarn add");
+  });
+
+  it("maps bun to bun add", () => {
+    expect(getPackageManagerAddCmd("bun")).toBe("bun add");
   });
 });
 

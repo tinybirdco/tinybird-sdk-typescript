@@ -20,6 +20,13 @@ import { saveTinybirdToken } from "../env.js";
 import { getGitRoot } from "../git.js";
 import { fetchAllResources } from "../../api/resources.js";
 import { generateCombinedFile } from "../../codegen/index.js";
+import { execSync } from "child_process";
+import { setTimeout as sleep } from "node:timers/promises";
+import {
+  detectPackageManager,
+  getPackageManagerAddCmd,
+  hasTinybirdSdkDependency,
+} from "../utils/package-manager.js";
 
 /**
  * Default starter content for tinybird.ts (single file with everything)
@@ -619,12 +626,16 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
           success: false,
           created,
           skipped,
-          error: `Failed to update ${configFileName}: ${(error as Error).message}`,
+          error: `Failed to update ${configFileName}: ${
+            (error as Error).message
+          }`,
         };
       }
     } else {
       // JS config file exists - skip and let user update manually
-      skipped.push(`${configFileName} (JS config files must be updated manually)`);
+      skipped.push(
+        `${configFileName} (JS config files must be updated manually)`
+      );
     }
   } else {
     // Create new config file with JSON format
@@ -641,7 +652,9 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         success: false,
         created,
         skipped,
-        error: `Failed to create tinybird.config.json: ${(error as Error).message}`,
+        error: `Failed to create tinybird.config.json: ${
+          (error as Error).message
+        }`,
       };
     }
   }
@@ -724,6 +737,27 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     }
   }
 
+  // Install @tinybirdco/sdk if not already installed
+  if (!hasTinybirdSdkDependency(cwd)) {
+    const s = p.spinner();
+    s.start("Installing dependencies");
+    const packageManager = detectPackageManager(cwd);
+    const addCmd = getPackageManagerAddCmd(packageManager);
+    try {
+      execSync(`${addCmd} @tinybirdco/sdk`, { cwd, stdio: "pipe" });
+      await sleep(1000);
+      s.stop("Installed dependencies");
+      created.push("@tinybirdco/sdk");
+    } catch (error) {
+      s.stop("Failed to install dependencies");
+      console.error(
+        `Warning: Failed to install @tinybirdco/sdk: ${
+          (error as Error).message
+        }`
+      );
+    }
+  }
+
   // Use git root for workflow files, fallback to cwd if not in a git repo
   const projectRoot = getGitRoot() ?? cwd;
   const githubWorkflowsDir = path.join(projectRoot, ".github", "workflows");
@@ -761,7 +795,10 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         skipped.push(".github/workflows/tinybird-ci.yaml");
       } else {
         try {
-          fs.writeFileSync(githubCiPath, generateGithubCiWorkflow(workingDirectory));
+          fs.writeFileSync(
+            githubCiPath,
+            generateGithubCiWorkflow(workingDirectory)
+          );
           created.push(".github/workflows/tinybird-ci.yaml");
           ciWorkflowCreated = true;
         } catch (error) {
@@ -782,7 +819,10 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         skipped.push(".github/workflows/tinybird-cd.yaml");
       } else {
         try {
-          fs.writeFileSync(githubCdPath, generateGithubCdWorkflow(workingDirectory));
+          fs.writeFileSync(
+            githubCdPath,
+            generateGithubCdWorkflow(workingDirectory)
+          );
           created.push(".github/workflows/tinybird-cd.yaml");
           cdWorkflowCreated = true;
         } catch (error) {
@@ -805,7 +845,10 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         skipped.push(".gitlab/tinybird-ci.yaml");
       } else {
         try {
-          fs.writeFileSync(gitlabCiPath, generateGitlabCiWorkflow(workingDirectory));
+          fs.writeFileSync(
+            gitlabCiPath,
+            generateGitlabCiWorkflow(workingDirectory)
+          );
           created.push(".gitlab/tinybird-ci.yaml");
           ciWorkflowCreated = true;
         } catch (error) {
@@ -826,7 +869,10 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         skipped.push(".gitlab/tinybird-cd.yaml");
       } else {
         try {
-          fs.writeFileSync(gitlabCdPath, generateGitlabCdWorkflow(workingDirectory));
+          fs.writeFileSync(
+            gitlabCdPath,
+            generateGitlabCdWorkflow(workingDirectory)
+          );
           created.push(".gitlab/tinybird-cd.yaml");
           cdWorkflowCreated = true;
         } catch (error) {

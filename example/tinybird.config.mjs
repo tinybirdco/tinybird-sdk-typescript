@@ -1,5 +1,5 @@
 /** @type {import("@tinybirdco/sdk").TinybirdConfig} */
-export default {
+const tinybirdConfig = {
   include: [
     "src/tinybird/datasources.ts",
     "src/tinybird/pipes.ts",
@@ -10,4 +10,7 @@ export default {
   ],
   token: process.env.TINYBIRD_TOKEN,
   baseUrl: "https://api.tinybird.co",
+  devMode: "branch",
 };
+
+export default tinybirdConfig;
