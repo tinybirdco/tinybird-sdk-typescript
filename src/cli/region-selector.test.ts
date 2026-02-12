@@ -84,6 +84,38 @@ describe("selectRegion", () => {
     // Should have used fallback regions
     expect(mockedSelect).toHaveBeenCalled();
   });
+
+  it("pre-selects region when defaultApiHost is provided", async () => {
+    mockedFetchRegions.mockResolvedValue([
+      { name: "EU", api_host: "https://api.eu.tinybird.co", provider: "gcp" },
+      { name: "US", api_host: "https://api.us.tinybird.co", provider: "aws" },
+    ]);
+    mockedSelect.mockResolvedValue("https://api.us.tinybird.co");
+
+    const result = await selectRegion("https://api.us.tinybird.co");
+
+    expect(result.success).toBe(true);
+    expect(mockedSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialValue: "https://api.us.tinybird.co",
+      })
+    );
+  });
+
+  it("does not set initialValue when defaultApiHost does not match any region", async () => {
+    mockedFetchRegions.mockResolvedValue([
+      { name: "EU", api_host: "https://api.eu.tinybird.co", provider: "gcp" },
+    ]);
+    mockedSelect.mockResolvedValue("https://api.eu.tinybird.co");
+
+    await selectRegion("https://api.unknown.tinybird.co");
+
+    expect(mockedSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialValue: undefined,
+      })
+    );
+  });
 });
 
 describe("getApiHostWithRegionSelection", () => {
@@ -103,20 +135,31 @@ describe("getApiHostWithRegionSelection", () => {
     }
   });
 
-  it("returns baseUrl from config when present", async () => {
+  it("pre-selects baseUrl from config when present", async () => {
     const configPath = path.join(tempDir, "tinybird.config.json");
     fs.writeFileSync(
       configPath,
       JSON.stringify({ baseUrl: "https://api.us-east.tinybird.co" })
     );
 
+    mockedFetchRegions.mockResolvedValue([
+      { name: "EU", api_host: "https://api.eu.tinybird.co", provider: "gcp" },
+      { name: "US East", api_host: "https://api.us-east.tinybird.co", provider: "aws" },
+    ]);
+    mockedSelect.mockResolvedValue("https://api.us-east.tinybird.co");
+
     const result = await getApiHostWithRegionSelection(configPath);
 
     expect(result).toEqual({
       apiHost: "https://api.us-east.tinybird.co",
-      fromConfig: true,
+      fromConfig: false,
     });
-    expect(mockedSelect).not.toHaveBeenCalled();
+    // Should have called select with initialValue
+    expect(mockedSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialValue: "https://api.us-east.tinybird.co",
+      })
+    );
   });
 
   it("prompts for region when config has no baseUrl", async () => {

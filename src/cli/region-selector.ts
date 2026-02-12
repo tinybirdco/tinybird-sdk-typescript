@@ -49,9 +49,12 @@ export interface RegionSelectionResult {
  * Fetches available regions from the API and presents an interactive selection.
  * Falls back to hardcoded regions if the API call fails.
  *
+ * @param defaultApiHost - Optional API host to pre-select in the prompt
  * @returns Selected region info or cancellation result
  */
-export async function selectRegion(): Promise<RegionSelectionResult> {
+export async function selectRegion(
+  defaultApiHost?: string
+): Promise<RegionSelectionResult> {
   let regions: TinybirdRegion[];
 
   // Try to fetch regions from API
@@ -74,9 +77,15 @@ export async function selectRegion(): Promise<RegionSelectionResult> {
     hint: region.api_host.replace("https://", ""),
   }));
 
+  // Find initial value if defaultApiHost is provided and matches a region
+  const initialValue = defaultApiHost
+    ? regions.find((r) => r.api_host === defaultApiHost)?.api_host
+    : undefined;
+
   const selected = await p.select({
     message: "Select your Tinybird region",
     options,
+    initialValue,
   });
 
   if (p.isCancel(selected)) {
@@ -105,26 +114,21 @@ export async function selectRegion(): Promise<RegionSelectionResult> {
 export async function getApiHostWithRegionSelection(
   configPath: string | null
 ): Promise<{ apiHost: string; fromConfig: boolean } | null> {
+  let existingBaseUrl: string | undefined;
+
   // If we have a JSON config file, try to read baseUrl from it
   if (configPath && configPath.endsWith(".json")) {
     try {
       const content = fs.readFileSync(configPath, "utf-8");
       const config = JSON.parse(content);
-
-      if (config.baseUrl) {
-        // baseUrl exists in config, use it
-        return {
-          apiHost: config.baseUrl,
-          fromConfig: true,
-        };
-      }
+      existingBaseUrl = config.baseUrl;
     } catch {
-      // Ignore errors reading config, proceed to region selection
+      // Ignore errors reading config
     }
   }
 
-  // No baseUrl in config, prompt for region selection
-  const result = await selectRegion();
+  // Prompt for region selection, pre-selecting existing baseUrl if available
+  const result = await selectRegion(existingBaseUrl);
 
   if (!result.success || !result.apiHost) {
     return null;
