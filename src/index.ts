@@ -251,6 +251,17 @@ export {
 } from "./api/dashboard.js";
 export type { RegionInfo } from "./api/dashboard.js";
 
+// ============ Token API ============
+export { createJWT, TokenApiError } from "./api/tokens.js";
+export type {
+  TokenApiConfig,
+  JWTScope,
+  JWTScopeType,
+  JWTLimits,
+  CreateJWTOptions,
+  CreateJWTResult,
+} from "./api/tokens.js";
+
 // ============ Config Types ============
 // Import from config-types.ts to avoid bundling esbuild in client code
 export type { TinybirdConfig, DevMode } from "./cli/config-types.js";

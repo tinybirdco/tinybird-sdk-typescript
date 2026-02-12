@@ -15,6 +15,7 @@ import type {
 } from "./types.js";
 import { TinybirdError } from "./types.js";
 import { TinybirdApi, TinybirdApiError } from "../api/api.js";
+import { TokensNamespace } from "./tokens.js";
 
 /**
  * Resolved token info from dev mode
@@ -65,6 +66,9 @@ export class TinybirdClient {
    */
   readonly datasources: DatasourcesNamespace;
 
+  /** Token operations (JWT creation, etc.) */
+  public readonly tokens: TokensNamespace;
+
   constructor(config: ClientConfig) {
     // Validate required config
     if (!config.baseUrl) {
@@ -86,6 +90,14 @@ export class TinybirdClient {
         return this.appendDatasource(datasourceName, options);
       },
     };
+
+    // Initialize tokens namespace
+    this.tokens = new TokensNamespace(
+      () => this.getToken(),
+      this.config.baseUrl,
+      this.config.fetch,
+      this.config.timeout
+    );
   }
 
   /**
