@@ -78,8 +78,12 @@ export async function selectRegion(
   }));
 
   // Find initial value if defaultApiHost is provided and matches a region
+  // Normalize URLs for comparison (remove trailing slashes, lowercase)
+  const normalizeUrl = (url: string) => url.toLowerCase().replace(/\/+$/, "");
   const initialValue = defaultApiHost
-    ? regions.find((r) => r.api_host === defaultApiHost)?.api_host
+    ? regions.find(
+        (r) => normalizeUrl(r.api_host) === normalizeUrl(defaultApiHost)
+      )?.api_host
     : undefined;
 
   const selected = await p.select({
