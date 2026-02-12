@@ -44,8 +44,8 @@ describe("selectRegion", () => {
     expect(mockedSelect).toHaveBeenCalledWith({
       message: "Select your Tinybird region",
       options: [
-        { value: "https://api.eu.tinybird.co", label: "GCP | europe-west3", hint: "api.eu.tinybird.co" },
-        { value: "https://api.us.tinybird.co", label: "AWS | us-east-1", hint: "api.us.tinybird.co" },
+        { value: "https://api.eu.tinybird.co", label: "gcp | europe-west3", hint: "api.eu.tinybird.co" },
+        { value: "https://api.us.tinybird.co", label: "aws | us-east-1", hint: "api.us.tinybird.co" },
       ],
       initialValue: undefined,
     });
