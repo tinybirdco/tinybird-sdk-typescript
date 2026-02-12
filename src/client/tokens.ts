@@ -12,7 +12,9 @@ import { TinybirdError } from "./types.js";
 export class TokensNamespace {
   constructor(
     private readonly getToken: () => Promise<string>,
-    private readonly baseUrl: string
+    private readonly baseUrl: string,
+    private readonly fetchFn?: typeof globalThis.fetch,
+    private readonly timeout?: number
   ) {}
 
   /**
@@ -45,7 +47,15 @@ export class TokensNamespace {
     const token = await this.getToken();
 
     try {
-      return await apiCreateJWT({ baseUrl: this.baseUrl, token }, options);
+      return await apiCreateJWT(
+        {
+          baseUrl: this.baseUrl,
+          token,
+          fetch: this.fetchFn,
+          timeout: this.timeout,
+        },
+        options
+      );
     } catch (error) {
       if (error instanceof TokenApiError) {
         throw new TinybirdError(error.message, error.status, {

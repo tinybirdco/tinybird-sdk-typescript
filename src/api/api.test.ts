@@ -215,6 +215,49 @@ describe("TinybirdApi", () => {
     expect(rawSql).toBe("SELECT 1 AS value");
   });
 
+  it("creates tokens via tinybirdApi.createToken", async () => {
+    let expirationTime: string | null = null;
+    let fromParam: string | null = null;
+    let contentType: string | null = null;
+    let parsedBody: Record<string, unknown> | null = null;
+
+    server.use(
+      http.post(`${BASE_URL}/v0/tokens/`, async ({ request }) => {
+        const url = new URL(request.url);
+        expirationTime = url.searchParams.get("expiration_time");
+        fromParam = url.searchParams.get("from");
+        contentType = request.headers.get("content-type");
+        parsedBody = (await request.json()) as Record<string, unknown>;
+
+        return HttpResponse.json({
+          token: "eyJ.test",
+        });
+      })
+    );
+
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+    });
+
+    const result = await api.createToken(
+      {
+        name: "user_token",
+        scopes: [{ type: "PIPES:READ", resource: "pipe_a" }],
+      },
+      { expirationTime: 1700000000 }
+    );
+
+    expect(result).toEqual({ token: "eyJ.test" });
+    expect(expirationTime).toBe("1700000000");
+    expect(fromParam).toBe(TINYBIRD_FROM_PARAM);
+    expect(contentType).toBe("application/json");
+    expect(parsedBody).toEqual({
+      name: "user_token",
+      scopes: [{ type: "PIPES:READ", resource: "pipe_a" }],
+    });
+  });
+
   it("returns zero counts for empty ingest batches", async () => {
     const api = createTinybirdApi({
       baseUrl: BASE_URL,

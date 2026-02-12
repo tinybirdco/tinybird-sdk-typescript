@@ -53,8 +53,9 @@ describe("Token API client", () => {
       expect(parsed.pathname).toBe("/v0/tokens/");
       expect(parsed.searchParams.get("expiration_time")).toBe("1700000000");
       expect(init.method).toBe("POST");
-      expect(init.headers.Authorization).toBe("Bearer p.admin-token");
-      expect(init.headers["Content-Type"]).toBe("application/json");
+      const headers = new Headers(init.headers);
+      expect(headers.get("Authorization")).toBe("Bearer p.admin-token");
+      expect(headers.get("Content-Type")).toBe("application/json");
 
       const body = JSON.parse(init.body);
       expect(body.name).toBe("user_token");
@@ -115,6 +116,28 @@ describe("Token API client", () => {
       const [, init] = mockFetch.mock.calls[0];
       const body = JSON.parse(init.body);
       expect(body.limits).toEqual({ rps: 100 });
+    });
+
+    it("uses custom fetch implementation when provided", async () => {
+      const customFetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ token: "jwt-token" }),
+      });
+
+      await createJWT(
+        {
+          ...config,
+          fetch: customFetch as typeof fetch,
+        },
+        {
+          name: "custom_fetch_token",
+          expiresAt: 1700000000,
+          scopes: [{ type: "PIPES:READ", resource: "pipe" }],
+        }
+      );
+
+      expect(customFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it("supports datasource scope with filter", async () => {

@@ -49,6 +49,54 @@ export interface TinybirdApiAppendOptions extends Omit<AppendOptions, 'url' | 'f
 }
 
 /**
+ * Scope definition for token creation APIs
+ */
+export interface TinybirdApiTokenScope {
+  type: string;
+  resource?: string;
+  fixed_params?: Record<string, string | number | boolean>;
+  filter?: string;
+}
+
+/**
+ * Request body for creating Tinybird tokens.
+ * Supports JWT-style scopes and static-token scope strings.
+ */
+export interface TinybirdApiCreateTokenRequest {
+  /** Token name/identifier */
+  name: string;
+  /** JWT-style scopes */
+  scopes?: TinybirdApiTokenScope[];
+  /** Static-token scope strings */
+  scope?: string | string[];
+  /** Optional rate-limiting config */
+  limits?: {
+    rps?: number;
+  };
+}
+
+/**
+ * Options for token creation requests
+ */
+export interface TinybirdApiCreateTokenOptions {
+  /** Optional expiration time for JWT tokens */
+  expirationTime?: number;
+  /** Optional token override for this request */
+  token?: string;
+  /** Request timeout in milliseconds */
+  timeout?: number;
+  /** AbortController signal for cancellation */
+  signal?: AbortSignal;
+}
+
+/**
+ * Result of token creation
+ */
+export interface TinybirdApiCreateTokenResult {
+  token: string;
+}
+
+/**
  * Error thrown by TinybirdApi when a response is not OK
  */
 export class TinybirdApiError extends Error {
@@ -319,6 +367,37 @@ export class TinybirdApi {
     }
 
     return (await response.json()) as AppendResult;
+  }
+
+  /**
+   * Create a token using Tinybird Token API.
+   * Supports both static and JWT token payloads.
+   */
+  async createToken(
+    body: TinybirdApiCreateTokenRequest,
+    options: TinybirdApiCreateTokenOptions = {}
+  ): Promise<TinybirdApiCreateTokenResult> {
+    const url = new URL("/v0/tokens/", `${this.baseUrl}/`);
+
+    if (options.expirationTime !== undefined) {
+      url.searchParams.set("expiration_time", String(options.expirationTime));
+    }
+
+    const response = await this.request(url.toString(), {
+      method: "POST",
+      token: options.token,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: this.createAbortSignal(options.timeout, options.signal),
+    });
+
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+
+    return (await response.json()) as TinybirdApiCreateTokenResult;
   }
 
   /**

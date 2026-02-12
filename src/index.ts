@@ -232,6 +232,10 @@ export type {
   TinybirdApiIngestOptions,
   TinybirdApiAppendOptions,
   TinybirdApiRequestInit,
+  TinybirdApiTokenScope,
+  TinybirdApiCreateTokenRequest,
+  TinybirdApiCreateTokenOptions,
+  TinybirdApiCreateTokenResult,
 } from "./api/api.js";
 
 // ============ Preview Environment ============

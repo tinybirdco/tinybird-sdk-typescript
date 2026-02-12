@@ -2,7 +2,10 @@
  * Tinybird Token API client
  */
 
-import { tinybirdFetch } from "./fetcher.js";
+import {
+  createTinybirdApi,
+  TinybirdApiError,
+} from "./api.js";
 
 /**
  * API configuration for token operations.
@@ -13,6 +16,10 @@ export interface TokenApiConfig {
   baseUrl: string;
   /** Workspace token with TOKENS or ADMIN scope */
   token: string;
+  /** Custom fetch implementation (optional, defaults to global fetch) */
+  fetch?: typeof fetch;
+  /** Default timeout in milliseconds (optional) */
+  timeout?: number;
 }
 
 /**
@@ -117,9 +124,6 @@ export async function createJWT(
 ): Promise<CreateJWTResult> {
   const expirationTime = toUnixTimestamp(options.expiresAt);
 
-  const url = new URL("/v0/tokens/", config.baseUrl);
-  url.searchParams.set("expiration_time", String(expirationTime));
-
   const body: CreateJWTRequestBody = {
     name: options.name,
     scopes: options.scopes,
@@ -129,34 +133,37 @@ export async function createJWT(
     body.limits = options.limits;
   }
 
-  const response = await tinybirdFetch(url.toString(), {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
+  const api = createTinybirdApi({
+    baseUrl: config.baseUrl,
+    token: config.token,
+    fetch: config.fetch,
+    timeout: config.timeout,
   });
 
-  if (!response.ok) {
-    const responseBody = await response.text();
+  try {
+    const result = await api.createToken(body, {
+      expirationTime,
+    });
+    return { token: result.token };
+  } catch (error) {
+    if (!(error instanceof TinybirdApiError)) {
+      throw error;
+    }
 
+    const responseBody = error.responseBody ?? error.message;
     let message: string;
 
-    if (response.status === 403) {
+    if (error.statusCode === 403) {
       message =
         `Permission denied creating JWT token. ` +
         `Make sure the token has TOKENS or ADMIN scope. ` +
         `API response: ${responseBody}`;
-    } else if (response.status === 400) {
+    } else if (error.statusCode === 400) {
       message = `Invalid JWT token request: ${responseBody}`;
     } else {
-      message = `Failed to create JWT token: ${response.status} ${response.statusText}. API response: ${responseBody}`;
+      message = `Failed to create JWT token: ${error.statusCode}. API response: ${responseBody}`;
     }
 
-    throw new TokenApiError(message, response.status, responseBody);
+    throw new TokenApiError(message, error.statusCode, responseBody);
   }
-
-  const data = (await response.json()) as { token: string };
-  return { token: data.token };
 }
