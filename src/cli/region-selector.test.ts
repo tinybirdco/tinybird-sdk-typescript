@@ -29,10 +29,10 @@ describe("selectRegion", () => {
     mockedIsCancel.mockReturnValue(false);
   });
 
-  it("fetches regions and shows selection prompt", async () => {
+  it("fetches regions and shows selection prompt with GCP first", async () => {
     mockedFetchRegions.mockResolvedValue([
-      { name: "europe-west3", api_host: "https://api.eu.tinybird.co", provider: "gcp" },
       { name: "us-east-1", api_host: "https://api.us.tinybird.co", provider: "aws" },
+      { name: "europe-west3", api_host: "https://api.eu.tinybird.co", provider: "gcp" },
     ]);
     mockedSelect.mockResolvedValue("https://api.eu.tinybird.co");
 
@@ -41,6 +41,7 @@ describe("selectRegion", () => {
     expect(result.success).toBe(true);
     expect(result.apiHost).toBe("https://api.eu.tinybird.co");
     expect(result.regionName).toBe("europe-west3");
+    // GCP regions should appear first, then AWS
     expect(mockedSelect).toHaveBeenCalledWith({
       message: "Select your Tinybird region",
       options: [

@@ -70,6 +70,12 @@ export async function selectRegion(
     regions = FALLBACK_REGIONS;
   }
 
+  // Sort regions: GCP first, then AWS
+  regions.sort((a, b) => {
+    if (a.provider === b.provider) return 0;
+    return a.provider === "gcp" ? -1 : 1;
+  });
+
   // Build options for p.select
   const options = regions.map((region) => ({
     value: region.api_host,
