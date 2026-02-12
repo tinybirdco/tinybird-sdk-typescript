@@ -9,7 +9,7 @@ const tinybirdConfig = {
     "src/tinybird/dummy.datasource",
   ],
   token: process.env.TINYBIRD_TOKEN,
-  baseUrl: "https://api.tinybird.co",
+  baseUrl: "https://api.europe-west2.gcp.tinybird.co",
   devMode: "branch",
 };
 

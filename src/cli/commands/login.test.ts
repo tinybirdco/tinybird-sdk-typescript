@@ -9,10 +9,17 @@ vi.mock("../auth.js", () => ({
   browserLogin: vi.fn(),
 }));
 
-// Import the mocked function
+// Mock the region-selector module to avoid interactive prompts
+vi.mock("../region-selector.js", () => ({
+  getApiHostWithRegionSelection: vi.fn(),
+}));
+
+// Import the mocked functions
 import { browserLogin } from "../auth.js";
+import { getApiHostWithRegionSelection } from "../region-selector.js";
 
 const mockedBrowserLogin = vi.mocked(browserLogin);
+const mockedGetApiHost = vi.mocked(getApiHostWithRegionSelection);
 
 describe("Login Command", () => {
   let tempDir: string;
@@ -20,6 +27,11 @@ describe("Login Command", () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-login-test-"));
     vi.clearAllMocks();
+    // Default mock for region selection - returns a default apiHost
+    mockedGetApiHost.mockResolvedValue({
+      apiHost: "https://api.tinybird.co",
+      fromConfig: false,
+    });
   });
 
   afterEach(() => {

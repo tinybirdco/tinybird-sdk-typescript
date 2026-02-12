@@ -17,6 +17,7 @@ import {
 } from "../config.js";
 import { browserLogin } from "../auth.js";
 import { saveTinybirdToken } from "../env.js";
+import { selectRegion } from "../region-selector.js";
 import { getGitRoot } from "../git.js";
 import { fetchAllResources } from "../../api/resources.js";
 import { generateCombinedFile } from "../../codegen/index.js";
@@ -893,7 +894,25 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   if (!skipLogin && !hasValidToken(cwd)) {
     console.log("\nNo authentication found. Starting login flow...\n");
 
-    const authResult = await browserLogin();
+    // Select region before login (init creates fresh config, so always prompt)
+    const regionResult = await selectRegion();
+    if (!regionResult.success || !regionResult.apiHost) {
+      return {
+        success: true,
+        created,
+        skipped,
+        loggedIn: false,
+        devMode,
+        clientPath: relativeTinybirdDir,
+        existingDatafiles:
+          existingDatafiles.length > 0 ? existingDatafiles : undefined,
+        ciWorkflowCreated,
+        cdWorkflowCreated,
+        workflowProvider,
+      };
+    }
+
+    const authResult = await browserLogin({ apiHost: regionResult.apiHost });
 
     if (authResult.success && authResult.token) {
       // Save token to .env.local
@@ -903,13 +922,11 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
           created.push(".env.local");
         }
 
-        // If custom base URL, update config file
-        const baseUrl = authResult.baseUrl ?? "https://api.tinybird.co";
-        if (baseUrl !== "https://api.tinybird.co") {
-          const currentConfigPath = findExistingConfigPath(cwd);
-          if (currentConfigPath && currentConfigPath.endsWith(".json")) {
-            updateConfig(currentConfigPath, { baseUrl });
-          }
+        // Update config with selected region's baseUrl
+        const baseUrl = authResult.baseUrl ?? regionResult.apiHost;
+        const currentConfigPath = findExistingConfigPath(cwd);
+        if (currentConfigPath && currentConfigPath.endsWith(".json")) {
+          updateConfig(currentConfigPath, { baseUrl });
         }
 
         // Generate TypeScript from existing Tinybird resources if requested
