@@ -73,7 +73,7 @@ export async function selectRegion(
   // Build options for p.select
   const options = regions.map((region) => ({
     value: region.api_host,
-    label: region.name,
+    label: `${region.name} (${region.provider.toUpperCase()})`,
     hint: region.api_host.replace("https://", ""),
   }));
 
