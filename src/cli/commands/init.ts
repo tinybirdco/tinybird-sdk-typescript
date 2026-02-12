@@ -21,6 +21,7 @@ import { getGitRoot } from "../git.js";
 import { fetchAllResources } from "../../api/resources.js";
 import { generateCombinedFile } from "../../codegen/index.js";
 import { execSync } from "child_process";
+import { setTimeout as sleep } from "node:timers/promises";
 import {
   detectPackageManager,
   getPackageManagerAddCmd,
@@ -738,12 +739,13 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
 
   // Install @tinybirdco/sdk if not already installed
   if (!hasTinybirdSdkDependency(cwd)) {
-    const packageManager = detectPackageManager(cwd);
-    const addCmd = getPackageManagerAddCmd(packageManager);
     const s = p.spinner();
     s.start("Installing dependencies");
+    const packageManager = detectPackageManager(cwd);
+    const addCmd = getPackageManagerAddCmd(packageManager);
     try {
       execSync(`${addCmd} @tinybirdco/sdk`, { cwd, stdio: "pipe" });
+      await sleep(1000);
       s.stop("Installed dependencies");
       created.push("@tinybirdco/sdk");
     } catch (error) {
