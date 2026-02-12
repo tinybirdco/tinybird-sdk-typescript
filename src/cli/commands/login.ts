@@ -6,6 +6,7 @@ import * as path from "path";
 import { browserLogin, type LoginOptions, type AuthResult } from "../auth.js";
 import { updateConfig, findConfigFile } from "../config.js";
 import { saveTinybirdToken } from "../env.js";
+import { getApiHostWithRegionSelection } from "../region-selector.js";
 
 /**
  * Login command options
@@ -57,10 +58,20 @@ export async function runLogin(options: RunLoginOptions = {}): Promise<LoginResu
   // Get the directory containing the config file for .env.local
   const configDir = path.dirname(configPath);
 
-  const loginOptions: LoginOptions = {};
-  if (options.apiHost) {
-    loginOptions.apiHost = options.apiHost;
+  // Determine API host: option > config baseUrl > region selection
+  let apiHost = options.apiHost;
+  if (!apiHost) {
+    const regionResult = await getApiHostWithRegionSelection(configPath);
+    if (!regionResult) {
+      return {
+        success: false,
+        error: "Region selection cancelled",
+      };
+    }
+    apiHost = regionResult.apiHost;
   }
+
+  const loginOptions: LoginOptions = { apiHost };
 
   // Perform browser login
   const authResult: AuthResult = await browserLogin(loginOptions);

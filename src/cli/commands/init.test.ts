@@ -9,6 +9,14 @@ vi.mock("../auth.js", () => ({
   browserLogin: vi.fn().mockResolvedValue({ success: false }),
 }));
 
+// Mock the region-selector module to avoid interactive prompts
+vi.mock("../region-selector.js", () => ({
+  selectRegion: vi.fn().mockResolvedValue({
+    success: true,
+    apiHost: "https://api.tinybird.co",
+  }),
+}));
+
 describe("Init Command", () => {
   let tempDir: string;
 
