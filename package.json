@@ -26,6 +26,10 @@
       "import": "./dist/cli/commands/login.js",
       "types": "./dist/cli/commands/login.d.ts"
     },
+    "./cli/commands/logs": {
+      "import": "./dist/cli/commands/logs.js",
+      "types": "./dist/cli/commands/logs.d.ts"
+    },
     "./cli/config": {
       "import": "./dist/cli/config.js",
       "types": "./dist/cli/config.d.ts"

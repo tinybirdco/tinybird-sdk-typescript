@@ -350,6 +350,45 @@ Get information about the current Tinybird project and workspace.
 
 </details>
 
+<details>
+<summary><code>query_logs</code></summary>
+
+Query Tinybird service logs for observability data. Returns unified logs from multiple service datasources.
+
+**When to use:**
+- Debug API calls, data ingestion, and query execution
+- Investigate endpoint errors
+- Monitor Kafka and sink operations
+- Track job executions and LLM usage
+
+**Input:**
+- `start_time` (optional) - Start time (relative: `-1h`, `-30m`, `-1d`, `-7d` or ISO 8601). Default: `-1h`
+- `end_time` (optional) - End time (relative or ISO 8601). Default: `now`
+- `source` (optional) - Array of sources to filter. Default: all sources
+- `limit` (optional) - Maximum rows (1-1000). Default: `100`
+
+**Available sources:**
+- `tinybird.pipe_stats_rt` - API call metrics
+- `tinybird.bi_stats_rt` - Query execution details
+- `tinybird.block_log` - Data ingestion blocks
+- `tinybird.datasources_ops_log` - Datasource operations
+- `tinybird.endpoint_errors` - Endpoint errors
+- `tinybird.kafka_ops_log` - Kafka operations
+- `tinybird.sinks_ops_log` - Sink operations
+- `tinybird.jobs_log` - Job executions
+- `tinybird.llm_usage` - LLM token usage
+
+**Output:**
+- JSON with `source`, `timestamp`, and `data` (JSON containing all columns) for each log entry
+
+**Example prompts:**
+- "Tinybird, show me recent logs"
+- "Tinybird, what errors happened in the last 24 hours?"
+- "Tinybird, show me endpoint errors from the last hour"
+- "Tinybird, query logs for tinybird.pipe_stats_rt"
+
+</details>
+
 ## Configuration
 
 The server resolves configuration in the following priority order:

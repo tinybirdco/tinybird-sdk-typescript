@@ -310,6 +310,40 @@ Shows:
 - **Branch**: Current branch details (when `devMode` is `branch` and on a feature branch)
 - **Project**: Configuration and git information
 
+### `tinybird logs`
+
+Query Tinybird service logs for observability data. Returns unified logs from multiple service datasources.
+
+```bash
+tinybird logs                          # Last hour, all sources
+tinybird logs -s -1d                   # Last 24 hours
+tinybird logs --source tinybird.endpoint_errors  # Filter by source
+tinybird logs -n 500                   # Limit to 500 rows
+tinybird logs --json                   # Output raw JSON
+tinybird logs --env cloud              # Query main workspace
+tinybird logs --env local              # Query local container
+tinybird logs --env my_branch          # Query specific branch
+```
+
+**Environment options:**
+- `cloud` - Query main workspace (production)
+- `local` - Query local Tinybird container
+- `branch` - Auto-detect from git branch (default)
+- `<branch_name>` - Query a specific branch by name
+
+By default, the environment is auto-resolved based on `devMode` in `tinybird.json` and the current git branch, matching the behavior of `tinybird build`.
+
+**Available sources:**
+- `tinybird.pipe_stats_rt` - API call metrics
+- `tinybird.bi_stats_rt` - Query execution details
+- `tinybird.block_log` - Data ingestion blocks
+- `tinybird.datasources_ops_log` - Datasource operations
+- `tinybird.endpoint_errors` - Endpoint errors
+- `tinybird.kafka_ops_log` - Kafka operations
+- `tinybird.sinks_ops_log` - Sink operations
+- `tinybird.jobs_log` - Job executions
+- `tinybird.llm_usage` - LLM token usage
+
 ## Configuration
 
 Create a `tinybird.config.json` (or `tinybird.config.mjs` / `tinybird.config.cjs` for dynamic logic) in your project root:

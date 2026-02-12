@@ -15,6 +15,7 @@ import { registerLoginTool } from "./tools/login.js";
 import { registerBuildTool } from "./tools/build.js";
 import { registerInfoTool } from "./tools/info.js";
 import { registerOpenDashboardTool } from "./tools/open-dashboard.js";
+import { registerQueryLogsTool } from "./tools/query-logs.js";
 import pkg from "../package.json" with { type: "json" }
 
 /**
@@ -46,6 +47,9 @@ export async function createMcpServer(): Promise<McpServer> {
   registerBuildTool(server, config);
   registerInfoTool(server, config);
   registerOpenDashboardTool(server, config);
+
+  // Observability tools
+  registerQueryLogsTool(server, config);
 
   return server;
 }

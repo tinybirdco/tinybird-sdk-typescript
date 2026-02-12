@@ -28,6 +28,7 @@ import {
 } from "./commands/branch.js";
 import { runClear } from "./commands/clear.js";
 import { runInfo } from "./commands/info.js";
+import { runLogs, LOG_SOURCES, type LogSource, type LogsEnvironment } from "./commands/logs.js";
 import { runOpenDashboard, type Environment } from "./commands/open-dashboard.js";
 import {
   detectPackageManagerInstallCmd,
@@ -810,6 +811,231 @@ function createCli(): Command {
 
       const typeLabel = result.isLocal ? "Workspace" : "Branch";
       console.log(`${typeLabel} '${result.name}' cleared successfully.`);
+    });
+
+  // Logs command
+  program
+    .command("logs")
+    .description("Query Tinybird service logs for observability data")
+    .option(
+      "-s, --start <time>",
+      "Start time (relative: -1h, -30m, -1d, -7d or ISO 8601)",
+      "-1h"
+    )
+    .option(
+      "-e, --end <time>",
+      "End time (relative or ISO 8601)",
+      undefined
+    )
+    .option(
+      "--source <source>",
+      `Comma-separated list of sources: ${LOG_SOURCES.join(", ")}`
+    )
+    .option("-n, --limit <number>", "Maximum rows to return (1-1000)", "100")
+    .option(
+      "--env <env>",
+      "Target environment: cloud (main workspace), local (container), branch (auto-detect), or a specific branch name"
+    )
+    .option("--json", "Output raw JSON instead of formatted table")
+    .action(async (options) => {
+      const sources = options.source
+        ? (options.source.split(",").map((s: string) => s.trim()) as LogSource[])
+        : undefined;
+
+      const limit = parseInt(options.limit, 10);
+      if (isNaN(limit) || limit < 1 || limit > 1000) {
+        console.error("Error: limit must be between 1 and 1000");
+        process.exit(1);
+      }
+
+      const environment = options.env as LogsEnvironment | undefined;
+
+      const result = await runLogs({
+        startTime: options.start,
+        endTime: options.end,
+        sources,
+        limit,
+        environment,
+      });
+
+      if (!result.success) {
+        console.error(`Error: ${result.error}`);
+        process.exit(1);
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      // Table rendering helpers (inspired by Vercel CLI)
+      interface ColumnDef<T> {
+        label: string;
+        width?: number | "stretch";
+        getValue: (row: T) => string;
+        format?: (value: string, row: T) => string;
+      }
+
+      function renderTable<T>(columns: ColumnDef<T>[], rows: T[], tableWidth: number): { header: string; rows: string[] } {
+        const maxWidths = columns.map((col) => {
+          const headerWidth = col.label.length;
+          const maxContent = Math.max(headerWidth, ...rows.map((row) => col.getValue(row).length));
+          return maxContent;
+        });
+
+        const finalWidths: number[] = [];
+        let usedWidth = 0;
+        let stretchIndex = -1;
+
+        for (let i = 0; i < columns.length; i++) {
+          const col = columns[i];
+          if (col.width === "stretch") {
+            stretchIndex = i;
+            finalWidths.push(0);
+          } else if (typeof col.width === "number") {
+            finalWidths.push(col.width);
+            usedWidth += col.width;
+          } else {
+            finalWidths.push(maxWidths[i]);
+            usedWidth += maxWidths[i];
+          }
+        }
+
+        usedWidth += (columns.length - 1) * 2;
+
+        if (stretchIndex >= 0) {
+          finalWidths[stretchIndex] = Math.max(20, tableWidth - usedWidth);
+        }
+
+        const pad = (value: string, width: number): string => {
+          if (value.length > width) {
+            return value.slice(0, width - 1) + "…";
+          }
+          return value.padEnd(width);
+        };
+
+        const headerStr = columns
+          .map((col, i) => pad(col.label, finalWidths[i]))
+          .join("  ");
+
+        const formattedRows = rows.map((row) => {
+          return columns
+            .map((col, i) => {
+              const value = col.getValue(row);
+              const padded = pad(value, finalWidths[i]);
+              return col.format ? col.format(padded, row) : padded;
+            })
+            .join("  ");
+        });
+
+        return { header: pc.dim(headerStr), rows: formattedRows };
+      }
+
+      // Parse data JSON to extract key info as key=value pairs
+      function extractDataSummary(dataStr: string, _source: string): string {
+        try {
+          const data = JSON.parse(dataStr) as Record<string, unknown>;
+
+          // Fields to exclude (timestamps and metadata already shown elsewhere)
+          const excludeFields = new Set([
+            "start_datetime", "timestamp", "created_at", "start_time",
+            "end_datetime", "end_time", "date", "source",
+          ]);
+
+          // Get all meaningful fields, excluding timestamps
+          const allKeys = Object.keys(data).filter((key) => !excludeFields.has(key));
+
+          // Build key=value pairs for all available fields
+          const pairs: string[] = [];
+          for (const key of allKeys) {
+            const value = data[key];
+            if (value !== undefined && value !== null && value !== "" && value !== 0) {
+              // Format the value (truncate strings, format numbers)
+              let formatted: string;
+              if (typeof value === "string") {
+                formatted = value.length > 25 ? value.slice(0, 22) + "..." : value;
+              } else if (typeof value === "number") {
+                // Format large numbers with K/M suffix
+                if (value >= 1000000) {
+                  formatted = (value / 1000000).toFixed(1) + "M";
+                } else if (value >= 1000) {
+                  formatted = (value / 1000).toFixed(1) + "K";
+                } else {
+                  formatted = String(value);
+                }
+              } else {
+                formatted = String(value);
+              }
+              pairs.push(`${key}=${formatted}`);
+            }
+          }
+
+          return pairs.join(" ") || dataStr.slice(0, 80);
+        } catch {
+          return dataStr.slice(0, 80);
+        }
+      }
+
+      // Human-readable output
+      if (!result.data || result.data.length === 0) {
+        const envLabel = result.environment?.isLocal
+          ? `local:${result.environment.target}`
+          : result.environment?.target ?? "cloud";
+        console.log(pc.dim(`No logs found for the specified time range.`));
+        console.log(pc.dim(`\nQueried ${result.query?.sources.length} source(s) from ${envLabel} in ${(result.durationMs / 1000).toFixed(1)}s`));
+        return;
+      }
+
+      const terminalWidth = process.stdout.columns || 120;
+
+      type RowData = {
+        time: string;
+        source: string;
+        summary: string;
+      };
+
+      const rowData: RowData[] = result.data.map((entry) => {
+        const date = new Date(entry.timestamp);
+        const time = date.toISOString().slice(11, 19); // HH:mm:ss
+        return {
+          time,
+          source: entry.source,
+          summary: extractDataSummary(entry.data, entry.source),
+        };
+      });
+
+      const columns: ColumnDef<RowData>[] = [
+        {
+          label: "TIME",
+          width: 8,
+          getValue: (row) => row.time,
+          format: (v) => pc.dim(v),
+        },
+        {
+          label: "SOURCE",
+          width: 20,
+          getValue: (row) => row.source,
+        },
+        {
+          label: "DETAILS",
+          width: "stretch",
+          getValue: (row) => row.summary,
+          format: (v) => pc.dim(v),
+        },
+      ];
+
+      const table = renderTable(columns, rowData, terminalWidth);
+
+      console.log(table.header);
+      for (const row of table.rows) {
+        console.log(row);
+      }
+
+      // Show environment info and fetch summary
+      const envLabel = result.environment?.isLocal
+        ? `local:${result.environment.target}`
+        : result.environment?.target ?? "cloud";
+      console.log(pc.dim(`\nFetched ${result.rows} logs from ${envLabel} in ${(result.durationMs / 1000).toFixed(1)}s`));
     });
 
   return program;
