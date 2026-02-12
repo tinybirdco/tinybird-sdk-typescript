@@ -181,6 +181,23 @@ function generateForwardQuery(forwardQuery?: string): string | null {
 }
 
 /**
+ * Generate SHARED_WITH section for sharing datasource with other workspaces
+ */
+function generateSharedWith(sharedWith?: readonly string[]): string | null {
+  if (!sharedWith || sharedWith.length === 0) {
+    return null;
+  }
+
+  const lines = ["SHARED_WITH >"];
+  sharedWith.forEach((workspace, index) => {
+    const suffix = index < sharedWith.length - 1 ? "," : "";
+    lines.push(`    ${workspace}${suffix}`);
+  });
+
+  return lines.join("\n");
+}
+
+/**
  * Generate TOKEN lines for a datasource
  */
 function generateTokens(tokens?: readonly TokenConfig[]): string[] {
@@ -278,6 +295,13 @@ export function generateDatasource(
   if (tokenLines.length > 0) {
     parts.push("");
     parts.push(tokenLines.join("\n"));
+  }
+
+  // Add shared_with if present
+  const sharedWithBlock = generateSharedWith(datasource.options.sharedWith);
+  if (sharedWithBlock) {
+    parts.push("");
+    parts.push(sharedWithBlock);
   }
 
   return {
