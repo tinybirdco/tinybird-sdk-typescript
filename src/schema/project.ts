@@ -14,6 +14,7 @@ import type {
   DatasourcesNamespace,
   DeleteOptions,
   DeleteResult,
+  IngestResult,
   QueryOptions,
   QueryResult,
   TruncateOptions,
@@ -63,34 +64,15 @@ type PipeEntityAccessors<T extends PipesDefinition> = {
 };
 
 /**
- * Type for a single ingest method
- */
-type IngestMethod<T extends DatasourceDefinition<SchemaDefinition>> = (
-  event: InferRow<T>
-) => Promise<void>;
-
-/**
- * Type for a batch ingest method
- */
-type IngestBatchMethod<T extends DatasourceDefinition<SchemaDefinition>> = (
-  events: InferRow<T>[]
-) => Promise<void>;
-
-/**
- * Type for ingest methods object
- */
-type IngestMethods<T extends DatasourcesDefinition> = {
-  [K in keyof T]: IngestMethod<T[K]>;
-} & {
-  [K in keyof T as `${K & string}Batch`]: IngestBatchMethod<T[K]>;
-};
-
-/**
  * Type for a datasource accessor with import/mutation methods
  */
-type DatasourceAccessor = {
+type DatasourceAccessor<T extends DatasourceDefinition<SchemaDefinition>> = {
+  /** Ingest a single event row */
+  ingest(event: InferRow<T>): Promise<IngestResult>;
   /** Append data from a URL or file */
   append(options: AppendOptions): Promise<AppendResult>;
+  /** Replace datasource content from a URL or file */
+  replace(options: AppendOptions): Promise<AppendResult>;
   /** Delete rows using a SQL condition */
   delete(options: DeleteOptions): Promise<DeleteResult>;
   /** Truncate all rows */
@@ -102,18 +84,16 @@ type DatasourceAccessor = {
  * Maps each datasource to an accessor with import/mutation methods
  */
 type DatasourceAccessors<T extends DatasourcesDefinition> = {
-  [K in keyof T]: DatasourceAccessor;
+  [K in keyof T]: DatasourceAccessor<T[K]>;
 };
 
 /**
  * Base project client interface
  */
-interface ProjectClientBase<TDatasources extends DatasourcesDefinition> {
-  /** Ingest events to datasources */
-  ingest: IngestMethods<TDatasources>;
+interface ProjectClientBase {
   /** Token operations (JWT creation, etc.) */
   readonly tokens: TokensNamespace;
-  /** Datasource operations (append/delete/truncate) */
+  /** Datasource operations (ingest/append/replace/delete/truncate) */
   readonly datasources: DatasourcesNamespace;
   /** Execute raw SQL queries */
   sql<T = unknown>(sql: string, options?: QueryOptions): Promise<QueryResult<T>>;
@@ -128,7 +108,7 @@ interface ProjectClientBase<TDatasources extends DatasourcesDefinition> {
 export type ProjectClient<
   TDatasources extends DatasourcesDefinition,
   TPipes extends PipesDefinition
-> = ProjectClientBase<TDatasources> &
+> = ProjectClientBase &
   DatasourceAccessors<TDatasources> &
   PipeEntityAccessors<TPipes>;
 
@@ -264,7 +244,7 @@ export function isProjectDefinition(value: unknown): value is ProjectDefinition 
 /**
  * Build a typed Tinybird client from datasources and pipes
  *
- * This is an internal helper that builds pipe query and datasource ingest methods.
+ * This is an internal helper that builds pipe query and datasource methods.
  */
 function buildProjectClient<
   TDatasources extends DatasourcesDefinition,
@@ -275,7 +255,6 @@ function buildProjectClient<
   options?: { baseUrl?: string; token?: string; configDir?: string; devMode?: boolean }
 ): ProjectClient<TDatasources, TPipes> {
   const RESERVED_CLIENT_NAMES = new Set([
-    "ingest",
     "tokens",
     "datasources",
     "sql",
@@ -346,8 +325,17 @@ function buildProjectClient<
     };
   }
 
-  // Build ingest methods for datasources
-  const ingestMethods: Record<string, (data: unknown) => Promise<void>> = {};
+  // Build datasource accessors for top-level access
+  const datasourceAccessors: Record<
+    string,
+    {
+      ingest: (event: unknown) => Promise<IngestResult>;
+      append: (options: AppendOptions) => Promise<AppendResult>;
+      replace: (options: AppendOptions) => Promise<AppendResult>;
+      delete: (options: DeleteOptions) => Promise<DeleteResult>;
+      truncate: (options?: TruncateOptions) => Promise<TruncateResult>;
+    }
+  > = {};
   for (const [name, datasource] of Object.entries(datasources)) {
     if (RESERVED_CLIENT_NAMES.has(name)) {
       throw new Error(
@@ -356,31 +344,20 @@ function buildProjectClient<
       );
     }
 
-    // Use the Tinybird datasource name (snake_case)
-    const tinybirdName = datasource._name;
-
-    // Single event ingest
-    ingestMethods[name] = async (event: unknown) => {
-      const client = await getClient();
-      await client.ingest(tinybirdName, event as Record<string, unknown>);
-    };
-
-    // Batch ingest
-    ingestMethods[`${name}Batch`] = async (events: unknown) => {
-      const client = await getClient();
-      await client.ingestBatch(tinybirdName, events as Record<string, unknown>[]);
-    };
-  }
-
-  // Build datasource accessors for top-level access
-  const datasourceAccessors: Record<string, DatasourceAccessor> = {};
-  for (const [name, datasource] of Object.entries(datasources)) {
     const tinybirdName = datasource._name;
 
     datasourceAccessors[name] = {
+      ingest: async (event: unknown) => {
+        const client = await getClient();
+        return client.datasources.ingest(tinybirdName, event as Record<string, unknown>);
+      },
       append: async (options: AppendOptions) => {
         const client = await getClient();
         return client.datasources.append(tinybirdName, options);
+      },
+      replace: async (options: AppendOptions) => {
+        const client = await getClient();
+        return client.datasources.replace(tinybirdName, options);
       },
       delete: async (options: DeleteOptions) => {
         const client = await getClient();
@@ -397,7 +374,6 @@ function buildProjectClient<
   return {
     ...datasourceAccessors,
     ...pipeAccessors,
-    ingest: ingestMethods,
     sql: async <T = unknown>(sql: string, options: QueryOptions = {}) => {
       const client = await getClient();
       return client.sql<T>(sql, options);
@@ -435,13 +411,13 @@ function buildProjectClient<
 /**
  * Create a typed Tinybird client
  *
- * Creates a client with typed pipe query and datasource ingest methods based on
+ * Creates a client with typed pipe query and datasource methods based on
  * the provided
  * datasources and pipes. This is the recommended way to create a Tinybird client
  * when using the SDK's auto-generated client file.
  *
  * @param config - Client configuration with datasources and pipes
- * @returns A typed client with pipe query and datasource ingest methods
+ * @returns A typed client with pipe query and datasource methods
  *
  * @example
  * ```ts
@@ -461,7 +437,7 @@ function buildProjectClient<
  * });
  *
  * // Ingest an event (fully typed)
- * await tinybird.ingest.pageViews({
+ * await tinybird.pageViews.ingest({
  *   timestamp: new Date(),
  *   pathname: '/home',
  *   session_id: 'abc123',

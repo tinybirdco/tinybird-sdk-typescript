@@ -70,7 +70,7 @@ describe("Project Schema", () => {
       expect(project.pipes.topEvents).toBe(topEvents);
     });
 
-    it("creates tinybird client with pipe accessors and ingest methods", () => {
+    it("creates tinybird client with pipe and datasource accessors", () => {
       const events = defineDatasource("events", {
         schema: { id: t.string() },
       });
@@ -86,15 +86,15 @@ describe("Project Schema", () => {
         pipes: { topEvents },
       });
 
-      expect(project.tinybird.ingest).toBeDefined();
       expect(typeof project.tinybird.topEvents.query).toBe("function");
-      expect(typeof project.tinybird.ingest.events).toBe("function");
-      expect(typeof project.tinybird.ingest.eventsBatch).toBe("function");
+      expect(typeof project.tinybird.events.ingest).toBe("function");
+      expect(typeof project.tinybird.events.append).toBe("function");
+      expect(typeof project.tinybird.events.replace).toBe("function");
       expect((project.tinybird as unknown as Record<string, unknown>).query).toBeUndefined();
       expect((project.tinybird as unknown as Record<string, unknown>).pipes).toBeUndefined();
     });
 
-    it("creates datasource accessors with append/delete/truncate methods", () => {
+    it("creates datasource accessors with ingest/append/replace/delete/truncate methods", () => {
       const events = defineDatasource("events", {
         schema: { timestamp: t.dateTime() },
       });
@@ -104,7 +104,9 @@ describe("Project Schema", () => {
       });
 
       expect(project.tinybird.events).toBeDefined();
+      expect(typeof project.tinybird.events.ingest).toBe("function");
       expect(typeof project.tinybird.events.append).toBe("function");
+      expect(typeof project.tinybird.events.replace).toBe("function");
       expect(typeof project.tinybird.events.delete).toBe("function");
       expect(typeof project.tinybird.events.truncate).toBe("function");
     });
@@ -123,8 +125,12 @@ describe("Project Schema", () => {
 
       expect(project.tinybird.events).toBeDefined();
       expect(project.tinybird.pageViews).toBeDefined();
+      expect(typeof project.tinybird.events.ingest).toBe("function");
+      expect(typeof project.tinybird.pageViews.ingest).toBe("function");
       expect(typeof project.tinybird.events.append).toBe("function");
       expect(typeof project.tinybird.pageViews.append).toBe("function");
+      expect(typeof project.tinybird.events.replace).toBe("function");
+      expect(typeof project.tinybird.pageViews.replace).toBe("function");
       expect(typeof project.tinybird.events.delete).toBe("function");
       expect(typeof project.tinybird.pageViews.delete).toBe("function");
       expect(typeof project.tinybird.events.truncate).toBe("function");
@@ -284,7 +290,7 @@ describe("Project Schema", () => {
       process.env.NODE_ENV = originalNodeEnv;
     });
 
-    it("creates a client with pipe accessors and ingest methods", () => {
+    it("creates a client with pipe and datasource accessors", () => {
       const events = defineDatasource("events", {
         schema: { id: t.string() },
       });
@@ -300,17 +306,17 @@ describe("Project Schema", () => {
         pipes: { topEvents },
       });
 
-      expect(client.ingest).toBeDefined();
       expect(client.sql).toBeDefined();
       expect(typeof client.topEvents.query).toBe("function");
-      expect(typeof client.ingest.events).toBe("function");
-      expect(typeof client.ingest.eventsBatch).toBe("function");
+      expect(typeof client.events.ingest).toBe("function");
+      expect(typeof client.events.append).toBe("function");
+      expect(typeof client.events.replace).toBe("function");
       expect(typeof client.sql).toBe("function");
       expect((client as unknown as Record<string, unknown>).query).toBeUndefined();
       expect((client as unknown as Record<string, unknown>).pipes).toBeUndefined();
     });
 
-    it("creates datasource accessors with append/delete/truncate methods", () => {
+    it("creates datasource accessors with ingest/append/replace/delete/truncate methods", () => {
       const events = defineDatasource("events", {
         schema: { id: t.string() },
       });
@@ -321,7 +327,9 @@ describe("Project Schema", () => {
       });
 
       expect(client.events).toBeDefined();
+      expect(typeof client.events.ingest).toBe("function");
       expect(typeof client.events.append).toBe("function");
+      expect(typeof client.events.replace).toBe("function");
       expect(typeof client.events.delete).toBe("function");
       expect(typeof client.events.truncate).toBe("function");
     });
@@ -341,8 +349,12 @@ describe("Project Schema", () => {
 
       expect(client.events).toBeDefined();
       expect(client.pageViews).toBeDefined();
+      expect(typeof client.events.ingest).toBe("function");
+      expect(typeof client.pageViews.ingest).toBe("function");
       expect(typeof client.events.append).toBe("function");
       expect(typeof client.pageViews.append).toBe("function");
+      expect(typeof client.events.replace).toBe("function");
+      expect(typeof client.pageViews.replace).toBe("function");
       expect(typeof client.events.delete).toBe("function");
       expect(typeof client.pageViews.delete).toBe("function");
       expect(typeof client.events.truncate).toBe("function");
@@ -361,7 +373,7 @@ describe("Project Schema", () => {
         devMode: true,
       });
 
-      expect(clientWithDevMode.ingest).toBeDefined();
+      expect(clientWithDevMode.events.ingest).toBeDefined();
 
       const clientWithoutDevMode = createTinybirdClient({
         datasources: { events },
@@ -369,7 +381,7 @@ describe("Project Schema", () => {
         devMode: false,
       });
 
-      expect(clientWithoutDevMode.ingest).toBeDefined();
+      expect(clientWithoutDevMode.events.ingest).toBeDefined();
     });
 
     it("accepts all configuration options", () => {
@@ -387,7 +399,7 @@ describe("Project Schema", () => {
         devMode: true,
       });
 
-      expect(client.ingest).toBeDefined();
+      expect(client.events.ingest).toBeDefined();
     });
 
     it("throws error when accessing underlying client before initialization", () => {

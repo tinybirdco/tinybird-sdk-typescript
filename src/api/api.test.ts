@@ -382,6 +382,31 @@ describe("TinybirdApi", () => {
       expect(requestBody).toBe("url=https%3A%2F%2Fexample.com%2Fdata.csv");
     });
 
+    it("supports replace mode", async () => {
+      let modeParam: string | null = null;
+
+      server.use(
+        http.post(`${BASE_URL}/v0/datasources`, async ({ request }) => {
+          const url = new URL(request.url);
+          modeParam = url.searchParams.get("mode");
+          return HttpResponse.json({ successful_rows: 1, quarantined_rows: 0 });
+        })
+      );
+
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      await api.appendDatasource(
+        "events",
+        { url: "https://example.com/data.csv" },
+        { mode: "replace" }
+      );
+
+      expect(modeParam).toBe("replace");
+    });
+
     it("detects ndjson format from URL extension", async () => {
       let formatParam: string | null = null;
 

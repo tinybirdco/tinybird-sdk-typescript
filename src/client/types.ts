@@ -290,8 +290,16 @@ export interface TruncateResult {
  * Datasources namespace interface for raw client
  */
 export interface DatasourcesNamespace {
+  /** Ingest a single event into a datasource */
+  ingest<T extends Record<string, unknown>>(
+    datasourceName: string,
+    event: T,
+    options?: IngestOptions
+  ): Promise<IngestResult>;
   /** Append data to a datasource from a URL or file */
   append(datasourceName: string, options: AppendOptions): Promise<AppendResult>;
+  /** Replace all datasource rows with data from a URL or file */
+  replace(datasourceName: string, options: AppendOptions): Promise<AppendResult>;
   /** Delete rows from a datasource using a SQL condition */
   delete(datasourceName: string, options: DeleteOptions): Promise<DeleteResult>;
   /** Truncate all rows from a datasource */
