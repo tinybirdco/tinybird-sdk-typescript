@@ -7,11 +7,12 @@
  * 3. Running build to deploy to Tinybird (mocked)
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi, type MockInstance } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { fileURLToPath } from "url";
+import { execSync } from "node:child_process";
 import { runInit } from "../src/cli/commands/init.js";
 import { runBuild } from "../src/cli/commands/build.js";
 import { server } from "./setup.js";
@@ -28,9 +29,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 
+function ensureDistBuild(): void {
+  const distIndex = path.join(PROJECT_ROOT, "dist", "index.js");
+  if (fs.existsSync(distIndex)) {
+    return;
+  }
+
+  execSync("pnpm build", {
+    cwd: PROJECT_ROOT,
+    stdio: "pipe",
+  });
+}
+
 describe("E2E: Init + Build Happy Path", () => {
   let tempDir: string;
   let originalEnv: NodeJS.ProcessEnv;
+
+  beforeAll(() => {
+    ensureDistBuild();
+  });
 
   beforeEach(() => {
     // Create temp directory

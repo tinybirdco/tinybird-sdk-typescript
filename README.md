@@ -344,6 +344,22 @@ npx tinybird init --skip-login  # Skip browser login flow
 
 This enables incremental migration for existing Tinybird projects - you can keep your `.datasource` and `.pipe` files alongside TypeScript definitions.
 
+### `tinybird migrate`
+
+Migrate local Tinybird datafiles (`.datasource`, `.pipe`, `.connection`) into a single TypeScript definitions file.
+
+```bash
+tinybird migrate "tinybird/**/*.datasource" "tinybird/**/*.pipe" "tinybird/**/*.connection"
+tinybird migrate tinybird/legacy --out ./tinybird.migration.ts
+tinybird migrate tinybird --dry-run
+```
+
+Behavior:
+- Processes files, directories, and glob patterns.
+- Continues through all matches and reports migratable resources plus per-file errors.
+- In strict mode (default), exits with non-zero status if any errors are found.
+- Writes one output file by default: `./tinybird.migration.ts`.
+
 ### `tinybird dev`
 
 Watch for changes and sync with Tinybird automatically. Only works on feature branches (not main).
