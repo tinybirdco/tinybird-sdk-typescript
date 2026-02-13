@@ -122,7 +122,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
  * Build options using include paths
  */
 export interface BuildFromIncludeOptions {
-  /** Array of file paths to scan for datasources and pipes */
+  /** Array of file paths or glob patterns to scan for datasources and pipes */
   includePaths: string[];
   /** Working directory (defaults to cwd) */
   cwd?: string;

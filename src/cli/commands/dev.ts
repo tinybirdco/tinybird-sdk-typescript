@@ -30,6 +30,7 @@ import {
 } from "../../api/local.js";
 import { getWorkspace } from "../../api/workspaces.js";
 import { getBranchDashboardUrl, getLocalDashboardUrl } from "../../api/dashboard.js";
+import { getIncludeWatchDirectories } from "../../generator/include-paths.js";
 
 /**
  * Login result info
@@ -274,14 +275,8 @@ export async function runDev(
   // Notify about branch readiness
   options.onBranchReady?.(branchInfo);
 
-  // Get directories to watch from include paths
-  const watchDirs = new Set<string>();
-  for (const includePath of config.include) {
-    const absolutePath = path.isAbsolute(includePath)
-      ? includePath
-      : path.resolve(config.cwd, includePath);
-    watchDirs.add(path.dirname(absolutePath));
-  }
+  // Get directories to watch from include paths (supports glob include patterns)
+  const watchDirs = getIncludeWatchDirectories(config.include, config.cwd);
 
   // Debounce state
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -376,7 +371,7 @@ export async function runDev(
   }
 
   // Set up file watcher for all include directories
-  const watcher = watch(Array.from(watchDirs), {
+  const watcher = watch(watchDirs, {
     ignored: [
       /(^|[\/\\])\../, // Ignore dotfiles
       /node_modules/,

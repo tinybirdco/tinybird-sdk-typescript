@@ -11,6 +11,7 @@ import { isProjectDefinition, type ProjectDefinition, type DatasourcesDefinition
 import { isDatasourceDefinition, type DatasourceDefinition } from "../schema/datasource.js";
 import { isPipeDefinition, type PipeDefinition } from "../schema/pipe.js";
 import { isConnectionDefinition, type ConnectionDefinition } from "../schema/connection.js";
+import { resolveIncludeFiles } from "./include-paths.js";
 
 /**
  * Result of loading a schema file
@@ -184,7 +185,7 @@ export interface LoadedEntities {
  * Options for loading entities
  */
 export interface LoadEntitiesOptions {
-  /** Array of file paths to scan (can be relative or absolute) */
+  /** Array of file paths or glob patterns to scan (can be relative or absolute) */
   includePaths: string[];
   /** The working directory for resolution (defaults to cwd) */
   cwd?: string;
@@ -211,6 +212,7 @@ export interface LoadEntitiesOptions {
  */
 export async function loadEntities(options: LoadEntitiesOptions): Promise<LoadedEntities> {
   const cwd = options.cwd ?? process.cwd();
+  const includeFiles = resolveIncludeFiles(options.includePaths, cwd);
   const result: LoadedEntities = {
     datasources: {},
     pipes: {},
@@ -220,15 +222,9 @@ export async function loadEntities(options: LoadEntitiesOptions): Promise<Loaded
     sourceFiles: [],
   };
 
-  for (const includePath of options.includePaths) {
-    const absolutePath = path.isAbsolute(includePath)
-      ? includePath
-      : path.resolve(cwd, includePath);
-
-    // Verify the file exists
-    if (!fs.existsSync(absolutePath)) {
-      throw new Error(`Include file not found: ${absolutePath}`);
-    }
+  for (const includeFile of includeFiles) {
+    const includePath = includeFile.sourcePath;
+    const absolutePath = includeFile.absolutePath;
 
     result.sourceFiles.push(includePath);
 

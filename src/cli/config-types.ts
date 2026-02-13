@@ -16,7 +16,7 @@ export type DevMode = "branch" | "local";
  * Tinybird configuration file structure
  */
 export interface TinybirdConfig {
-  /** Array of TypeScript files to scan for datasources and pipes */
+  /** Array of file paths or glob patterns to scan for TypeScript/resources */
   include?: string[];
   /** @deprecated Use `include` instead. Path to the TypeScript schema entry point */
   schema?: string;
