@@ -1,0 +1,166 @@
+{
+  "scopeName": "inline.tinybird-ts-sdk",
+  "injectionSelector": "L:source.ts -comment -string, L:source.tsx -comment -string",
+  "patterns": [
+    {
+      "comment": "Template literals preceded by sql: or SQL property names",
+      "begin": "((?:sql|forwardQuery|partitionKey|ttl))(:\\s*)(`)",
+      "beginCaptures": {
+        "1": { "name": "variable.other.property.ts" },
+        "2": { "name": "punctuation.separator.key-value.ts" },
+        "3": { "name": "punctuation.definition.string.template.begin.ts" }
+      },
+      "end": "(`)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.string.template.end.ts" }
+      },
+      "contentName": "meta.embedded.inline.sql",
+      "patterns": [{ "include": "#all" }]
+    },
+    {
+      "comment": "Double-quoted strings preceded by sql: or SQL property names",
+      "begin": "((?:sql|forwardQuery|partitionKey|ttl))(:\\s*)(\")",
+      "beginCaptures": {
+        "1": { "name": "variable.other.property.ts" },
+        "2": { "name": "punctuation.separator.key-value.ts" },
+        "3": { "name": "punctuation.definition.string.begin.ts" }
+      },
+      "end": "(\")",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.string.end.ts" }
+      },
+      "contentName": "meta.embedded.inline.sql",
+      "patterns": [{ "include": "#all" }]
+    },
+    {
+      "comment": "Single-quoted strings preceded by sql: or SQL property names",
+      "begin": "((?:sql|forwardQuery|partitionKey|ttl))(:\\s*)(')",
+      "beginCaptures": {
+        "1": { "name": "variable.other.property.ts" },
+        "2": { "name": "punctuation.separator.key-value.ts" },
+        "3": { "name": "punctuation.definition.string.begin.ts" }
+      },
+      "end": "(')",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.string.end.ts" }
+      },
+      "contentName": "meta.embedded.inline.sql",
+      "patterns": [{ "include": "#all" }]
+    }
+  ],
+  "repository": {
+    "all": {
+      "patterns": [
+        { "include": "#jinja-block" },
+        { "include": "#jinja-expression" },
+        { "include": "#jinja-comment" },
+        { "include": "#template-interpolation" },
+        { "include": "#line-comment" },
+        { "include": "#block-comment" },
+        { "include": "#string-single" },
+        { "include": "#string-double" },
+        { "include": "#number" },
+        { "include": "#clickhouse-types" },
+        { "include": "#clickhouse-functions" },
+        { "include": "#sql-keywords" },
+        { "include": "#sql-operators" },
+        { "include": "#identifier" }
+      ]
+    },
+
+    "jinja-block": {
+      "begin": "\\{%[-~]?",
+      "end": "[-~]?%\\}",
+      "name": "meta.tag.template.jinja2",
+      "beginCaptures": { "0": { "name": "punctuation.section.tag.begin.jinja2" } },
+      "endCaptures": { "0": { "name": "punctuation.section.tag.end.jinja2" } },
+      "patterns": [
+        { "include": "#jinja-keywords" },
+        { "include": "#jinja-inner" }
+      ]
+    },
+    "jinja-expression": {
+      "begin": "\\{\\{",
+      "end": "\\}\\}",
+      "name": "meta.expression.jinja2",
+      "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.jinja2" } },
+      "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.jinja2" } },
+      "patterns": [{ "include": "#jinja-inner" }]
+    },
+    "jinja-comment": {
+      "begin": "\\{#",
+      "end": "#\\}",
+      "name": "comment.block.jinja2"
+    },
+    "jinja-keywords": {
+      "match": "\\b(if|elif|else|end|endif|for|endfor|set|block|endblock|extends|include|macro|endmacro|call|filter|defined|not|and|or|in|is)\\b",
+      "name": "keyword.control.jinja2"
+    },
+    "jinja-inner": {
+      "patterns": [
+        { "match": "\\b(defined|column|columns|date_diff_in_seconds|date_diff_in_minutes|date_diff_in_hours|date_diff_in_days|split_to_array|enumerate_with_last|symbol|sql_and|error|custom_error|Boolean|DateTime64|DateTime|Date|Float32|Float64|Integer|Int|Int8|Int16|Int32|Int64|Int128|Int256|UInt8|UInt16|UInt32|UInt64|UInt128|UInt256|String|Array|JSON)\\b", "name": "entity.name.function.jinja2" },
+        { "match": "'[^']*'", "name": "string.quoted.single.jinja2" },
+        { "match": "\\b\\d+\\b", "name": "constant.numeric.jinja2" },
+        { "match": "\\b(True|False|None)\\b", "name": "constant.language.jinja2" },
+        { "match": "[=!<>]=?|\\bnot\\b|\\band\\b|\\bor\\b", "name": "keyword.operator.jinja2" },
+        { "match": "[a-zA-Z_][a-zA-Z0-9_]*", "name": "variable.parameter.jinja2" }
+      ]
+    },
+
+    "template-interpolation": {
+      "begin": "\\$\\{",
+      "end": "\\}",
+      "name": "meta.template.expression.ts",
+      "patterns": [{ "match": "[^}]+", "name": "variable.other.ts" }]
+    },
+
+    "line-comment": {
+      "match": "--.*$",
+      "name": "comment.line.double-dash.sql"
+    },
+    "block-comment": {
+      "begin": "/\\*",
+      "end": "\\*/",
+      "name": "comment.block.sql"
+    },
+    "string-single": {
+      "begin": "'",
+      "end": "'",
+      "name": "string.quoted.single.sql",
+      "patterns": [{ "match": "''", "name": "constant.character.escape.sql" }]
+    },
+    "string-double": {
+      "begin": "\"",
+      "end": "\"",
+      "name": "string.quoted.double.sql"
+    },
+    "number": {
+      "match": "\\b\\d+(\\.\\d+)?\\b",
+      "name": "constant.numeric.sql"
+    },
+
+    "sql-keywords": {
+      "match": "(?i)\\b(SELECT|FROM|WHERE|AND|OR|NOT|IN|AS|ON|JOIN|INNER|LEFT|RIGHT|OUTER|CROSS|GROUP|BY|ORDER|ASC|DESC|LIMIT|OFFSET|HAVING|UNION|ALL|DISTINCT|CASE|WHEN|THEN|ELSE|END|WITH|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|TABLE|DROP|ALTER|INDEX|EXISTS|BETWEEN|LIKE|IS|NULL|TRUE|FALSE|CAST|INTERVAL|DAY|HOUR|MINUTE|SECOND|WEEK|MONTH|YEAR)\\b",
+      "name": "keyword.other.sql"
+    },
+    "sql-operators": {
+      "match": "(?i)\\b(ANY|SOME|ARRAY|GLOBAL|PREWHERE|FINAL|SAMPLE|FORMAT|SETTINGS|MATERIALIZED|ENGINE|PARTITION|TTL)\\b",
+      "name": "keyword.other.clickhouse"
+    },
+
+    "clickhouse-types": {
+      "match": "(?i)\\b(UInt8|UInt16|UInt32|UInt64|UInt128|UInt256|Int8|Int16|Int32|Int64|Int128|Int256|Float32|Float64|Decimal|Decimal32|Decimal64|Decimal128|Decimal256|String|FixedString|UUID|Date|Date32|DateTime|DateTime64|Enum8|Enum16|Array|Tuple|Map|Nullable|LowCardinality|SimpleAggregateFunction|AggregateFunction|IPv4|IPv6|Bool|Nothing)\\b",
+      "name": "storage.type.clickhouse"
+    },
+
+    "clickhouse-functions": {
+      "match": "(?i)\\b(toStartOfHour|toStartOfDay|toStartOfWeek|toStartOfMonth|toStartOfInterval|toIntervalHour|toIntervalDay|toIntervalMinute|toIntervalSecond|toYYYYMM|toDate|toDateTime|toFloat64|toUInt64|toInt64|toString|toTypeName|now|now64|today|yesterday|formatDateTime|parseDateTimeBestEffort|parseDateTimeBestEffortOrNull|parseTimeDelta|dateDiff|dateAdd|dateSub|addDays|addHours|addMinutes|subtractDays|multiIf|if|ifNull|nullIf|coalesce|isNull|isNotNull|count|sum|avg|min|max|any|anyLast|argMin|argMax|quantile|quantiles|quantileExact|quantileTDigest|median|groupArray|groupUniqArray|uniq|uniqExact|uniqHLL12|topK|sumIf|countIf|avgIf|minIf|maxIf|arrayJoin|arrayMap|arrayFilter|arrayReduce|arrayExists|arrayAll|length|empty|notEmpty|concat|substring|lower|upper|trim|trimLeft|trimRight|replace|replaceAll|replaceOne|match|extract|like|notLike|splitByChar|splitByString|JSONExtract|JSONExtractString|JSONExtractInt|JSONExtractFloat|JSONExtractRaw|JSONExtractKeysAndValues|round|floor|ceil|abs|greatest|least|rand|cityHash64|sipHash64|halfMD5|SHA256|hex|unhex|base64Encode|base64Decode|tuple|untuple|arrayElement|has|hasAll|hasAny|indexOf|countEqual|rowNumberInAllBlocks|runningDifference|neighbor|lagInFrame|leadInFrame|attribute_not_exists)\\b",
+      "name": "support.function.clickhouse"
+    },
+
+    "identifier": {
+      "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b",
+      "name": "variable.other.sql"
+    }
+  }
+}

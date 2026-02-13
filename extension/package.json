@@ -1,0 +1,93 @@
+{
+  "name": "tinybird-ts-sdk-extension",
+  "displayName": "Tinybird SDK Extension",
+  "description": "Inject SQL + Jinja-ish highlighting into TS/TSX template literals and strings for Tinybird SDK usage.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tinybirdco/tinybird-sdk-typescript"
+  },
+  "version": "0.1.0",
+  "publisher": "local",
+  "private": true,
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "scripts": {
+    "build": "vsce package"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "grammars": [
+      {
+        "scopeName": "inline.tinybird-ts-sdk",
+        "path": "./sql.tmLanguage.json",
+        "injectTo": [
+          "source.ts",
+          "source.tsx"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.inline.sql": "sql"
+        }
+      }
+    ],
+    "configurationDefaults": {
+      "editor.tokenColorCustomizations": {
+        "textMateRules": [
+          {
+            "scope": [
+              "punctuation.section.tag.begin.jinja2",
+              "punctuation.section.tag.end.jinja2"
+            ],
+            "settings": {
+              "foreground": "#8DA89C"
+            }
+          },
+          {
+            "scope": [
+              "punctuation.section.interpolation.begin.jinja2",
+              "punctuation.section.interpolation.end.jinja2"
+            ],
+            "settings": {
+              "foreground": "#A89B8A"
+            }
+          },
+          {
+            "scope": "keyword.control.jinja2",
+            "settings": {
+              "foreground": "#A898C4"
+            }
+          },
+          {
+            "scope": "entity.name.function.jinja2",
+            "settings": {
+              "foreground": "#7DB8A5"
+            }
+          },
+          {
+            "scope": "variable.parameter.jinja2",
+            "settings": {
+              "foreground": "#B5949C"
+            }
+          },
+          {
+            "scope": "constant.language.jinja2",
+            "settings": {
+              "foreground": "#B5A57A"
+            }
+          },
+          {
+            "scope": "string.quoted.single.jinja2",
+            "settings": {
+              "foreground": "#8FB58A"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.7.1"
+  }
+}

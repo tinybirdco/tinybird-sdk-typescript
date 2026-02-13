@@ -2,6 +2,7 @@ packages:
   - "."
   - "example"
   - "mcp"
+  - "extension"
 
 onlyBuiltDependencies:
   - esbuild

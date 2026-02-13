@@ -319,7 +319,7 @@ const userClient = createClient({
 
 ### `npx tinybird init`
 
-Initialize a new Tinybird TypeScript project. If you have existing `.datasource` and `.pipe` files in your repository, the CLI will detect them and ask if you want to include them in your configuration.
+Initialize a new Tinybird TypeScript project. The setup flow can also install Tinybird agent skills and Tinybird SQL syntax highlighting for Cursor/VS Code (when available). If you have existing `.datasource` and `.pipe` files in your repository, the CLI will detect them and ask if you want to include them in your configuration.
 
 ```bash
 npx tinybird init

@@ -515,4 +515,21 @@ describe("Init Command", () => {
       expect(content).toContain('"lib/tinybird.ts"');
     });
   });
+
+  describe("tool installation selection", () => {
+    it("returns selected tools and skips installation when requested", async () => {
+      const result = await runInit({
+        cwd: tempDir,
+        skipLogin: true,
+        devMode: "branch",
+        clientPath: "lib/tinybird.ts",
+        installTools: ["skills", "syntax-highlighting"],
+        skipToolsInstall: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.installTools).toEqual(["skills", "syntax-highlighting"]);
+      expect(result.installedTools).toBeUndefined();
+    });
+  });
 });
