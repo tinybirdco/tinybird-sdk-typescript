@@ -295,9 +295,11 @@ describe("Project Schema", () => {
 
       expect(client.query).toBeDefined();
       expect(client.ingest).toBeDefined();
+      expect(client.sql).toBeDefined();
       expect(typeof client.query.topEvents).toBe("function");
       expect(typeof client.ingest.events).toBe("function");
       expect(typeof client.ingest.eventsBatch).toBe("function");
+      expect(typeof client.sql).toBe("function");
     });
 
     it("creates datasource accessors with append method", () => {

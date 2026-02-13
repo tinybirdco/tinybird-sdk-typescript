@@ -8,7 +8,13 @@ import type { PipeDefinition, ParamsDefinition, OutputDefinition } from "./pipe.
 import type { ConnectionDefinition } from "./connection.js";
 import { getEndpointConfig } from "./pipe.js";
 import type { TinybirdClient } from "../client/base.js";
-import type { AppendOptions, AppendResult, DatasourcesNamespace, QueryResult } from "../client/types.js";
+import type {
+  AppendOptions,
+  AppendResult,
+  DatasourcesNamespace,
+  QueryOptions,
+  QueryResult,
+} from "../client/types.js";
 import type { InferRow, InferParams, InferOutputRow } from "../infer/index.js";
 import type { TokensNamespace } from "../client/tokens.js";
 
@@ -103,6 +109,8 @@ interface ProjectClientBase<
   readonly tokens: TokensNamespace;
   /** Datasource operations (append from URL/file) */
   readonly datasources: DatasourcesNamespace;
+  /** Execute raw SQL queries */
+  sql<T = unknown>(sql: string, options?: QueryOptions): Promise<QueryResult<T>>;
   /** Raw client for advanced usage */
   readonly client: TinybirdClient;
 }
@@ -342,6 +350,10 @@ function buildProjectClient<
     ...datasourceAccessors,
     query: queryMethods,
     ingest: ingestMethods,
+    sql: async <T = unknown>(sql: string, options: QueryOptions = {}) => {
+      const client = await getClient();
+      return client.sql<T>(sql, options);
+    },
     get tokens(): TokensNamespace {
       // Synchronous access - will throw if not initialized
       if (!_client) {
