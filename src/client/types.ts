@@ -237,9 +237,63 @@ export interface AppendResult {
 }
 
 /**
+ * Options for deleting rows from a datasource
+ */
+export interface DeleteOptions {
+  /** SQL WHERE clause condition used to select rows to delete */
+  deleteCondition: string;
+  /** Validate and return matched rows without executing deletion */
+  dryRun?: boolean;
+  /** Request timeout in milliseconds */
+  timeout?: number;
+  /** AbortController signal for cancellation */
+  signal?: AbortSignal;
+}
+
+/**
+ * Result of deleting rows from a datasource
+ */
+export interface DeleteResult {
+  /** Delete job ID */
+  id?: string;
+  /** Same value as id */
+  job_id?: string;
+  /** Job status URL */
+  job_url?: string;
+  /** Job status */
+  status?: string;
+  /** Same value as id */
+  delete_id?: string;
+  /** Number of rows matched in dry run mode */
+  rows_to_be_deleted?: number;
+}
+
+/**
+ * Options for truncating a datasource
+ */
+export interface TruncateOptions {
+  /** Request timeout in milliseconds */
+  timeout?: number;
+  /** AbortController signal for cancellation */
+  signal?: AbortSignal;
+}
+
+/**
+ * Result of truncating a datasource
+ */
+export interface TruncateResult {
+  /** Optional status returned by the API */
+  status?: string;
+}
+
+/**
  * Datasources namespace interface for raw client
  */
 export interface DatasourcesNamespace {
   /** Append data to a datasource from a URL or file */
   append(datasourceName: string, options: AppendOptions): Promise<AppendResult>;
+  /** Delete rows from a datasource using a SQL condition */
+  delete(datasourceName: string, options: DeleteOptions): Promise<DeleteResult>;
+  /** Truncate all rows from a datasource */
+  truncate(datasourceName: string, options?: TruncateOptions): Promise<TruncateResult>;
 }

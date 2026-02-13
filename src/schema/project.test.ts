@@ -94,7 +94,7 @@ describe("Project Schema", () => {
       expect((project.tinybird as unknown as Record<string, unknown>).pipes).toBeUndefined();
     });
 
-    it("creates datasource accessors with append method", () => {
+    it("creates datasource accessors with append/delete/truncate methods", () => {
       const events = defineDatasource("events", {
         schema: { timestamp: t.dateTime() },
       });
@@ -105,6 +105,8 @@ describe("Project Schema", () => {
 
       expect(project.tinybird.events).toBeDefined();
       expect(typeof project.tinybird.events.append).toBe("function");
+      expect(typeof project.tinybird.events.delete).toBe("function");
+      expect(typeof project.tinybird.events.truncate).toBe("function");
     });
 
     it("creates multiple datasource accessors", () => {
@@ -123,6 +125,10 @@ describe("Project Schema", () => {
       expect(project.tinybird.pageViews).toBeDefined();
       expect(typeof project.tinybird.events.append).toBe("function");
       expect(typeof project.tinybird.pageViews.append).toBe("function");
+      expect(typeof project.tinybird.events.delete).toBe("function");
+      expect(typeof project.tinybird.pageViews.delete).toBe("function");
+      expect(typeof project.tinybird.events.truncate).toBe("function");
+      expect(typeof project.tinybird.pageViews.truncate).toBe("function");
     });
 
     it("throws error when accessing client before initialization", () => {
@@ -304,7 +310,7 @@ describe("Project Schema", () => {
       expect((client as unknown as Record<string, unknown>).pipes).toBeUndefined();
     });
 
-    it("creates datasource accessors with append method", () => {
+    it("creates datasource accessors with append/delete/truncate methods", () => {
       const events = defineDatasource("events", {
         schema: { id: t.string() },
       });
@@ -316,6 +322,8 @@ describe("Project Schema", () => {
 
       expect(client.events).toBeDefined();
       expect(typeof client.events.append).toBe("function");
+      expect(typeof client.events.delete).toBe("function");
+      expect(typeof client.events.truncate).toBe("function");
     });
 
     it("creates multiple datasource accessors", () => {
@@ -335,6 +343,10 @@ describe("Project Schema", () => {
       expect(client.pageViews).toBeDefined();
       expect(typeof client.events.append).toBe("function");
       expect(typeof client.pageViews.append).toBe("function");
+      expect(typeof client.events.delete).toBe("function");
+      expect(typeof client.pageViews.delete).toBe("function");
+      expect(typeof client.events.truncate).toBe("function");
+      expect(typeof client.pageViews.truncate).toBe("function");
     });
 
     it("accepts devMode option", () => {

@@ -12,8 +12,12 @@ import type {
   AppendOptions,
   AppendResult,
   DatasourcesNamespace,
+  DeleteOptions,
+  DeleteResult,
   QueryOptions,
   QueryResult,
+  TruncateOptions,
+  TruncateResult,
 } from "../client/types.js";
 import type { InferRow, InferParams, InferOutputRow } from "../infer/index.js";
 import type { TokensNamespace } from "../client/tokens.js";
@@ -82,16 +86,20 @@ type IngestMethods<T extends DatasourcesDefinition> = {
 };
 
 /**
- * Type for a datasource accessor with append method
+ * Type for a datasource accessor with import/mutation methods
  */
 type DatasourceAccessor = {
   /** Append data from a URL or file */
   append(options: AppendOptions): Promise<AppendResult>;
+  /** Delete rows using a SQL condition */
+  delete(options: DeleteOptions): Promise<DeleteResult>;
+  /** Truncate all rows */
+  truncate(options?: TruncateOptions): Promise<TruncateResult>;
 };
 
 /**
  * Type for datasource accessors object
- * Maps each datasource to an accessor with append method
+ * Maps each datasource to an accessor with import/mutation methods
  */
 type DatasourceAccessors<T extends DatasourcesDefinition> = {
   [K in keyof T]: DatasourceAccessor;
@@ -105,7 +113,7 @@ interface ProjectClientBase<TDatasources extends DatasourcesDefinition> {
   ingest: IngestMethods<TDatasources>;
   /** Token operations (JWT creation, etc.) */
   readonly tokens: TokensNamespace;
-  /** Datasource operations (append from URL/file) */
+  /** Datasource operations (append/delete/truncate) */
   readonly datasources: DatasourcesNamespace;
   /** Execute raw SQL queries */
   sql<T = unknown>(sql: string, options?: QueryOptions): Promise<QueryResult<T>>;
@@ -373,6 +381,14 @@ function buildProjectClient<
       append: async (options: AppendOptions) => {
         const client = await getClient();
         return client.datasources.append(tinybirdName, options);
+      },
+      delete: async (options: DeleteOptions) => {
+        const client = await getClient();
+        return client.datasources.delete(tinybirdName, options);
+      },
+      truncate: async (options: TruncateOptions = {}) => {
+        const client = await getClient();
+        return client.datasources.truncate(tinybirdName, options);
       },
     };
   }

@@ -2,10 +2,14 @@ import { createTinybirdFetcher, type TinybirdFetch } from "./fetcher.js";
 import type {
   AppendOptions,
   AppendResult,
+  DeleteOptions,
+  DeleteResult,
   IngestOptions,
   IngestResult,
   QueryOptions,
   QueryResult,
+  TruncateOptions,
+  TruncateResult,
   TinybirdErrorResponse,
 } from "../client/types.js";
 
@@ -44,6 +48,16 @@ export interface TinybirdApiIngestOptions extends IngestOptions {
 }
 
 export interface TinybirdApiAppendOptions extends Omit<AppendOptions, 'url' | 'file'> {
+  /** Optional token override for this request */
+  token?: string;
+}
+
+export interface TinybirdApiDeleteOptions extends Omit<DeleteOptions, 'deleteCondition'> {
+  /** Optional token override for this request */
+  token?: string;
+}
+
+export interface TinybirdApiTruncateOptions extends TruncateOptions {
   /** Optional token override for this request */
   token?: string;
 }
@@ -370,6 +384,82 @@ export class TinybirdApi {
   }
 
   /**
+   * Delete rows from a datasource using a SQL condition
+   */
+  async deleteDatasource(
+    datasourceName: string,
+    options: DeleteOptions,
+    apiOptions: TinybirdApiDeleteOptions = {}
+  ): Promise<DeleteResult> {
+    const deleteCondition = options.deleteCondition?.trim();
+
+    if (!deleteCondition) {
+      throw new Error("'deleteCondition' must be provided in options");
+    }
+
+    const url = new URL(
+      `/v0/datasources/${encodeURIComponent(datasourceName)}/delete`,
+      `${this.baseUrl}/`
+    );
+
+    const requestBody = new URLSearchParams();
+    requestBody.set("delete_condition", deleteCondition);
+
+    const dryRun = options.dryRun ?? apiOptions.dryRun;
+    if (dryRun !== undefined) {
+      requestBody.set("dry_run", String(dryRun));
+    }
+
+    const response = await this.request(url.toString(), {
+      method: "POST",
+      token: apiOptions.token,
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: requestBody.toString(),
+      signal: this.createAbortSignal(
+        options.timeout ?? apiOptions.timeout,
+        options.signal ?? apiOptions.signal
+      ),
+    });
+
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+
+    return (await response.json()) as DeleteResult;
+  }
+
+  /**
+   * Truncate all rows from a datasource
+   */
+  async truncateDatasource(
+    datasourceName: string,
+    options: TruncateOptions = {},
+    apiOptions: TinybirdApiTruncateOptions = {}
+  ): Promise<TruncateResult> {
+    const url = new URL(
+      `/v0/datasources/${encodeURIComponent(datasourceName)}/truncate`,
+      `${this.baseUrl}/`
+    );
+
+    const response = await this.request(url.toString(), {
+      method: "POST",
+      token: apiOptions.token,
+      signal: this.createAbortSignal(
+        options.timeout ?? apiOptions.timeout,
+        options.signal ?? apiOptions.signal
+      ),
+    });
+
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+
+    return this.parseOptionalJson(response);
+  }
+
+  /**
    * Create a token using Tinybird Token API.
    * Supports both static and JWT token payloads.
    */
@@ -436,6 +526,20 @@ export class TinybirdApi {
     formData.append("csv", new Blob([fileContent]), fileName);
 
     return formData;
+  }
+
+  private async parseOptionalJson<T extends object>(response: Response): Promise<T> {
+    const rawBody = await response.text();
+
+    if (!rawBody.trim()) {
+      return {} as T;
+    }
+
+    try {
+      return JSON.parse(rawBody) as T;
+    } catch {
+      return {} as T;
+    }
   }
 
   private createAbortSignal(
