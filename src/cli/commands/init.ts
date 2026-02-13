@@ -21,7 +21,7 @@ import { selectRegion } from "../region-selector.js";
 import { getGitRoot } from "../git.js";
 import { fetchAllResources } from "../../api/resources.js";
 import { generateCombinedFile } from "../../codegen/index.js";
-import { execSync } from "child_process";
+import { execSync, spawn } from "child_process";
 import {
   detectPackageManager,
   getPackageManagerAddCmd,
@@ -564,11 +564,11 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
 
   if (shouldPromptTools) {
     const toolsChoice = await p.multiselect({
-      message: "Install tools?",
+      message: "Install extra tools",
       options: [
         {
           value: "skills",
-          label: "Skills",
+          label: "Agent skills",
           hint: "Installs Tinybird agent skills",
         },
         {
@@ -630,7 +630,9 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
       cicdSummary = workflowProvider === "gitlab" ? "GitLab" : "GitHub";
     }
     const toolsSummary =
-      installTools.length > 0 ? installTools.join(", ") : "none selected";
+      installTools.length > 0
+        ? installTools.map(getInstallToolLabel).join(", ")
+        : "none selected";
 
     const summaryLines = [
       `Mode: ${devModeLabel}`,
@@ -805,7 +807,9 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     const packageManager = detectPackageManager(cwd);
     const addCmd = getPackageManagerAddCmd(packageManager);
     try {
-      execSync(`${addCmd} @tinybirdco/sdk`, { cwd, stdio: "pipe" });
+      await flushSpinnerRender();
+      const { command, args } = splitCommandPrefix(addCmd);
+      await runCommand(command, [...args, "@tinybirdco/sdk"], cwd);
       s.stop("Installed dependencies");
       created.push("@tinybirdco/sdk");
     } catch (error) {
@@ -1116,8 +1120,17 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
 
 type DatafileAction = "include" | "codegen" | "skip";
 
-const SKILLS_INSTALL_COMMAND =
-  "npx skills add tinybirdco/tinybird-agent-skills --skill tinybird --skill tinybird-typescript-sdk-guidelines";
+const SKILLS_INSTALL_COMMAND = "npx";
+const SKILLS_INSTALL_ARGS = [
+  "skills",
+  "add",
+  "tinybirdco/tinybird-agent-skills",
+  "--skill",
+  "tinybird",
+  "--skill",
+  "tinybird-typescript-sdk-guidelines",
+  "--yes",
+];
 const SYNTAX_EXTENSION_DIR = path.join("extension");
 const SYNTAX_EXTENSION_PREFIX = "tinybird-ts-sdk-extension";
 
@@ -1131,13 +1144,14 @@ async function installSelectedTools(
   const s = p.spinner();
   const installedBefore = installedTools.length;
   s.start("Installing tools");
+  await flushSpinnerRender();
 
   if (installTools.includes("skills")) {
-    installSkills(cwd, created, skipped, installedTools);
+    await installSkills(cwd, created, skipped, installedTools);
   }
 
   if (installTools.includes("syntax-highlighting")) {
-    installSyntaxHighlighting(cwd, created, skipped, installedTools);
+    await installSyntaxHighlighting(cwd, created, skipped, installedTools);
   }
 
   const installedCount = installedTools.length - installedBefore;
@@ -1148,30 +1162,44 @@ async function installSelectedTools(
   }
 }
 
-function installSkills(
+async function flushSpinnerRender(): Promise<void> {
+  // Yield once so terminal UI can paint before child process work starts.
+  await new Promise<void>((resolve) => setTimeout(resolve, 20));
+}
+
+async function installSkills(
   cwd: string,
   created: string[],
   skipped: string[],
   installedTools: string[]
-): void {
+): Promise<void> {
   try {
-    execSync(SKILLS_INSTALL_COMMAND, { cwd, stdio: "pipe" });
-    created.push("skills (tinybird, tinybird-typescript-sdk-guidelines)");
-    installedTools.push("skills");
+    const installCwd = resolveRepoRoot(cwd);
+    await runCommand(SKILLS_INSTALL_COMMAND, SKILLS_INSTALL_ARGS, installCwd);
+    created.push("agent skills (tinybird, tinybird-typescript-sdk-guidelines)");
+    installedTools.push("agent-skills");
   } catch (error) {
-    skipped.push("skills (installation failed)");
+    skipped.push("agent skills (installation failed)");
     console.error(
-      `Warning: Failed to install Tinybird skills: ${(error as Error).message}`
+      `Warning: Failed to install Tinybird agent skills: ${(error as Error).message}`
     );
   }
 }
 
-function installSyntaxHighlighting(
+function getInstallToolLabel(tool: InstallTool): string {
+  if (tool === "skills") {
+    return "agent skills";
+  }
+
+  return "syntax highlighting";
+}
+
+async function installSyntaxHighlighting(
   cwd: string,
   created: string[],
   skipped: string[],
   installedTools: string[]
-): void {
+): Promise<void> {
   const editors = [
     { command: "cursor", label: "Cursor" },
     { command: "code", label: "VS Code" },
@@ -1190,10 +1218,11 @@ function installSyntaxHighlighting(
 
   for (const editor of editors) {
     try {
-      execSync(`${editor.command} --install-extension "${vsixPath}" --force`, {
-        cwd,
-        stdio: "pipe",
-      });
+      await runCommand(
+        editor.command,
+        ["--install-extension", vsixPath, "--force"],
+        cwd
+      );
       created.push(`syntax highlighting (${editor.label})`);
       installedTools.push(`syntax-highlighting:${editor.command}`);
     } catch (error) {
@@ -1205,6 +1234,55 @@ function installSyntaxHighlighting(
       );
     }
   }
+}
+
+function resolveRepoRoot(cwd: string): string {
+  try {
+    return execSync("git rev-parse --show-toplevel", {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+  } catch {
+    return cwd;
+  }
+}
+
+function runCommand(command: string, args: string[], cwd: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      stdio: "ignore",
+    });
+
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(
+        new Error(
+          `Command failed (${code ?? "unknown"}): ${command} ${args.join(" ")}`
+        )
+      );
+    });
+  });
+}
+
+function splitCommandPrefix(commandPrefix: string): {
+  command: string;
+  args: string[];
+} {
+  const parts = commandPrefix.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    throw new Error("Invalid command prefix");
+  }
+  return {
+    command: parts[0],
+    args: parts.slice(1),
+  };
 }
 
 function isCommandAvailable(command: string): boolean {
