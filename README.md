@@ -175,6 +175,31 @@ const result = await tinybird.topPages.query({
 // result.data is fully typed: { pathname: string, views: bigint }[]
 ```
 
+### 9. Manage datasource rows
+
+```typescript
+import { tinybird } from "@tinybird/client";
+
+// Import rows from a remote file
+await tinybird.pageViews.append({
+  url: "https://example.com/page_views.csv",
+});
+
+// Delete matching rows
+await tinybird.pageViews.delete({
+  deleteCondition: "country = 'XX'",
+});
+
+// Preview matching rows without deleting
+await tinybird.pageViews.delete({
+  deleteCondition: "country = 'XX'",
+  dryRun: true,
+});
+
+// Remove all rows from the datasource
+await tinybird.pageViews.truncate();
+```
+
 ## Public Tinybird API (Optional)
 
 If you want a low-level API wrapper that is decoupled from the typed client layer,
@@ -206,6 +231,25 @@ await api.ingest<EventRow>("events", {
   event_name: "page_view",
   pathname: "/home",
 });
+
+// Import rows from URL/file
+await api.appendDatasource("events", {
+  url: "https://example.com/events.csv",
+});
+
+// Delete rows matching a SQL condition
+await api.deleteDatasource("events", {
+  deleteCondition: "event_name = 'test'",
+});
+
+// Delete dry run (validate and return count only)
+await api.deleteDatasource("events", {
+  deleteCondition: "event_name = 'test'",
+  dryRun: true,
+});
+
+// Truncate datasource
+await api.truncateDatasource("events");
 
 // Execute raw SQL (with optional type parameter)
 interface CountResult { total: number }

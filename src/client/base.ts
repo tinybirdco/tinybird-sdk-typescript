@@ -8,10 +8,14 @@ import type {
   ClientConfig,
   ClientContext,
   DatasourcesNamespace,
+  DeleteOptions,
+  DeleteResult,
   QueryResult,
   IngestResult,
   QueryOptions,
   IngestOptions,
+  TruncateOptions,
+  TruncateResult,
 } from "./types.js";
 import { TinybirdError } from "./types.js";
 import { TinybirdApi, TinybirdApiError } from "../api/api.js";
@@ -89,6 +93,15 @@ export class TinybirdClient {
       append: (datasourceName: string, options: AppendOptions): Promise<AppendResult> => {
         return this.appendDatasource(datasourceName, options);
       },
+      delete: (datasourceName: string, options: DeleteOptions): Promise<DeleteResult> => {
+        return this.deleteDatasource(datasourceName, options);
+      },
+      truncate: (
+        datasourceName: string,
+        options: TruncateOptions = {}
+      ): Promise<TruncateResult> => {
+        return this.truncateDatasource(datasourceName, options);
+      },
     };
 
     // Initialize tokens namespace
@@ -128,6 +141,46 @@ export class TinybirdClient {
 
     try {
       return await this.getApi(token).appendDatasource(datasourceName, options);
+    } catch (error) {
+      this.rethrowApiError(error);
+    }
+  }
+
+  /**
+   * Delete rows from a datasource using a SQL condition
+   *
+   * @param datasourceName - Name of the datasource
+   * @param options - Delete options including deleteCondition
+   * @returns Delete job result
+   */
+  private async deleteDatasource(
+    datasourceName: string,
+    options: DeleteOptions
+  ): Promise<DeleteResult> {
+    const token = await this.getToken();
+
+    try {
+      return await this.getApi(token).deleteDatasource(datasourceName, options);
+    } catch (error) {
+      this.rethrowApiError(error);
+    }
+  }
+
+  /**
+   * Truncate all rows from a datasource
+   *
+   * @param datasourceName - Name of the datasource
+   * @param options - Truncate options
+   * @returns Truncate result
+   */
+  private async truncateDatasource(
+    datasourceName: string,
+    options: TruncateOptions = {}
+  ): Promise<TruncateResult> {
+    const token = await this.getToken();
+
+    try {
+      return await this.getApi(token).truncateDatasource(datasourceName, options);
     } catch (error) {
       this.rethrowApiError(error);
     }

@@ -156,6 +156,8 @@ describe("TinybirdClient", () => {
       });
 
       expect(typeof client.datasources.append).toBe("function");
+      expect(typeof client.datasources.delete).toBe("function");
+      expect(typeof client.datasources.truncate).toBe("function");
     });
 
     it("datasources conforms to DatasourcesNamespace interface", () => {
@@ -167,6 +169,8 @@ describe("TinybirdClient", () => {
       const datasources: DatasourcesNamespace = client.datasources;
       expect(datasources).toBeDefined();
       expect(typeof datasources.append).toBe("function");
+      expect(typeof datasources.delete).toBe("function");
+      expect(typeof datasources.truncate).toBe("function");
     });
   });
 });

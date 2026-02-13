@@ -557,4 +557,169 @@ describe("TinybirdApi", () => {
       expect(authorizationHeader).toBe("Bearer p.override-token");
     });
   });
+
+  describe("deleteDatasource", () => {
+    it("deletes rows from datasource with condition", async () => {
+      let deleteConditionParam: string | null = null;
+      let dryRunParam: string | null = null;
+
+      server.use(
+        http.post(`${BASE_URL}/v0/datasources/events/delete`, async ({ request }) => {
+          const body = new URLSearchParams(await request.text());
+          deleteConditionParam = body.get("delete_condition");
+          dryRunParam = body.get("dry_run");
+
+          return HttpResponse.json({
+            id: "delete_123",
+            job_id: "delete_123",
+            job_url: "https://api.tinybird.co/v0/jobs/delete_123",
+            status: "working",
+          });
+        })
+      );
+
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      const result = await api.deleteDatasource("events", {
+        deleteCondition: "event_type = 'test'",
+      });
+
+      expect(result).toEqual({
+        id: "delete_123",
+        job_id: "delete_123",
+        job_url: "https://api.tinybird.co/v0/jobs/delete_123",
+        status: "working",
+      });
+      expect(deleteConditionParam).toBe("event_type = 'test'");
+      expect(dryRunParam).toBeNull();
+    });
+
+    it("includes dry_run option when provided", async () => {
+      let dryRunParam: string | null = null;
+
+      server.use(
+        http.post(`${BASE_URL}/v0/datasources/events/delete`, async ({ request }) => {
+          const body = new URLSearchParams(await request.text());
+          dryRunParam = body.get("dry_run");
+          return HttpResponse.json({ rows_to_be_deleted: 3 });
+        })
+      );
+
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      await api.deleteDatasource("events", {
+        deleteCondition: "event_type = 'test'",
+        dryRun: true,
+      });
+
+      expect(dryRunParam).toBe("true");
+    });
+
+    it("throws error when deleteCondition is missing", async () => {
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      await expect(
+        api.deleteDatasource("events", {
+          deleteCondition: "   ",
+        })
+      ).rejects.toThrow("'deleteCondition' must be provided in options");
+    });
+
+    it("allows per-request token override", async () => {
+      let authorizationHeader: string | null = null;
+
+      server.use(
+        http.post(`${BASE_URL}/v0/datasources/events/delete`, async ({ request }) => {
+          authorizationHeader = request.headers.get("Authorization");
+          return HttpResponse.json({ id: "delete_123" });
+        })
+      );
+
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      await api.deleteDatasource(
+        "events",
+        { deleteCondition: "event_type = 'test'" },
+        { token: "p.override-token" }
+      );
+
+      expect(authorizationHeader).toBe("Bearer p.override-token");
+    });
+  });
+
+  describe("truncateDatasource", () => {
+    it("truncates a datasource", async () => {
+      let called = false;
+
+      server.use(
+        http.post(`${BASE_URL}/v0/datasources/events/truncate`, () => {
+          called = true;
+          return HttpResponse.json({ status: "ok" });
+        })
+      );
+
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      const result = await api.truncateDatasource("events");
+
+      expect(called).toBe(true);
+      expect(result).toEqual({ status: "ok" });
+    });
+
+    it("returns empty object when API returns empty body", async () => {
+      server.use(
+        http.post(`${BASE_URL}/v0/datasources/events/truncate`, () => {
+          return new HttpResponse(null, { status: 200 });
+        })
+      );
+
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      const result = await api.truncateDatasource("events");
+
+      expect(result).toEqual({});
+    });
+
+    it("allows per-request token override", async () => {
+      let authorizationHeader: string | null = null;
+
+      server.use(
+        http.post(`${BASE_URL}/v0/datasources/events/truncate`, ({ request }) => {
+          authorizationHeader = request.headers.get("Authorization");
+          return HttpResponse.json({});
+        })
+      );
+
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      await api.truncateDatasource(
+        "events",
+        {},
+        { token: "p.override-token" }
+      );
+
+      expect(authorizationHeader).toBe("Bearer p.override-token");
+    });
+  });
 });
