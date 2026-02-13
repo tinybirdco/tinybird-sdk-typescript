@@ -36,8 +36,8 @@ export async function GET() {
 
     // Fetch in parallel
     const [topPagesResult, topEventsResult] = await Promise.all([
-      tinybird.pipes.topPages.query(pagesParams),
-      tinybird.pipes.topEvents.query(eventsParams),
+      tinybird.topPages.query(pagesParams),
+      tinybird.topEvents.query(eventsParams),
     ]);
 
     return NextResponse.json({

@@ -48,11 +48,11 @@ type QueryMethod<T extends PipeDefinition<ParamsDefinition, OutputDefinition>> =
     : never;
 
 /**
- * Type for pipe accessors object
+ * Type for pipe entity accessors object
  * Note: At runtime, all declared pipes are included. Non-endpoint pipes throw
  * when queried with a clear error message.
  */
-type PipeAccessors<T extends PipesDefinition> = {
+type PipeEntityAccessors<T extends PipesDefinition> = {
   [K in keyof T]: {
     query: QueryMethod<T[K]>;
   };
@@ -100,12 +100,7 @@ type DatasourceAccessors<T extends DatasourcesDefinition> = {
 /**
  * Base project client interface
  */
-interface ProjectClientBase<
-  TDatasources extends DatasourcesDefinition,
-  TPipes extends PipesDefinition
-> {
-  /** Query access by pipe name */
-  pipes: PipeAccessors<TPipes>;
+interface ProjectClientBase<TDatasources extends DatasourcesDefinition> {
   /** Ingest events to datasources */
   ingest: IngestMethods<TDatasources>;
   /** Token operations (JWT creation, etc.) */
@@ -125,7 +120,9 @@ interface ProjectClientBase<
 export type ProjectClient<
   TDatasources extends DatasourcesDefinition,
   TPipes extends PipesDefinition
-> = ProjectClientBase<TDatasources, TPipes> & DatasourceAccessors<TDatasources>;
+> = ProjectClientBase<TDatasources> &
+  DatasourceAccessors<TDatasources> &
+  PipeEntityAccessors<TPipes>;
 
 /**
  * Configuration for createTinybirdClient
@@ -269,6 +266,14 @@ function buildProjectClient<
   pipes: TPipes,
   options?: { baseUrl?: string; token?: string; configDir?: string; devMode?: boolean }
 ): ProjectClient<TDatasources, TPipes> {
+  const RESERVED_CLIENT_NAMES = new Set([
+    "ingest",
+    "tokens",
+    "datasources",
+    "sql",
+    "client",
+  ]);
+
   // Lazy client initialization
   let _client: TinybirdClient | null = null;
 
@@ -295,6 +300,19 @@ function buildProjectClient<
   // Build pipe accessors with query methods
   const pipeAccessors: Record<string, { query: (params?: unknown) => Promise<unknown> }> = {};
   for (const [name, pipe] of Object.entries(pipes)) {
+    if (name in datasources) {
+      throw new Error(
+        `Name conflict in createTinybirdClient(): "${name}" is defined as both datasource and pipe. ` +
+          `Rename one of them to expose both as top-level client properties.`
+      );
+    }
+    if (RESERVED_CLIENT_NAMES.has(name)) {
+      throw new Error(
+        `Name conflict in createTinybirdClient(): "${name}" is reserved by the client API. ` +
+          `Rename this pipe to expose it as a top-level client property.`
+      );
+    }
+
     const endpointConfig = getEndpointConfig(pipe);
 
     if (!endpointConfig) {
@@ -323,6 +341,13 @@ function buildProjectClient<
   // Build ingest methods for datasources
   const ingestMethods: Record<string, (data: unknown) => Promise<void>> = {};
   for (const [name, datasource] of Object.entries(datasources)) {
+    if (RESERVED_CLIENT_NAMES.has(name)) {
+      throw new Error(
+        `Name conflict in createTinybirdClient(): "${name}" is reserved by the client API. ` +
+          `Rename this datasource to expose it as a top-level client property.`
+      );
+    }
+
     // Use the Tinybird datasource name (snake_case)
     const tinybirdName = datasource._name;
 
@@ -355,7 +380,7 @@ function buildProjectClient<
   // Create the typed client object
   return {
     ...datasourceAccessors,
-    pipes: pipeAccessors,
+    ...pipeAccessors,
     ingest: ingestMethods,
     sql: async <T = unknown>(sql: string, options: QueryOptions = {}) => {
       const client = await getClient();
@@ -414,7 +439,7 @@ function buildProjectClient<
  * });
  *
  * // Query a pipe (fully typed)
- * const result = await tinybird.pipes.topPages.query({
+ * const result = await tinybird.topPages.query({
  *   start_date: new Date('2024-01-01'),
  *   end_date: new Date('2024-01-31'),
  * });
