@@ -422,6 +422,7 @@ Create a `tinybird.config.json` (or `tinybird.config.mjs` / `tinybird.config.cjs
 ```
 
 You can mix TypeScript files with raw `.datasource` and `.pipe` files for incremental migration.
+`include` also supports glob patterns like `src/tinybird/**/*.ts` and `src/tinybird/**/*.datasource`.
 
 ### Config File Formats
 
@@ -451,7 +452,7 @@ export default {
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `include` | `string[]` | *required* | Array of TypeScript files or raw `.datasource`/`.pipe` files to include |
+| `include` | `string[]` | *required* | Array of file paths or glob patterns for TypeScript files and raw `.datasource`/`.pipe` files |
 | `token` | `string` | *required* | API token. Supports `${ENV_VAR}` interpolation for environment variables |
 | `baseUrl` | `string` | `"https://api.tinybird.co"` | Tinybird API URL. Use `"https://api.us-east.tinybird.co"` for US region |
 | `devMode` | `"branch"` \| `"local"` | `"branch"` | Development mode. `"branch"` uses Tinybird cloud with branches, `"local"` uses local Docker container |

@@ -14,7 +14,7 @@ import type { DevMode, TinybirdConfig } from "./config-types.js";
  * Resolved configuration with all values expanded
  */
 export interface ResolvedConfig {
-  /** Array of TypeScript files to scan for datasources and pipes */
+  /** Array of file paths or glob patterns to scan for datasources and pipes */
   include: string[];
   /** Resolved API token (workspace main token) */
   token: string;

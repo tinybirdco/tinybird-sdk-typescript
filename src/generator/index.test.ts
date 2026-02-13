@@ -325,5 +325,49 @@ TYPE endpoint
       expect(rawPipe).toBeDefined();
       expect(rawPipe!.content).toBe(rawPipeContent);
     });
+
+    it("supports glob include patterns", async () => {
+      const nestedDir = path.join(tempDir, "tinybird", "legacy");
+      fs.mkdirSync(nestedDir, { recursive: true });
+
+      const datasourceContent = `SCHEMA >
+    id String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+`;
+      const datasourcePath = path.join(nestedDir, "events.datasource");
+      fs.writeFileSync(datasourcePath, datasourceContent);
+
+      const pipeContent = `NODE endpoint
+SQL >
+    SELECT * FROM events
+
+TYPE endpoint
+`;
+      const pipePath = path.join(nestedDir, "events.pipe");
+      fs.writeFileSync(pipePath, pipeContent);
+
+      const result = await buildFromInclude({
+        includePaths: ["tinybird/**/*.datasource", "tinybird/**/*.pipe"],
+        cwd: tempDir,
+      });
+
+      expect(result.resources.datasources).toHaveLength(1);
+      expect(result.resources.datasources[0].name).toBe("events");
+      expect(result.resources.datasources[0].content).toBe(datasourceContent);
+      expect(result.resources.pipes).toHaveLength(1);
+      expect(result.resources.pipes[0].name).toBe("events");
+      expect(result.resources.pipes[0].content).toBe(pipeContent);
+    });
+
+    it("throws when include glob matches no files", async () => {
+      await expect(
+        buildFromInclude({
+          includePaths: ["tinybird/**/*.datasource"],
+          cwd: tempDir,
+        })
+      ).rejects.toThrow("Include pattern matched no files");
+    });
   });
 });
