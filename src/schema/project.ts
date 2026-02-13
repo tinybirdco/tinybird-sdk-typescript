@@ -8,8 +8,9 @@ import type { PipeDefinition, ParamsDefinition, OutputDefinition } from "./pipe.
 import type { ConnectionDefinition } from "./connection.js";
 import { getEndpointConfig } from "./pipe.js";
 import type { TinybirdClient } from "../client/base.js";
-import type { AppendOptions, AppendResult, QueryResult } from "../client/types.js";
+import type { AppendOptions, AppendResult, DatasourcesNamespace, QueryResult } from "../client/types.js";
 import type { InferRow, InferParams, InferOutputRow } from "../infer/index.js";
+import type { TokensNamespace } from "../client/tokens.js";
 
 // Symbol for brand typing - use Symbol.for() for global registry
 // This ensures the same symbol is used across module instances
@@ -98,6 +99,10 @@ interface ProjectClientBase<
   query: QueryMethods<TPipes>;
   /** Ingest events to datasources */
   ingest: IngestMethods<TDatasources>;
+  /** Token operations (JWT creation, etc.) */
+  readonly tokens: TokensNamespace;
+  /** Datasource operations (append from URL/file) */
+  readonly datasources: DatasourcesNamespace;
   /** Raw client for advanced usage */
   readonly client: TinybirdClient;
 }
@@ -337,6 +342,24 @@ function buildProjectClient<
     ...datasourceAccessors,
     query: queryMethods,
     ingest: ingestMethods,
+    get tokens(): TokensNamespace {
+      // Synchronous access - will throw if not initialized
+      if (!_client) {
+        throw new Error(
+          "Client not initialized. Call a query or ingest method first, or access client asynchronously."
+        );
+      }
+      return _client.tokens;
+    },
+    get datasources(): DatasourcesNamespace {
+      // Synchronous access - will throw if not initialized
+      if (!_client) {
+        throw new Error(
+          "Client not initialized. Call a query or ingest method first, or access client asynchronously."
+        );
+      }
+      return _client.datasources;
+    },
     get client(): TinybirdClient {
       // Synchronous client access - will throw if not initialized
       if (!_client) {
