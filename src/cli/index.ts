@@ -20,6 +20,7 @@ import { runBuild } from "./commands/build.js";
 import { runDeploy } from "./commands/deploy.js";
 import { runPreview } from "./commands/preview.js";
 import { runDev } from "./commands/dev.js";
+import { runMigrate } from "./commands/migrate.js";
 import { runLogin } from "./commands/login.js";
 import {
   runBranchList,
@@ -356,6 +357,72 @@ function createCli(): Command {
 
           output.showBuildSuccess(result.durationMs);
         }
+      }
+    });
+
+  // Migrate command
+  program
+    .command("migrate")
+    .description(
+      "Migrate .datasource/.pipe/.connection files into TypeScript definitions"
+    )
+    .argument(
+      "<patterns...>",
+      "One or more file paths, directories, or glob patterns"
+    )
+    .option(
+      "-o, --out <path>",
+      "Output TypeScript path (default: ./tinybird.migration.ts)"
+    )
+    .option("--dry-run", "Preview migration without writing files")
+    .option("--force", "Overwrite output file if it already exists")
+    .option(
+      "--no-strict",
+      "Do not fail command when some resources cannot be migrated"
+    )
+    .action(async (patterns: string[], options) => {
+      const result = await runMigrate({
+        patterns,
+        out: options.out,
+        strict: options.strict,
+        dryRun: options.dryRun,
+        force: options.force,
+      });
+
+      const migratedCounts = {
+        datasources: result.migrated.filter((resource) => resource.kind === "datasource")
+          .length,
+        pipes: result.migrated.filter((resource) => resource.kind === "pipe").length,
+        connections: result.migrated.filter(
+          (resource) => resource.kind === "connection"
+        ).length,
+      };
+
+      console.log(
+        `Migrated: ${migratedCounts.datasources} datasource(s), ${migratedCounts.pipes} pipe(s), ${migratedCounts.connections} connection(s)`
+      );
+
+      if (result.migrated.length > 0) {
+        if (result.dryRun) {
+          console.log(`[Dry run] Output would be written to: ${result.outputPath}`);
+        } else {
+          console.log(`Output written to: ${result.outputPath}`);
+        }
+      } else {
+        console.log("No resources were migrated.");
+      }
+
+      if (result.errors.length > 0) {
+        console.log("\nErrors:");
+        for (const error of result.errors) {
+          console.log(
+            `- ${error.filePath} (${error.resourceKind}:${error.resourceName}): ${error.message}`
+          );
+        }
+      }
+
+      if (!result.success) {
+        process.exit(1);
       }
     });
 

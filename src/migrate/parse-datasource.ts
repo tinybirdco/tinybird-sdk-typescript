@@ -1,0 +1,453 @@
+import type { DatasourceModel, DatasourceTokenModel, ResourceFile } from "./types.js";
+import {
+  MigrationParseError,
+  isBlank,
+  parseDirectiveLine,
+  parseQuotedValue,
+  splitCommaSeparated,
+  splitLines,
+  splitTopLevelComma,
+  stripIndent,
+} from "./parser-utils.js";
+
+interface BlockReadResult {
+  lines: string[];
+  nextIndex: number;
+}
+
+function readIndentedBlock(lines: string[], startIndex: number): BlockReadResult {
+  const collected: string[] = [];
+  let i = startIndex;
+
+  while (i < lines.length) {
+    const line = lines[i] ?? "";
+    if (line.startsWith("    ")) {
+      collected.push(stripIndent(line));
+      i += 1;
+      continue;
+    }
+
+    if (isBlank(line)) {
+      let j = i + 1;
+      while (j < lines.length && isBlank(lines[j] ?? "")) {
+        j += 1;
+      }
+      if (j < lines.length && (lines[j] ?? "").startsWith("    ")) {
+        collected.push("");
+        i += 1;
+        continue;
+      }
+    }
+
+    break;
+  }
+
+  return { lines: collected, nextIndex: i };
+}
+
+function findTokenOutsideContexts(input: string, token: string): number {
+  let depth = 0;
+  let inSingle = false;
+  let inDouble = false;
+  let inBacktick = false;
+
+  for (let i = 0; i <= input.length - token.length; i += 1) {
+    const char = input[i];
+    const prev = i > 0 ? input[i - 1] : "";
+
+    if (char === "'" && !inDouble && !inBacktick && prev !== "\\") {
+      inSingle = !inSingle;
+    } else if (char === '"' && !inSingle && !inBacktick && prev !== "\\") {
+      inDouble = !inDouble;
+    } else if (char === "`" && !inSingle && !inDouble) {
+      inBacktick = !inBacktick;
+    } else if (!inSingle && !inDouble && !inBacktick) {
+      if (char === "(") {
+        depth += 1;
+      } else if (char === ")") {
+        depth -= 1;
+      }
+    }
+
+    if (!inSingle && !inDouble && !inBacktick && depth === 0) {
+      if (input.slice(i, i + token.length) === token) {
+        return i;
+      }
+    }
+  }
+
+  return -1;
+}
+
+function parseColumnLine(filePath: string, resourceName: string, rawLine: string) {
+  const line = rawLine.trim().replace(/,$/, "");
+  if (!line) {
+    throw new MigrationParseError(filePath, "datasource", resourceName, "Empty schema line.");
+  }
+
+  const firstSpace = line.search(/\s/);
+  if (firstSpace === -1) {
+    throw new MigrationParseError(
+      filePath,
+      "datasource",
+      resourceName,
+      `Invalid schema column definition: "${rawLine}"`
+    );
+  }
+
+  const columnName = line.slice(0, firstSpace).trim();
+  let rest = line.slice(firstSpace + 1).trim();
+
+  const codecMatch = rest.match(/\s+CODEC\((.+)\)\s*$/);
+  const codec = codecMatch ? codecMatch[1].trim() : undefined;
+  if (codecMatch?.index !== undefined) {
+    rest = rest.slice(0, codecMatch.index).trim();
+  }
+
+  let defaultExpression: string | undefined;
+  const defaultMarkerIndex = findTokenOutsideContexts(rest, " DEFAULT ");
+  if (defaultMarkerIndex >= 0) {
+    defaultExpression = rest.slice(defaultMarkerIndex + " DEFAULT ".length).trim();
+    rest = rest.slice(0, defaultMarkerIndex).trim();
+  }
+
+  let jsonPath: string | undefined;
+  const jsonMatch = rest.match(/`json:([^`]+)`/);
+  if (jsonMatch) {
+    jsonPath = jsonMatch[1].trim();
+    rest = rest.replace(/`json:[^`]+`/, "").trim();
+  }
+
+  if (!rest) {
+    throw new MigrationParseError(
+      filePath,
+      "datasource",
+      resourceName,
+      `Missing type in schema column: "${rawLine}"`
+    );
+  }
+
+  return {
+    name: columnName,
+    type: rest,
+    jsonPath,
+    defaultExpression,
+    codec,
+  };
+}
+
+function parseEngineSettings(value: string): Record<string, string | number | boolean> {
+  const raw = parseQuotedValue(value);
+  const parts = splitTopLevelComma(raw);
+  const settings: Record<string, string | number | boolean> = {};
+
+  for (const part of parts) {
+    const equalIndex = part.indexOf("=");
+    if (equalIndex === -1) {
+      throw new Error(`Invalid ENGINE_SETTINGS part: "${part}"`);
+    }
+    const key = part.slice(0, equalIndex).trim();
+    const rawValue = part.slice(equalIndex + 1).trim();
+    if (!key) {
+      throw new Error(`Invalid ENGINE_SETTINGS key in "${part}"`);
+    }
+
+    if (rawValue.startsWith("'") && rawValue.endsWith("'")) {
+      settings[key] = rawValue.slice(1, -1).replace(/\\'/g, "'");
+      continue;
+    }
+    if (/^-?\d+(\.\d+)?$/.test(rawValue)) {
+      settings[key] = Number(rawValue);
+      continue;
+    }
+    if (rawValue === "true") {
+      settings[key] = true;
+      continue;
+    }
+    if (rawValue === "false") {
+      settings[key] = false;
+      continue;
+    }
+
+    throw new Error(`Unsupported ENGINE_SETTINGS value: "${rawValue}"`);
+  }
+
+  return settings;
+}
+
+function parseToken(filePath: string, resourceName: string, value: string): DatasourceTokenModel {
+  const parts = value.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) {
+    throw new MigrationParseError(
+      filePath,
+      "datasource",
+      resourceName,
+      `Invalid TOKEN line: "${value}"`
+    );
+  }
+
+  if (parts.length > 2) {
+    throw new MigrationParseError(
+      filePath,
+      "datasource",
+      resourceName,
+      `Unsupported TOKEN syntax in strict mode: "${value}"`
+    );
+  }
+
+  const name = parts[0];
+  const scope = parts[1];
+  if (scope !== "READ" && scope !== "APPEND") {
+    throw new MigrationParseError(
+      filePath,
+      "datasource",
+      resourceName,
+      `Unsupported datasource token scope: "${scope}"`
+    );
+  }
+
+  return { name, scope };
+}
+
+export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
+  const lines = splitLines(resource.content);
+  const columns = [];
+  const tokens: DatasourceTokenModel[] = [];
+  const sharedWith: string[] = [];
+  let description: string | undefined;
+  let forwardQuery: string | undefined;
+
+  let engineType: string | undefined;
+  let sortingKey: string[] = [];
+  let partitionKey: string | undefined;
+  let primaryKey: string[] | undefined;
+  let ttl: string | undefined;
+  let ver: string | undefined;
+  let sign: string | undefined;
+  let version: string | undefined;
+  let summingColumns: string[] | undefined;
+  let settings: Record<string, string | number | boolean> | undefined;
+
+  let kafkaConnectionName: string | undefined;
+  let kafkaTopic: string | undefined;
+  let kafkaGroupId: string | undefined;
+  let kafkaAutoOffsetReset: "earliest" | "latest" | undefined;
+
+  let i = 0;
+  while (i < lines.length) {
+    const rawLine = lines[i] ?? "";
+    const line = rawLine.trim();
+    if (!line) {
+      i += 1;
+      continue;
+    }
+
+    if (line === "DESCRIPTION >") {
+      const block = readIndentedBlock(lines, i + 1);
+      if (block.lines.length === 0) {
+        throw new MigrationParseError(
+          resource.filePath,
+          "datasource",
+          resource.name,
+          "DESCRIPTION block is empty."
+        );
+      }
+      description = block.lines.join("\n");
+      i = block.nextIndex;
+      continue;
+    }
+
+    if (line === "SCHEMA >") {
+      const block = readIndentedBlock(lines, i + 1);
+      if (block.lines.length === 0) {
+        throw new MigrationParseError(
+          resource.filePath,
+          "datasource",
+          resource.name,
+          "SCHEMA block is empty."
+        );
+      }
+      for (const schemaLine of block.lines) {
+        if (isBlank(schemaLine)) {
+          continue;
+        }
+        columns.push(parseColumnLine(resource.filePath, resource.name, schemaLine));
+      }
+      i = block.nextIndex;
+      continue;
+    }
+
+    if (line === "FORWARD_QUERY >") {
+      const block = readIndentedBlock(lines, i + 1);
+      if (block.lines.length === 0) {
+        throw new MigrationParseError(
+          resource.filePath,
+          "datasource",
+          resource.name,
+          "FORWARD_QUERY block is empty."
+        );
+      }
+      forwardQuery = block.lines.join("\n");
+      i = block.nextIndex;
+      continue;
+    }
+
+    if (line === "SHARED_WITH >") {
+      const block = readIndentedBlock(lines, i + 1);
+      for (const sharedLine of block.lines) {
+        const normalized = sharedLine.trim().replace(/,$/, "");
+        if (normalized) {
+          sharedWith.push(normalized);
+        }
+      }
+      i = block.nextIndex;
+      continue;
+    }
+
+    const { key, value } = parseDirectiveLine(line);
+    switch (key) {
+      case "ENGINE":
+        engineType = parseQuotedValue(value);
+        break;
+      case "ENGINE_SORTING_KEY":
+        sortingKey = splitCommaSeparated(parseQuotedValue(value));
+        break;
+      case "ENGINE_PARTITION_KEY":
+        partitionKey = parseQuotedValue(value);
+        break;
+      case "ENGINE_PRIMARY_KEY":
+        primaryKey = splitCommaSeparated(parseQuotedValue(value));
+        break;
+      case "ENGINE_TTL":
+        ttl = parseQuotedValue(value);
+        break;
+      case "ENGINE_VER":
+        ver = parseQuotedValue(value);
+        break;
+      case "ENGINE_SIGN":
+        sign = parseQuotedValue(value);
+        break;
+      case "ENGINE_VERSION":
+        version = parseQuotedValue(value);
+        break;
+      case "ENGINE_SUMMING_COLUMNS":
+        summingColumns = splitCommaSeparated(parseQuotedValue(value));
+        break;
+      case "ENGINE_SETTINGS":
+        try {
+          settings = parseEngineSettings(value);
+        } catch (error) {
+          throw new MigrationParseError(
+            resource.filePath,
+            "datasource",
+            resource.name,
+            (error as Error).message
+          );
+        }
+        break;
+      case "KAFKA_CONNECTION_NAME":
+        kafkaConnectionName = value.trim();
+        break;
+      case "KAFKA_TOPIC":
+        kafkaTopic = value.trim();
+        break;
+      case "KAFKA_GROUP_ID":
+        kafkaGroupId = value.trim();
+        break;
+      case "KAFKA_AUTO_OFFSET_RESET":
+        if (value !== "earliest" && value !== "latest") {
+          throw new MigrationParseError(
+            resource.filePath,
+            "datasource",
+            resource.name,
+            `Invalid KAFKA_AUTO_OFFSET_RESET value: "${value}"`
+          );
+        }
+        kafkaAutoOffsetReset = value;
+        break;
+      case "TOKEN":
+        tokens.push(parseToken(resource.filePath, resource.name, value));
+        break;
+      default:
+        throw new MigrationParseError(
+          resource.filePath,
+          "datasource",
+          resource.name,
+          `Unsupported datasource directive in strict mode: "${line}"`
+        );
+    }
+
+    i += 1;
+  }
+
+  if (columns.length === 0) {
+    throw new MigrationParseError(
+      resource.filePath,
+      "datasource",
+      resource.name,
+      "SCHEMA block is required."
+    );
+  }
+
+  if (!engineType) {
+    throw new MigrationParseError(
+      resource.filePath,
+      "datasource",
+      resource.name,
+      "ENGINE directive is required."
+    );
+  }
+
+  if (sortingKey.length === 0) {
+    throw new MigrationParseError(
+      resource.filePath,
+      "datasource",
+      resource.name,
+      "ENGINE_SORTING_KEY directive is required."
+    );
+  }
+
+  const kafka =
+    kafkaConnectionName || kafkaTopic || kafkaGroupId || kafkaAutoOffsetReset
+      ? {
+          connectionName: kafkaConnectionName ?? "",
+          topic: kafkaTopic ?? "",
+          groupId: kafkaGroupId,
+          autoOffsetReset: kafkaAutoOffsetReset,
+        }
+      : undefined;
+
+  if (kafka && (!kafka.connectionName || !kafka.topic)) {
+    throw new MigrationParseError(
+      resource.filePath,
+      "datasource",
+      resource.name,
+      "KAFKA_CONNECTION_NAME and KAFKA_TOPIC are required when Kafka directives are used."
+    );
+  }
+
+  return {
+    kind: "datasource",
+    name: resource.name,
+    filePath: resource.filePath,
+    description,
+    columns,
+    engine: {
+      type: engineType,
+      sortingKey,
+      partitionKey,
+      primaryKey,
+      ttl,
+      ver,
+      sign,
+      version,
+      summingColumns,
+      settings,
+    },
+    kafka,
+    forwardQuery,
+    tokens,
+    sharedWith,
+  };
+}
+
