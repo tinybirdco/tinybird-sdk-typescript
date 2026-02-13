@@ -166,7 +166,7 @@ await tinybird.ingest.pageViews({
 });
 
 // Type-safe queries with autocomplete
-const result = await tinybird.query.topPages({
+const result = await tinybird.topPages.query({
   start_date: new Date("2024-01-01"),
   end_date: new Date(),
   limit: 5,
@@ -221,6 +221,55 @@ await api.request("/v1/workspace", {
 This Tinybird API is standalone and can be used without `createClient()` or `createTinybirdClient()`.
 It is intended for cases where you want a simple public API that remains
 decoupled from the higher-level typed client APIs.
+
+## JWT Token Creation
+
+Create short-lived JWT tokens for secure, scoped access to your Tinybird resources. This is useful for:
+- Frontend applications that need to call Tinybird APIs directly from browsers
+- Multi-tenant applications requiring row-level security
+- Time-limited access with automatic expiration
+
+```typescript
+import { createClient } from "@tinybirdco/sdk";
+
+const client = createClient({
+  baseUrl: "https://api.tinybird.co",
+  token: process.env.TINYBIRD_ADMIN_TOKEN!, // Requires ADMIN scope
+});
+
+// Create a JWT token with scoped access
+const { token } = await client.tokens.createJWT({
+  name: "user_123_session",
+  expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+  scopes: [
+    {
+      type: "PIPES:READ",
+      resource: "user_dashboard",
+      fixed_params: { user_id: 123 }, // Row-level security
+    },
+  ],
+  limits: { rps: 10 }, // Optional rate limiting
+});
+
+// Use the JWT token for client-side queries
+const userClient = createClient({
+  baseUrl: "https://api.tinybird.co",
+  token, // The JWT
+});
+```
+
+### Scope Types
+
+| Scope | Description |
+|-------|-------------|
+| `PIPES:READ` | Read access to a specific pipe endpoint |
+| `DATASOURCES:READ` | Read access to a datasource (with optional `filter`) |
+| `DATASOURCES:APPEND` | Append access to a datasource |
+
+### Scope Options
+
+- **`fixed_params`**: For pipes, embed parameters that cannot be overridden by the caller
+- **`filter`**: For datasources, append a SQL WHERE clause (e.g., `"org_id = 'acme'"`)
 
 ## CLI Commands
 
