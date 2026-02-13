@@ -569,7 +569,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         {
           value: "skills",
           label: "Agent skills",
-          hint: "Installs Tinybird agent skills",
+          hint: "Manual: npx skills add tinybirdco/tinybird-agent-skills --skill tinybird --skill tinybird-typescript-sdk-guidelines",
         },
         {
           value: "syntax-highlighting",
