@@ -11,10 +11,10 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as TrackRequest;
 
     if (body.type === "pageview") {
-      await tinybird.ingest.pageViews(body.data as PageViewsRow);
+      await tinybird.pageViews.ingest(body.data as PageViewsRow);
       return NextResponse.json({ success: true, type: "pageview" });
     } else if (body.type === "event") {
-      await tinybird.ingest.events(body.data as EventsRow);
+      await tinybird.events.ingest(body.data as EventsRow);
       return NextResponse.json({ success: true, type: "event" });
     } else {
       return NextResponse.json(

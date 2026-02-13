@@ -50,6 +50,8 @@ export interface TinybirdApiIngestOptions extends IngestOptions {
 export interface TinybirdApiAppendOptions extends Omit<AppendOptions, 'url' | 'file'> {
   /** Optional token override for this request */
   token?: string;
+  /** Import mode */
+  mode?: "append" | "replace";
 }
 
 export interface TinybirdApiDeleteOptions extends Omit<DeleteOptions, 'deleteCondition'> {
@@ -331,7 +333,7 @@ export class TinybirdApi {
 
     const url = new URL("/v0/datasources", `${this.baseUrl}/`);
     url.searchParams.set("name", datasourceName);
-    url.searchParams.set("mode", "append");
+    url.searchParams.set("mode", apiOptions.mode ?? "append");
 
     // Auto-detect format from file/url extension
     const format = this.detectFormat(sourceUrl ?? filePath!);

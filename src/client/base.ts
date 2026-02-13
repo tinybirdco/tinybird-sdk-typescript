@@ -66,7 +66,7 @@ export class TinybirdClient {
   private resolvedContext: ClientContext | null = null;
 
   /**
-   * Datasources namespace for import operations
+   * Datasources namespace for ingest and import operations
    */
   readonly datasources: DatasourcesNamespace;
 
@@ -90,8 +90,18 @@ export class TinybirdClient {
 
     // Initialize datasources namespace
     this.datasources = {
+      ingest: <T extends Record<string, unknown>>(
+        datasourceName: string,
+        event: T,
+        options: IngestOptions = {}
+      ): Promise<IngestResult> => {
+        return this.ingestDatasource(datasourceName, event, options);
+      },
       append: (datasourceName: string, options: AppendOptions): Promise<AppendResult> => {
         return this.appendDatasource(datasourceName, options);
+      },
+      replace: (datasourceName: string, options: AppendOptions): Promise<AppendResult> => {
+        return this.replaceDatasource(datasourceName, options);
       },
       delete: (datasourceName: string, options: DeleteOptions): Promise<DeleteResult> => {
         return this.deleteDatasource(datasourceName, options);
@@ -147,6 +157,28 @@ export class TinybirdClient {
   }
 
   /**
+   * Replace datasource rows from a URL or local file
+   *
+   * @param datasourceName - Name of the datasource
+   * @param options - Replace options including url or file source
+   * @returns Append-style result
+   */
+  private async replaceDatasource(
+    datasourceName: string,
+    options: AppendOptions
+  ): Promise<AppendResult> {
+    const token = await this.getToken();
+
+    try {
+      return await this.getApi(token).appendDatasource(datasourceName, options, {
+        mode: "replace",
+      });
+    } catch (error) {
+      this.rethrowApiError(error);
+    }
+  }
+
+  /**
    * Delete rows from a datasource using a SQL condition
    *
    * @param datasourceName - Name of the datasource
@@ -181,6 +213,28 @@ export class TinybirdClient {
 
     try {
       return await this.getApi(token).truncateDatasource(datasourceName, options);
+    } catch (error) {
+      this.rethrowApiError(error);
+    }
+  }
+
+  /**
+   * Ingest a single event to a datasource
+   *
+   * @param datasourceName - Name of the datasource
+   * @param event - Event data to ingest
+   * @param options - Additional request options
+   * @returns Ingest result
+   */
+  private async ingestDatasource<T extends Record<string, unknown>>(
+    datasourceName: string,
+    event: T,
+    options: IngestOptions = {}
+  ): Promise<IngestResult> {
+    const token = await this.getToken();
+
+    try {
+      return await this.getApi(token).ingestBatch(datasourceName, [event], options);
     } catch (error) {
       this.rethrowApiError(error);
     }
@@ -351,7 +405,7 @@ export class TinybirdClient {
     event: T,
     options: IngestOptions = {}
   ): Promise<IngestResult> {
-    return this.ingestBatch(datasourceName, [event], options);
+    return this.datasources.ingest(datasourceName, event, options);
   }
 
   /**

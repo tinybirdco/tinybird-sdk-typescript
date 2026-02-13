@@ -158,7 +158,7 @@ This watches your schema files and automatically syncs changes to Tinybird.
 import { tinybird, type PageViewsRow } from "@tinybird/client";
 
 // Type-safe data ingestion
-await tinybird.ingest.pageViews({
+await tinybird.pageViews.ingest({
   timestamp: new Date(),
   pathname: "/home",
   session_id: "abc123",
@@ -180,9 +180,24 @@ const result = await tinybird.topPages.query({
 ```typescript
 import { tinybird } from "@tinybird/client";
 
+// Datasource accessors support: ingest, append, replace, delete, truncate
+
+// Ingest one row as JSON
+await tinybird.pageViews.ingest({
+  timestamp: new Date(),
+  pathname: "/pricing",
+  session_id: "session_123",
+  country: "US",
+});
+
 // Import rows from a remote file
 await tinybird.pageViews.append({
   url: "https://example.com/page_views.csv",
+});
+
+// Replace all rows from a remote file
+await tinybird.pageViews.replace({
+  url: "https://example.com/page_views_full_snapshot.csv",
 });
 
 // Delete matching rows
