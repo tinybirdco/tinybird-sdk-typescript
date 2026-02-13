@@ -5,7 +5,13 @@ import {
   listDatasources,
   getDatasource,
   listPipes,
+  listPipesV1,
   getPipe,
+  listConnectors,
+  getDatasourceFile,
+  getPipeFile,
+  getConnectorFile,
+  pullAllResourceFiles,
   fetchAllResources,
   hasResources,
   ResourceApiError,
@@ -66,6 +72,13 @@ const handlers = [
     });
   }),
 
+  // List pipes v1
+  http.get(`${BASE_URL}/v1/pipes`, () => {
+    return HttpResponse.json({
+      pipes: [{ name: "top_events" }, { name: "daily_stats_mv" }],
+    });
+  }),
+
   // Get pipe detail - endpoint
   http.get(`${BASE_URL}/v0/pipes/top_events`, () => {
     return HttpResponse.json({
@@ -117,6 +130,45 @@ const handlers = [
           sql: "SELECT * FROM events WHERE date = today()",
         },
       ],
+    });
+  }),
+
+  // List connectors
+  http.get(`${BASE_URL}/v0/connectors`, () => {
+    return HttpResponse.json({
+      connectors: [{ name: "main_kafka" }],
+    });
+  }),
+
+  // Raw datasource datafile
+  http.get(`${BASE_URL}/v0/datasources/events.datasource`, () => {
+    return new HttpResponse(
+      "SCHEMA >\n    timestamp DateTime,\n    event_name String",
+      { headers: { "Content-Type": "text/plain" } }
+    );
+  }),
+  http.get(`${BASE_URL}/v0/datasources/users.datasource`, () => {
+    return new HttpResponse("SCHEMA >\n    user_id String", {
+      headers: { "Content-Type": "text/plain" },
+    });
+  }),
+
+  // Raw pipe datafiles
+  http.get(`${BASE_URL}/v1/pipes/top_events.pipe`, () => {
+    return new HttpResponse("NODE endpoint\nSQL >\n    SELECT 1", {
+      headers: { "Content-Type": "text/plain" },
+    });
+  }),
+  http.get(`${BASE_URL}/v1/pipes/daily_stats_mv.pipe`, () => {
+    return new HttpResponse("TYPE MATERIALIZED\nDATASOURCE daily_stats", {
+      headers: { "Content-Type": "text/plain" },
+    });
+  }),
+
+  // Raw connector datafile
+  http.get(`${BASE_URL}/v0/connectors/main_kafka.connection`, () => {
+    return new HttpResponse("TYPE kafka\nKAFKA_BOOTSTRAP_SERVERS localhost:9092", {
+      headers: { "Content-Type": "text/plain" },
     });
   }),
 ];
@@ -207,6 +259,26 @@ describe("listPipes", () => {
   });
 });
 
+describe("listPipesV1", () => {
+  it("returns array of pipe names from /v1/pipes", async () => {
+    const result = await listPipesV1({ baseUrl: BASE_URL, token: TOKEN });
+
+    expect(result).toEqual(["top_events", "daily_stats_mv"]);
+  });
+
+  it("falls back to /v0/pipes when /v1/pipes is unavailable", async () => {
+    server.use(
+      http.get(`${BASE_URL}/v1/pipes`, () => {
+        return new HttpResponse(null, { status: 404 });
+      })
+    );
+
+    const result = await listPipesV1({ baseUrl: BASE_URL, token: TOKEN });
+
+    expect(result).toEqual(["top_events", "daily_stats_mv"]);
+  });
+});
+
 describe("getPipe", () => {
   it("returns endpoint pipe info", async () => {
     const result = await getPipe({ baseUrl: BASE_URL, token: TOKEN }, "top_events");
@@ -261,6 +333,55 @@ describe("fetchAllResources", () => {
     const topEvents = result.pipes.find((p) => p.name === "top_events");
     expect(topEvents?.nodes).toBeDefined();
     expect(topEvents?.type).toBe("endpoint");
+  });
+});
+
+describe("raw datafile APIs", () => {
+  it("lists connectors", async () => {
+    const result = await listConnectors({ baseUrl: BASE_URL, token: TOKEN });
+    expect(result).toEqual(["main_kafka"]);
+  });
+
+  it("gets datasource .datasource content", async () => {
+    const result = await getDatasourceFile(
+      { baseUrl: BASE_URL, token: TOKEN },
+      "events"
+    );
+
+    expect(result).toContain("SCHEMA >");
+    expect(result).toContain("timestamp DateTime");
+  });
+
+  it("gets pipe .pipe content", async () => {
+    const result = await getPipeFile(
+      { baseUrl: BASE_URL, token: TOKEN },
+      "top_events"
+    );
+
+    expect(result).toContain("NODE endpoint");
+  });
+
+  it("gets connector .connection content", async () => {
+    const result = await getConnectorFile(
+      { baseUrl: BASE_URL, token: TOKEN },
+      "main_kafka"
+    );
+
+    expect(result).toContain("TYPE kafka");
+  });
+});
+
+describe("pullAllResourceFiles", () => {
+  it("pulls datasources, pipes, and connectors as raw datafiles", async () => {
+    const result = await pullAllResourceFiles({ baseUrl: BASE_URL, token: TOKEN });
+
+    expect(result.datasources).toHaveLength(2);
+    expect(result.pipes).toHaveLength(2);
+    expect(result.connections).toHaveLength(1);
+
+    expect(result.datasources[0]?.filename).toMatch(/\.datasource$/);
+    expect(result.pipes[0]?.filename).toMatch(/\.pipe$/);
+    expect(result.connections[0]?.filename).toMatch(/\.connection$/);
   });
 });
 

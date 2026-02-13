@@ -1,6 +1,6 @@
 /**
  * Tinybird Resources API client
- * Functions to list and fetch datasources and pipes from a workspace
+ * Functions to list and fetch resources from a workspace
  */
 
 import type { WorkspaceApiConfig } from "./workspaces.js";
@@ -248,6 +248,36 @@ interface PipeDetailResponse {
   materialized_datasource?: string;
 }
 
+// ============ Connector/Datafile Types ============
+
+/**
+ * Resource file type returned by pull operations
+ */
+export type ResourceFileType = "datasource" | "pipe" | "connection";
+
+/**
+ * Raw Tinybird datafile pulled from API
+ */
+export interface ResourceFile {
+  /** Resource name (without extension) */
+  name: string;
+  /** Resource kind */
+  type: ResourceFileType;
+  /** Filename with extension */
+  filename: string;
+  /** Raw datafile content */
+  content: string;
+}
+
+/**
+ * Grouped resource files returned by pull operations
+ */
+export interface PulledResourceFiles {
+  datasources: ResourceFile[];
+  pipes: ResourceFile[];
+  connections: ResourceFile[];
+}
+
 // ============ API Helper ============
 
 /**
@@ -288,6 +318,107 @@ async function handleApiResponse<T>(
     );
   }
   return response.json() as Promise<T>;
+}
+
+/**
+ * Handle API text response and throw appropriate errors
+ */
+async function handleApiTextResponse(
+  response: Response,
+  endpoint: string
+): Promise<string> {
+  if (response.status === 401) {
+    throw new ResourceApiError("Invalid or expired token", 401, endpoint);
+  }
+  if (response.status === 403) {
+    throw new ResourceApiError(
+      "Insufficient permissions to access resources",
+      403,
+      endpoint
+    );
+  }
+  if (response.status === 404) {
+    throw new ResourceApiError("Resource not found", 404, endpoint);
+  }
+  if (!response.ok) {
+    const body = await response.text();
+    throw new ResourceApiError(
+      `API request failed: ${response.status} ${response.statusText}`,
+      response.status,
+      endpoint,
+      body
+    );
+  }
+  return response.text();
+}
+
+/**
+ * Extract resource names from API response arrays
+ */
+function extractNames(
+  data: Record<string, unknown>,
+  keys: string[]
+): string[] {
+  for (const key of keys) {
+    const value = data[key];
+    if (!Array.isArray(value)) {
+      continue;
+    }
+
+    const names = value
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+        if (
+          typeof item === "object" &&
+          item !== null &&
+          "name" in item &&
+          typeof (item as { name: unknown }).name === "string"
+        ) {
+          return (item as { name: string }).name;
+        }
+        return null;
+      })
+      .filter((name): name is string => name !== null);
+
+    return names;
+  }
+
+  return [];
+}
+
+/**
+ * Fetch text resource from the first successful endpoint.
+ * Falls back on 404 responses.
+ */
+async function fetchTextFromAnyEndpoint(
+  config: WorkspaceApiConfig,
+  endpoints: string[]
+): Promise<string> {
+  let lastNotFound: ResourceApiError | null = null;
+
+  for (const endpoint of endpoints) {
+    const url = new URL(endpoint, config.baseUrl);
+    const response = await tinybirdFetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+      },
+    });
+
+    if (response.status === 404) {
+      lastNotFound = new ResourceApiError("Resource not found", 404, endpoint);
+      continue;
+    }
+
+    return handleApiTextResponse(response, endpoint);
+  }
+
+  throw (
+    lastNotFound ??
+    new ResourceApiError("Resource not found", 404, endpoints[0] ?? "unknown")
+  );
 }
 
 // ============ Datasource API ============
@@ -425,6 +556,117 @@ export async function listPipes(
 }
 
 /**
+ * List all pipes from the v1 endpoint.
+ * Falls back to v0 when v1 is unavailable.
+ *
+ * @param config - API configuration
+ * @returns Array of pipe names
+ */
+export async function listPipesV1(config: WorkspaceApiConfig): Promise<string[]> {
+  const endpoint = "/v1/pipes";
+  const url = new URL(endpoint, config.baseUrl);
+
+  const response = await tinybirdFetch(url.toString(), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+    },
+  });
+
+  // Older/self-hosted versions may not expose /v1/pipes.
+  if (response.status === 404) {
+    return listPipes(config);
+  }
+
+  const data = await handleApiResponse<Record<string, unknown>>(response, endpoint);
+  return extractNames(data, ["pipes", "data"]);
+}
+
+/**
+ * Get a datasource as native .datasource text
+ *
+ * @param config - API configuration
+ * @param name - Datasource name
+ * @returns Raw .datasource content
+ */
+export async function getDatasourceFile(
+  config: WorkspaceApiConfig,
+  name: string
+): Promise<string> {
+  const encoded = encodeURIComponent(name);
+  return fetchTextFromAnyEndpoint(config, [
+    `/v0/datasources/${encoded}.datasource`,
+    `/v0/datasources/${encoded}?format=datasource`,
+  ]);
+}
+
+/**
+ * Get a pipe as native .pipe text
+ *
+ * @param config - API configuration
+ * @param name - Pipe name
+ * @returns Raw .pipe content
+ */
+export async function getPipeFile(
+  config: WorkspaceApiConfig,
+  name: string
+): Promise<string> {
+  const encoded = encodeURIComponent(name);
+  return fetchTextFromAnyEndpoint(config, [
+    `/v1/pipes/${encoded}.pipe`,
+    `/v0/pipes/${encoded}.pipe`,
+    `/v1/pipes/${encoded}?format=pipe`,
+    `/v0/pipes/${encoded}?format=pipe`,
+  ]);
+}
+
+/**
+ * List all connectors in the workspace
+ *
+ * @param config - API configuration
+ * @returns Array of connector names
+ */
+export async function listConnectors(
+  config: WorkspaceApiConfig
+): Promise<string[]> {
+  const endpoint = "/v0/connectors";
+  const url = new URL(endpoint, config.baseUrl);
+
+  const response = await tinybirdFetch(url.toString(), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+    },
+  });
+
+  // Not all workspaces expose connectors. Treat missing endpoint as no connectors.
+  if (response.status === 404) {
+    return [];
+  }
+
+  const data = await handleApiResponse<Record<string, unknown>>(response, endpoint);
+  return extractNames(data, ["connectors", "connections"]);
+}
+
+/**
+ * Get a connector as native .connection text
+ *
+ * @param config - API configuration
+ * @param name - Connector name
+ * @returns Raw .connection content
+ */
+export async function getConnectorFile(
+  config: WorkspaceApiConfig,
+  name: string
+): Promise<string> {
+  const encoded = encodeURIComponent(name);
+  return fetchTextFromAnyEndpoint(config, [
+    `/v0/connectors/${encoded}.connection`,
+    `/v0/connectors/${encoded}?format=connection`,
+  ]);
+}
+
+/**
  * Get detailed information about a specific pipe
  *
  * @param config - API configuration
@@ -539,6 +781,55 @@ export async function fetchAllResources(
   ]);
 
   return { datasources, pipes };
+}
+
+/**
+ * Pull all datasource/pipe/connector datafiles from a workspace
+ *
+ * @param config - API configuration
+ * @returns Raw resource files grouped by type
+ */
+export async function pullAllResourceFiles(
+  config: WorkspaceApiConfig
+): Promise<PulledResourceFiles> {
+  const [datasourceNames, pipeNames, connectorNames] = await Promise.all([
+    listDatasources(config),
+    listPipesV1(config),
+    listConnectors(config),
+  ]);
+
+  const [datasources, pipes, connections] = await Promise.all([
+    Promise.all(
+      datasourceNames.map(async (name): Promise<ResourceFile> => ({
+        name,
+        type: "datasource",
+        filename: `${name}.datasource`,
+        content: await getDatasourceFile(config, name),
+      }))
+    ),
+    Promise.all(
+      pipeNames.map(async (name): Promise<ResourceFile> => ({
+        name,
+        type: "pipe",
+        filename: `${name}.pipe`,
+        content: await getPipeFile(config, name),
+      }))
+    ),
+    Promise.all(
+      connectorNames.map(async (name): Promise<ResourceFile> => ({
+        name,
+        type: "connection",
+        filename: `${name}.connection`,
+        content: await getConnectorFile(config, name),
+      }))
+    ),
+  ]);
+
+  return {
+    datasources,
+    pipes,
+    connections,
+  };
 }
 
 /**

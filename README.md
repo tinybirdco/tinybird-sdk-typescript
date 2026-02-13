@@ -378,6 +378,16 @@ tinybird deploy
 tinybird deploy --dry-run  # Preview without pushing
 ```
 
+### `tinybird pull`
+
+Download all cloud resources as native Tinybird datafiles (`.datasource`, `.pipe`, `.connection`).
+
+```bash
+tinybird pull
+tinybird pull --output-dir ./tinybird-datafiles
+tinybird pull --force  # Overwrite existing files
+```
+
 ### `tinybird login`
 
 Authenticate with Tinybird via browser. Use this to set up credentials for an existing project without reinitializing.

@@ -28,6 +28,7 @@ import {
 } from "./commands/branch.js";
 import { runClear } from "./commands/clear.js";
 import { runInfo } from "./commands/info.js";
+import { runPull } from "./commands/pull.js";
 import {
   runOpenDashboard,
   type Environment,
@@ -177,6 +178,50 @@ function createCli(): Command {
           project: result.project,
         });
       }
+    });
+
+  // Pull command
+  program
+    .command("pull")
+    .description(
+      "Download datasources, pipes, and connections from Tinybird as datafiles"
+    )
+    .option(
+      "-o, --output-dir <path>",
+      "Directory where pulled files are written",
+      "."
+    )
+    .option("-f, --force", "Overwrite existing files")
+    .action(async (options) => {
+      output.highlight("Pulling resources from Tinybird...");
+
+      const result = await runPull({
+        outputDir: options.outputDir,
+        overwrite: options.force,
+      });
+
+      if (!result.success) {
+        output.error(result.error ?? "Pull failed");
+        process.exit(1);
+      }
+
+      const files = result.files ?? [];
+      const stats = result.stats ?? {
+        datasources: 0,
+        pipes: 0,
+        connections: 0,
+        total: files.length,
+      };
+
+      for (const file of files) {
+        const status = file.status === "created" ? "created" : "changed";
+        output.showResourceChange(file.relativePath, status);
+      }
+
+      output.success(
+        `\nPulled ${stats.total} file(s): ${stats.datasources} datasource(s), ${stats.pipes} pipe(s), ${stats.connections} connection(s)`
+      );
+      output.success(`Completed in ${output.formatDuration(result.durationMs)}`);
     });
 
   // Open command
