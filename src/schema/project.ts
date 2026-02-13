@@ -48,11 +48,14 @@ type QueryMethod<T extends PipeDefinition<ParamsDefinition, OutputDefinition>> =
     : never;
 
 /**
- * Type for query methods object
- * Note: At runtime, only pipes with endpoint: true are included
+ * Type for pipe accessors object
+ * Note: At runtime, all declared pipes are included. Non-endpoint pipes throw
+ * when queried with a clear error message.
  */
-type QueryMethods<T extends PipesDefinition> = {
-  [K in keyof T]: QueryMethod<T[K]>;
+type PipeAccessors<T extends PipesDefinition> = {
+  [K in keyof T]: {
+    query: QueryMethod<T[K]>;
+  };
 };
 
 /**
@@ -101,8 +104,8 @@ interface ProjectClientBase<
   TDatasources extends DatasourcesDefinition,
   TPipes extends PipesDefinition
 > {
-  /** Query endpoint pipes */
-  query: QueryMethods<TPipes>;
+  /** Query access by pipe name */
+  pipes: PipeAccessors<TPipes>;
   /** Ingest events to datasources */
   ingest: IngestMethods<TDatasources>;
   /** Token operations (JWT creation, etc.) */
@@ -256,7 +259,7 @@ export function isProjectDefinition(value: unknown): value is ProjectDefinition 
 /**
  * Build a typed Tinybird client from datasources and pipes
  *
- * This is an internal helper that builds query/ingest methods.
+ * This is an internal helper that builds pipe query and datasource ingest methods.
  */
 function buildProjectClient<
   TDatasources extends DatasourcesDefinition,
@@ -289,27 +292,31 @@ function buildProjectClient<
     return _client;
   };
 
-  // Build query methods for pipes
-  const queryMethods: Record<string, (params?: unknown) => Promise<unknown>> = {};
+  // Build pipe accessors with query methods
+  const pipeAccessors: Record<string, { query: (params?: unknown) => Promise<unknown> }> = {};
   for (const [name, pipe] of Object.entries(pipes)) {
     const endpointConfig = getEndpointConfig(pipe);
 
     if (!endpointConfig) {
       // Non-endpoint pipes get a stub that throws a clear error
-      queryMethods[name] = async () => {
-        throw new Error(
-          `Pipe "${name}" is not exposed as an endpoint. ` +
-            `Set "endpoint: true" in the pipe definition to enable querying.`
-        );
+      pipeAccessors[name] = {
+        query: async () => {
+          throw new Error(
+            `Pipe "${name}" is not exposed as an endpoint. ` +
+              `Set "endpoint: true" in the pipe definition to enable querying.`
+          );
+        },
       };
       continue;
     }
 
     // Use the Tinybird pipe name (snake_case)
     const tinybirdName = pipe._name;
-    queryMethods[name] = async (params?: unknown) => {
-      const client = await getClient();
-      return client.query(tinybirdName, (params ?? {}) as Record<string, unknown>);
+    pipeAccessors[name] = {
+      query: async (params?: unknown) => {
+        const client = await getClient();
+        return client.query(tinybirdName, (params ?? {}) as Record<string, unknown>);
+      },
     };
   }
 
@@ -348,7 +355,7 @@ function buildProjectClient<
   // Create the typed client object
   return {
     ...datasourceAccessors,
-    query: queryMethods,
+    pipes: pipeAccessors,
     ingest: ingestMethods,
     sql: async <T = unknown>(sql: string, options: QueryOptions = {}) => {
       const client = await getClient();
@@ -387,12 +394,13 @@ function buildProjectClient<
 /**
  * Create a typed Tinybird client
  *
- * Creates a client with typed query and ingest methods based on the provided
+ * Creates a client with typed pipe query and datasource ingest methods based on
+ * the provided
  * datasources and pipes. This is the recommended way to create a Tinybird client
  * when using the SDK's auto-generated client file.
  *
  * @param config - Client configuration with datasources and pipes
- * @returns A typed client with query and ingest methods
+ * @returns A typed client with pipe query and datasource ingest methods
  *
  * @example
  * ```ts
@@ -406,7 +414,7 @@ function buildProjectClient<
  * });
  *
  * // Query a pipe (fully typed)
- * const result = await tinybird.query.topPages({
+ * const result = await tinybird.pipes.topPages.query({
  *   start_date: new Date('2024-01-01'),
  *   end_date: new Date('2024-01-31'),
  * });

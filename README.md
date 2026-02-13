@@ -166,7 +166,7 @@ await tinybird.ingest.pageViews({
 });
 
 // Type-safe queries with autocomplete
-const result = await tinybird.query.topPages({
+const result = await tinybird.pipes.topPages.query({
   start_date: new Date("2024-01-01"),
   end_date: new Date(),
   limit: 5,

@@ -70,7 +70,7 @@ describe("Project Schema", () => {
       expect(project.pipes.topEvents).toBe(topEvents);
     });
 
-    it("creates tinybird client with query and ingest methods", () => {
+    it("creates tinybird client with pipes and ingest methods", () => {
       const events = defineDatasource("events", {
         schema: { id: t.string() },
       });
@@ -86,11 +86,12 @@ describe("Project Schema", () => {
         pipes: { topEvents },
       });
 
-      expect(project.tinybird.query).toBeDefined();
+      expect(project.tinybird.pipes).toBeDefined();
       expect(project.tinybird.ingest).toBeDefined();
-      expect(typeof project.tinybird.query.topEvents).toBe("function");
+      expect(typeof project.tinybird.pipes.topEvents.query).toBe("function");
       expect(typeof project.tinybird.ingest.events).toBe("function");
       expect(typeof project.tinybird.ingest.eventsBatch).toBe("function");
+      expect((project.tinybird as unknown as Record<string, unknown>).query).toBeUndefined();
     });
 
     it("creates datasource accessors with append method", () => {
@@ -144,7 +145,7 @@ describe("Project Schema", () => {
       });
 
       // Cast to any since the type system expects params but stub throws regardless
-      const queryFn = project.tinybird.query.internalPipe as () => Promise<unknown>;
+      const queryFn = project.tinybird.pipes.internalPipe.query as () => Promise<unknown>;
       await expect(queryFn()).rejects.toThrow(
         'Pipe "internalPipe" is not exposed as an endpoint'
       );
@@ -277,7 +278,7 @@ describe("Project Schema", () => {
       process.env.NODE_ENV = originalNodeEnv;
     });
 
-    it("creates a client with query and ingest methods", () => {
+    it("creates a client with pipes and ingest methods", () => {
       const events = defineDatasource("events", {
         schema: { id: t.string() },
       });
@@ -293,13 +294,14 @@ describe("Project Schema", () => {
         pipes: { topEvents },
       });
 
-      expect(client.query).toBeDefined();
+      expect(client.pipes).toBeDefined();
       expect(client.ingest).toBeDefined();
       expect(client.sql).toBeDefined();
-      expect(typeof client.query.topEvents).toBe("function");
+      expect(typeof client.pipes.topEvents.query).toBe("function");
       expect(typeof client.ingest.events).toBe("function");
       expect(typeof client.ingest.eventsBatch).toBe("function");
       expect(typeof client.sql).toBe("function");
+      expect((client as unknown as Record<string, unknown>).query).toBeUndefined();
     });
 
     it("creates datasource accessors with append method", () => {
@@ -347,7 +349,7 @@ describe("Project Schema", () => {
         devMode: true,
       });
 
-      expect(clientWithDevMode.query).toBeDefined();
+      expect(clientWithDevMode.pipes).toBeDefined();
       expect(clientWithDevMode.ingest).toBeDefined();
 
       const clientWithoutDevMode = createTinybirdClient({
@@ -356,7 +358,7 @@ describe("Project Schema", () => {
         devMode: false,
       });
 
-      expect(clientWithoutDevMode.query).toBeDefined();
+      expect(clientWithoutDevMode.pipes).toBeDefined();
       expect(clientWithoutDevMode.ingest).toBeDefined();
     });
 
@@ -375,7 +377,7 @@ describe("Project Schema", () => {
         devMode: true,
       });
 
-      expect(client.query).toBeDefined();
+      expect(client.pipes).toBeDefined();
       expect(client.ingest).toBeDefined();
     });
 
