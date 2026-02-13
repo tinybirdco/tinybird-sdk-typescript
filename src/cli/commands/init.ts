@@ -286,6 +286,8 @@ function createDefaultConfig(
   };
 }
 
+type InstallTool = "skills" | "syntax-highlighting";
+
 /**
  * Init command options
  */
@@ -314,6 +316,12 @@ export interface InitOptions {
   workflowProvider?: "github" | "gitlab";
   /** Skip auto-installing @tinybirdco/sdk dependency */
   skipDependencyInstall?: boolean;
+  /** Skip install tools prompt */
+  skipToolsPrompt?: boolean;
+  /** Install selected tools */
+  installTools?: InstallTool[];
+  /** Skip selected tool installation */
+  skipToolsInstall?: boolean;
 }
 
 /**
@@ -346,6 +354,10 @@ export interface InitResult {
   cdWorkflowCreated?: boolean;
   /** Git provider used for workflow templates */
   workflowProvider?: "github" | "gitlab";
+  /** Selected install tools */
+  installTools?: InstallTool[];
+  /** Installed tools */
+  installedTools?: string[];
 }
 
 /**
@@ -418,14 +430,18 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   const skipLogin = options.skipLogin ?? false;
   const skipDependencyInstall =
     options.skipDependencyInstall ?? Boolean(process.env.VITEST);
+  const skipToolsInstall =
+    options.skipToolsInstall ?? Boolean(process.env.VITEST);
 
   const created: string[] = [];
   const skipped: string[] = [];
+  const installedTools: string[] = [];
   let didPrompt = false;
   let existingDatafiles: string[] = [];
   let ciWorkflowCreated = false;
   let cdWorkflowCreated = false;
   let workflowProvider = options.workflowProvider;
+  let installTools: InstallTool[] = options.installTools ?? [];
 
   // Check for existing .datasource and .pipe files
   const foundDatafiles = findExistingDatafiles(cwd);
@@ -540,6 +556,44 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     workflowProvider = "github";
   }
 
+  const skipToolsPrompt =
+    options.skipToolsPrompt ??
+    (options.devMode !== undefined || options.clientPath !== undefined);
+  const shouldPromptTools =
+    !skipToolsPrompt && options.installTools === undefined;
+
+  if (shouldPromptTools) {
+    const toolsChoice = await p.multiselect({
+      message: "Install tools?",
+      options: [
+        {
+          value: "skills",
+          label: "Skills",
+          hint: "Installs Tinybird agent skills",
+        },
+        {
+          value: "syntax-highlighting",
+          label: "Syntax highlighting (Cursor/VS Code)",
+          hint: "Installs Tinybird SQL highlighting extension",
+        },
+      ],
+      required: false,
+    });
+
+    if (p.isCancel(toolsChoice)) {
+      p.cancel("Operation cancelled");
+      return {
+        success: false,
+        created: [],
+        skipped: [],
+        error: "Cancelled by user",
+      };
+    }
+
+    didPrompt = true;
+    installTools = toolsChoice as InstallTool[];
+  }
+
   // Ask about existing datafiles if found
   let datafileAction: DatafileAction = "skip";
   if (foundDatafiles.length > 0 && !options.skipDatafilePrompt) {
@@ -575,12 +629,15 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     if (includeCiWorkflow || includeCdWorkflow) {
       cicdSummary = workflowProvider === "gitlab" ? "GitLab" : "GitHub";
     }
+    const toolsSummary =
+      installTools.length > 0 ? installTools.join(", ") : "none selected";
 
     const summaryLines = [
       `Mode: ${devModeLabel}`,
       `Folder: ${relativeTinybirdDir}/`,
       `Existing datafiles: ${datafileSummary}`,
       `CI/CD: ${cicdSummary}`,
+      `Tools: ${toolsSummary}`,
     ];
 
     p.note(summaryLines.join("\n"), "Installation Summary");
@@ -761,6 +818,16 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     }
   }
 
+  if (installTools.length > 0 && !skipToolsInstall) {
+    await installSelectedTools(
+      cwd,
+      installTools,
+      created,
+      skipped,
+      installedTools
+    );
+  }
+
   // Use git root for workflow files, fallback to cwd if not in a git repo
   const projectRoot = getGitRoot() ?? cwd;
   const githubWorkflowsDir = path.join(projectRoot, ".github", "workflows");
@@ -911,6 +978,8 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         ciWorkflowCreated,
         cdWorkflowCreated,
         workflowProvider,
+        installTools: installTools.length > 0 ? installTools : undefined,
+        installedTools: installedTools.length > 0 ? installedTools : undefined,
       };
     }
 
@@ -958,6 +1027,9 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
           ciWorkflowCreated,
           cdWorkflowCreated,
           workflowProvider,
+          installTools: installTools.length > 0 ? installTools : undefined,
+          installedTools:
+            installedTools.length > 0 ? installedTools : undefined,
         };
       } catch (error) {
         // Login succeeded but saving credentials failed
@@ -976,6 +1048,9 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
           ciWorkflowCreated,
           cdWorkflowCreated,
           workflowProvider,
+          installTools: installTools.length > 0 ? installTools : undefined,
+          installedTools:
+            installedTools.length > 0 ? installedTools : undefined,
         };
       }
     } else {
@@ -992,6 +1067,8 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
         ciWorkflowCreated,
         cdWorkflowCreated,
         workflowProvider,
+        installTools: installTools.length > 0 ? installTools : undefined,
+        installedTools: installedTools.length > 0 ? installedTools : undefined,
       };
     }
   }
@@ -1032,10 +1109,153 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
     ciWorkflowCreated,
     cdWorkflowCreated,
     workflowProvider,
+    installTools: installTools.length > 0 ? installTools : undefined,
+    installedTools: installedTools.length > 0 ? installedTools : undefined,
   };
 }
 
 type DatafileAction = "include" | "codegen" | "skip";
+
+const SKILLS_INSTALL_COMMAND =
+  "npx skills add tinybirdco/tinybird-agent-skills --skill tinybird --skill tinybird-typescript-sdk-guidelines";
+const SYNTAX_EXTENSION_DIR = path.join("extension");
+const SYNTAX_EXTENSION_PREFIX = "tinybird-ts-sdk-extension";
+
+async function installSelectedTools(
+  cwd: string,
+  installTools: InstallTool[],
+  created: string[],
+  skipped: string[],
+  installedTools: string[]
+): Promise<void> {
+  const s = p.spinner();
+  const installedBefore = installedTools.length;
+  s.start("Installing tools");
+
+  if (installTools.includes("skills")) {
+    installSkills(cwd, created, skipped, installedTools);
+  }
+
+  if (installTools.includes("syntax-highlighting")) {
+    installSyntaxHighlighting(cwd, created, skipped, installedTools);
+  }
+
+  const installedCount = installedTools.length - installedBefore;
+  if (installedCount > 0) {
+    s.stop("Installed tools");
+  } else {
+    s.stop("No tools installed");
+  }
+}
+
+function installSkills(
+  cwd: string,
+  created: string[],
+  skipped: string[],
+  installedTools: string[]
+): void {
+  try {
+    execSync(SKILLS_INSTALL_COMMAND, { cwd, stdio: "pipe" });
+    created.push("skills (tinybird, tinybird-typescript-sdk-guidelines)");
+    installedTools.push("skills");
+  } catch (error) {
+    skipped.push("skills (installation failed)");
+    console.error(
+      `Warning: Failed to install Tinybird skills: ${(error as Error).message}`
+    );
+  }
+}
+
+function installSyntaxHighlighting(
+  cwd: string,
+  created: string[],
+  skipped: string[],
+  installedTools: string[]
+): void {
+  const editors = [
+    { command: "cursor", label: "Cursor" },
+    { command: "code", label: "VS Code" },
+  ].filter((editor) => isCommandAvailable(editor.command));
+
+  if (editors.length === 0) {
+    skipped.push("syntax highlighting (Cursor/VS Code CLI not found)");
+    return;
+  }
+
+  const vsixPath = findSyntaxHighlightingVsix(cwd);
+  if (!vsixPath) {
+    skipped.push("syntax highlighting (VSIX not found)");
+    return;
+  }
+
+  for (const editor of editors) {
+    try {
+      execSync(`${editor.command} --install-extension "${vsixPath}" --force`, {
+        cwd,
+        stdio: "pipe",
+      });
+      created.push(`syntax highlighting (${editor.label})`);
+      installedTools.push(`syntax-highlighting:${editor.command}`);
+    } catch (error) {
+      skipped.push(`syntax highlighting (${editor.label}, install failed)`);
+      console.error(
+        `Warning: Failed to install syntax highlighting in ${editor.label}: ${
+          (error as Error).message
+        }`
+      );
+    }
+  }
+}
+
+function isCommandAvailable(command: string): boolean {
+  try {
+    execSync(`command -v ${command}`, { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function findSyntaxHighlightingVsix(cwd: string): string | undefined {
+  const searchRoots = new Set<string>();
+  const gitRoot = getGitRoot();
+  if (gitRoot) {
+    searchRoots.add(gitRoot);
+  }
+
+  let current = path.resolve(cwd);
+  while (true) {
+    searchRoots.add(current);
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  for (const root of searchRoots) {
+    const extensionDir = path.join(root, SYNTAX_EXTENSION_DIR);
+    if (!fs.existsSync(extensionDir)) {
+      continue;
+    }
+
+    try {
+      const files = fs
+        .readdirSync(extensionDir)
+        .filter(
+          (file) =>
+            file.endsWith(".vsix") && file.startsWith(SYNTAX_EXTENSION_PREFIX)
+        )
+        .sort();
+
+      if (files.length > 0) {
+        return path.join(extensionDir, files[files.length - 1]);
+      }
+    } catch {
+      // Ignore unreadable directories
+    }
+  }
+
+  return undefined;
+}
 
 /**
  * Generate TypeScript files from Tinybird workspace resources
