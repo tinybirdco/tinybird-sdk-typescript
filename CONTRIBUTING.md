@@ -24,4 +24,6 @@ Please be respectful and constructive in all interactions. We're all here to bui
 
 ## License
 
-By contributing to this project, you agree that your contributions will be licensed under the MIT License.
+This project is licensed under the MIT License.
+
+By contributing (e.g., submitting a pull request), you agree that your contributions will be licensed under the MIT License, and you represent that you have the authority to make the contribution.
