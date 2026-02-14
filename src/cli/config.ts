@@ -4,6 +4,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { config as loadDotenv } from "dotenv";
 import { getCurrentGitBranch, isMainBranch, getTinybirdBranchName } from "./git.js";
 
 // Re-export types from config-types.ts (separate file to avoid bundling esbuild)
@@ -69,6 +70,28 @@ const DEFAULT_CONFIG_FILE = "tinybird.config.json";
  * Tinybird file path within lib folder
  */
 const TINYBIRD_FILE = "lib/tinybird.ts";
+
+/**
+ * Load .env files from a directory.
+ *
+ * Priority:
+ * 1. .env.local
+ * 2. .env
+ *
+ * Existing process.env values are preserved (dotenv default behavior).
+ */
+export function loadEnvFiles(directory: string): void {
+  const envLocalPath = path.join(directory, ".env.local");
+  const envPath = path.join(directory, ".env");
+
+  if (fs.existsSync(envLocalPath)) {
+    loadDotenv({ path: envLocalPath });
+  }
+
+  if (fs.existsSync(envPath)) {
+    loadDotenv({ path: envPath });
+  }
+}
 
 /**
  * Detect if project has a src folder
@@ -200,6 +223,9 @@ function resolveConfig(config: TinybirdConfig, configPath: string): ResolvedConf
 
   // Get the directory containing the config file
   const configDir = path.dirname(configPath);
+
+  // Load environment files next to the config before interpolating values.
+  loadEnvFiles(configDir);
 
   // Resolve token (may contain env vars)
   let resolvedToken: string;
