@@ -6,7 +6,7 @@
  */
 
 import {
-  createTinybirdClient,
+  Tinybird,
   type InferRow,
   type InferParams,
   type InferOutputRow,
@@ -28,7 +28,7 @@ import { filteredEvents, filteredPageViews } from "./pipes";
 import { dailyStats, pageViewsOverTime, topEvents, topPages } from "./endpoints";
 
 // Create the typed Tinybird client
-export const tinybird = createTinybirdClient({
+export const tinybird = new Tinybird({
   datasources: {
     pageViews,
     events,

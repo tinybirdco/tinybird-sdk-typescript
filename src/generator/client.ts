@@ -108,7 +108,7 @@ export function generateClientFile(options: GenerateClientOptions): GeneratedCli
     sdkTypes.push("InferParams", "InferOutputRow");
   }
   importLines.push(
-    `import { createTinybirdClient, type ${sdkTypes.join(", type ")} } from "@tinybirdco/sdk";`
+    `import { Tinybird, type ${sdkTypes.join(", type ")} } from "@tinybirdco/sdk";`
   );
   // Node imports for deriving configDir from import.meta.url (monorepo support)
   importLines.push(`import { fileURLToPath } from "url";`);
@@ -136,7 +136,7 @@ export function generateClientFile(options: GenerateClientOptions): GeneratedCli
   // This ensures tinybird.json is found regardless of where the app runs from
   clientLines.push("const __configDir = dirname(fileURLToPath(import.meta.url));");
   clientLines.push("");
-  clientLines.push("export const tinybird = createTinybirdClient({");
+  clientLines.push("export const tinybird = new Tinybird({");
 
   if (datasourceNames.length > 0) {
     clientLines.push(`  datasources: { ${datasourceNames.join(", ")} },`);
