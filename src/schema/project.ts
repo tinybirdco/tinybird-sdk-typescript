@@ -217,7 +217,7 @@ export function defineProject<
   const connections = (config.connections ?? {}) as TConnections;
 
   // Create the typed Tinybird client
-  const tinybird = new Tinybird({ datasources, pipes }) as ProjectClient<TDatasources, TPipes>;
+  const tinybird = new Tinybird({ datasources, pipes });
 
   return {
     [PROJECT_BRAND]: true,
@@ -242,6 +242,16 @@ export function isProjectDefinition(value: unknown): value is ProjectDefinition 
 }
 
 const RESERVED_CLIENT_NAMES = new Set(["tokens", "datasources", "sql", "client"]);
+
+/**
+ * Constructor interface for Tinybird class
+ * This allows TypeScript to infer the correct return type with typed accessors
+ */
+interface TinybirdConstructor {
+  new <TDatasources extends DatasourcesDefinition, TPipes extends PipesDefinition>(
+    config: TinybirdClientConfig<TDatasources, TPipes>
+  ): ProjectClient<TDatasources, TPipes>;
+}
 
 /**
  * Typed Tinybird client
@@ -274,7 +284,7 @@ const RESERVED_CLIENT_NAMES = new Set(["tokens", "datasources", "sql", "client"]
  * });
  * ```
  */
-export class Tinybird<
+export const Tinybird: TinybirdConstructor = class Tinybird<
   TDatasources extends DatasourcesDefinition = DatasourcesDefinition,
   TPipes extends PipesDefinition = PipesDefinition
 > {
@@ -422,7 +432,7 @@ export class Tinybird<
     }
     return this._client;
   }
-}
+} as unknown as TinybirdConstructor;
 
 /**
  * Create a typed Tinybird client
@@ -436,7 +446,7 @@ export function createTinybirdClient<
   TDatasources extends DatasourcesDefinition,
   TPipes extends PipesDefinition
 >(config: TinybirdClientConfig<TDatasources, TPipes>): ProjectClient<TDatasources, TPipes> {
-  return new Tinybird(config) as ProjectClient<TDatasources, TPipes>;
+  return new Tinybird(config);
 }
 
 /**
