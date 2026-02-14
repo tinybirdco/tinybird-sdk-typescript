@@ -116,11 +116,11 @@ export type TopPagesOutput = InferOutputRow<typeof topPages>;
 
 ```typescript
 // src/tinybird/client.ts
-import { createTinybirdClient } from "@tinybirdco/sdk";
+import { Tinybird } from "@tinybirdco/sdk";
 import { pageViews, type PageViewsRow } from "./datasources";
 import { topPages, type TopPagesParams, type TopPagesOutput } from "./pipes";
 
-export const tinybird = createTinybirdClient({
+export const tinybird = new Tinybird({
   datasources: { pageViews },
   pipes: { topPages },
 });
@@ -277,7 +277,7 @@ await api.request("/v1/workspace", {
 });
 ```
 
-This Tinybird API is standalone and can be used without `createClient()` or `createTinybirdClient()`.
+This Tinybird API is standalone and can be used without `createClient()` or `new Tinybird()`.
 It is intended for cases where you want a simple public API that remains
 decoupled from the higher-level typed client APIs.
 
