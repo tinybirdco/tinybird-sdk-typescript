@@ -36,7 +36,6 @@ jobs:
     name: E2E (Live API)
     runs-on: ubuntu-latest
     needs: test
-    if: ${{ secrets.TINYBIRD_E2E_USER_TOKEN != '' && secrets.TINYBIRD_E2E_WORKSPACE_ADMIN_TOKEN != '' }}
     timeout-minutes: 30
     env:
       TINYBIRD_E2E_BASE_URL: ${{ vars.TINYBIRD_E2E_BASE_URL || 'https://api.tinybird.co' }}
@@ -44,22 +43,38 @@ jobs:
       TINYBIRD_E2E_WORKSPACE_ADMIN_TOKEN: ${{ secrets.TINYBIRD_E2E_WORKSPACE_ADMIN_TOKEN }}
 
     steps:
+      - name: Check required live E2E secrets
+        id: check-secrets
+        run: |
+          if [ -z "${TINYBIRD_E2E_USER_TOKEN}" ] || [ -z "${TINYBIRD_E2E_WORKSPACE_ADMIN_TOKEN}" ]; then
+            echo "run_live_e2e=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping live E2E: required secrets are not configured."
+          else
+            echo "run_live_e2e=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: ${{ steps.check-secrets.outputs.run_live_e2e == 'true' }}
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
+        if: ${{ steps.check-secrets.outputs.run_live_e2e == 'true' }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
+        if: ${{ steps.check-secrets.outputs.run_live_e2e == 'true' }}
         with:
           node-version: '20'
           cache: 'pnpm'
 
       - name: Install dependencies
+        if: ${{ steps.check-secrets.outputs.run_live_e2e == 'true' }}
         run: pnpm install --frozen-lockfile
 
       - name: Build
+        if: ${{ steps.check-secrets.outputs.run_live_e2e == 'true' }}
         run: pnpm run build
 
       - name: Run live end-to-end tests
+        if: ${{ steps.check-secrets.outputs.run_live_e2e == 'true' }}
         run: pnpm run test:e2e:live
