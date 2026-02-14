@@ -410,5 +410,33 @@ describe("Project Schema", () => {
 
       expect(() => client.client).toThrow("Client not initialized");
     });
+
+    it("does not allow datasource names to overwrite internal client state", () => {
+      const events = defineDatasource("events", {
+        schema: { id: t.string() },
+      });
+
+      const client = createTinybirdClient({
+        datasources: { _client: events },
+        pipes: {},
+      });
+
+      expect(client._client).toBeDefined();
+      expect(() => client.client).toThrow("Client not initialized");
+    });
+
+    it("does not allow datasource names to overwrite internal options state", () => {
+      const events = defineDatasource("events", {
+        schema: { id: t.string() },
+      });
+
+      const client = createTinybirdClient({
+        datasources: { _options: events },
+        pipes: {},
+      });
+
+      expect(client._options).toBeDefined();
+      expect(() => client.client).toThrow("Client not initialized");
+    });
   });
 });

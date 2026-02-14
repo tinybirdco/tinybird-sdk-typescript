@@ -288,8 +288,8 @@ export const Tinybird: TinybirdConstructor = class Tinybird<
   TDatasources extends DatasourcesDefinition = DatasourcesDefinition,
   TPipes extends PipesDefinition = PipesDefinition
 > {
-  private _client: TinybirdClient | null = null;
-  private readonly _options: {
+  #client: TinybirdClient | null = null;
+  readonly #options: {
     baseUrl?: string;
     token?: string;
     configDir?: string;
@@ -297,7 +297,7 @@ export const Tinybird: TinybirdConstructor = class Tinybird<
   };
 
   constructor(config: TinybirdClientConfig<TDatasources, TPipes>) {
-    this._options = {
+    this.#options = {
       baseUrl: config.baseUrl,
       token: config.token,
       configDir: config.configDir,
@@ -336,7 +336,7 @@ export const Tinybird: TinybirdConstructor = class Tinybird<
       const tinybirdName = pipe._name;
       (this as Record<string, unknown>)[name] = {
         query: async (params?: unknown) => {
-          const client = await this.getClient();
+          const client = await this.#getClient();
           return client.query(tinybirdName, (params ?? {}) as Record<string, unknown>);
         },
       };
@@ -355,82 +355,82 @@ export const Tinybird: TinybirdConstructor = class Tinybird<
 
       (this as Record<string, unknown>)[name] = {
         ingest: async (event: unknown) => {
-          const client = await this.getClient();
+          const client = await this.#getClient();
           return client.datasources.ingest(tinybirdName, event as Record<string, unknown>);
         },
         append: async (options: AppendOptions) => {
-          const client = await this.getClient();
+          const client = await this.#getClient();
           return client.datasources.append(tinybirdName, options);
         },
         replace: async (options: AppendOptions) => {
-          const client = await this.getClient();
+          const client = await this.#getClient();
           return client.datasources.replace(tinybirdName, options);
         },
         delete: async (options: DeleteOptions) => {
-          const client = await this.getClient();
+          const client = await this.#getClient();
           return client.datasources.delete(tinybirdName, options);
         },
         truncate: async (options: TruncateOptions = {}) => {
-          const client = await this.getClient();
+          const client = await this.#getClient();
           return client.datasources.truncate(tinybirdName, options);
         },
       };
     }
   }
 
-  private async getClient(): Promise<TinybirdClient> {
-    if (!this._client) {
+  async #getClient(): Promise<TinybirdClient> {
+    if (!this.#client) {
       const { createClient } = await import("../client/base.js");
       const { resolveToken } = await import("../client/preview.js");
 
       const baseUrl =
-        this._options.baseUrl ?? process.env.TINYBIRD_URL ?? "https://api.tinybird.co";
-      const token = await resolveToken({ baseUrl, token: this._options.token });
+        this.#options.baseUrl ?? process.env.TINYBIRD_URL ?? "https://api.tinybird.co";
+      const token = await resolveToken({ baseUrl, token: this.#options.token });
 
-      this._client = createClient({
+      this.#client = createClient({
         baseUrl,
         token,
-        devMode: this._options.devMode ?? process.env.NODE_ENV === "development",
-        configDir: this._options.configDir,
+        devMode: this.#options.devMode ?? process.env.NODE_ENV === "development",
+        configDir: this.#options.configDir,
       });
     }
-    return this._client;
+    return this.#client;
   }
 
   /** Execute raw SQL queries */
   async sql<T = unknown>(sqlQuery: string, options: QueryOptions = {}): Promise<QueryResult<T>> {
-    const client = await this.getClient();
+    const client = await this.#getClient();
     return client.sql<T>(sqlQuery, options);
   }
 
   /** Token operations (JWT creation, etc.) */
   get tokens(): TokensNamespace {
-    if (!this._client) {
+    if (!this.#client) {
       throw new Error(
         "Client not initialized. Call a query or ingest method first, or access client asynchronously."
       );
     }
-    return this._client.tokens;
+    return this.#client.tokens;
   }
 
   /** Datasource operations (ingest/append/replace/delete/truncate) */
   get datasources(): DatasourcesNamespace {
-    if (!this._client) {
+    if (!this.#client) {
       throw new Error(
         "Client not initialized. Call a query or ingest method first, or access client asynchronously."
       );
     }
-    return this._client.datasources;
+    return this.#client.datasources;
   }
 
   /** Raw client for advanced usage */
   get client(): TinybirdClient {
-    if (!this._client) {
+    if (!this.#client) {
       throw new Error(
         "Client not initialized. Call a query or ingest method first, or access client asynchronously."
       );
     }
-    return this._client;
+    return this.#client;
   }
 } as unknown as TinybirdConstructor;
 
