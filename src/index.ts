@@ -168,7 +168,7 @@ export type {
 } from "./schema/pipe.js";
 
 // ============ Project ============
-export { defineProject, isProjectDefinition, getDatasourceNames, getPipeNames, getDatasource, getPipe, createTinybirdClient } from "./schema/project.js";
+export { defineProject, isProjectDefinition, getDatasourceNames, getPipeNames, getDatasource, getPipe, Tinybird, createTinybirdClient } from "./schema/project.js";
 export type {
   ProjectDefinition,
   ProjectConfig,

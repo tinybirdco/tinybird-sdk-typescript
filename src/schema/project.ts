@@ -216,8 +216,8 @@ export function defineProject<
   const pipes = (config.pipes ?? {}) as TPipes;
   const connections = (config.connections ?? {}) as TConnections;
 
-  // Use the shared client builder
-  const tinybird = buildProjectClient(datasources, pipes);
+  // Create the typed Tinybird client
+  const tinybird = new Tinybird({ datasources, pipes });
 
   return {
     [PROJECT_BRAND]: true,
@@ -241,191 +241,31 @@ export function isProjectDefinition(value: unknown): value is ProjectDefinition 
   );
 }
 
+const RESERVED_CLIENT_NAMES = new Set(["tokens", "datasources", "sql", "client"]);
+
 /**
- * Build a typed Tinybird client from datasources and pipes
- *
- * This is an internal helper that builds pipe query and datasource methods.
+ * Constructor interface for Tinybird class
+ * This allows TypeScript to infer the correct return type with typed accessors
  */
-function buildProjectClient<
-  TDatasources extends DatasourcesDefinition,
-  TPipes extends PipesDefinition
->(
-  datasources: TDatasources,
-  pipes: TPipes,
-  options?: { baseUrl?: string; token?: string; configDir?: string; devMode?: boolean }
-): ProjectClient<TDatasources, TPipes> {
-  const RESERVED_CLIENT_NAMES = new Set([
-    "tokens",
-    "datasources",
-    "sql",
-    "client",
-  ]);
-
-  // Lazy client initialization
-  let _client: TinybirdClient | null = null;
-
-  const getClient = async (): Promise<TinybirdClient> => {
-    if (!_client) {
-      // Dynamic imports to avoid circular dependencies
-      const { createClient } = await import("../client/base.js");
-      const { resolveToken } = await import("../client/preview.js");
-
-      // Resolve the token (handles preview environment detection)
-      const baseUrl = options?.baseUrl ?? process.env.TINYBIRD_URL ?? "https://api.tinybird.co";
-      const token = await resolveToken({ baseUrl, token: options?.token });
-
-      _client = createClient({
-        baseUrl,
-        token,
-        devMode: options?.devMode ?? process.env.NODE_ENV === "development",
-        configDir: options?.configDir,
-      });
-    }
-    return _client;
-  };
-
-  // Build pipe accessors with query methods
-  const pipeAccessors: Record<string, { query: (params?: unknown) => Promise<unknown> }> = {};
-  for (const [name, pipe] of Object.entries(pipes)) {
-    if (name in datasources) {
-      throw new Error(
-        `Name conflict in createTinybirdClient(): "${name}" is defined as both datasource and pipe. ` +
-          `Rename one of them to expose both as top-level client properties.`
-      );
-    }
-    if (RESERVED_CLIENT_NAMES.has(name)) {
-      throw new Error(
-        `Name conflict in createTinybirdClient(): "${name}" is reserved by the client API. ` +
-          `Rename this pipe to expose it as a top-level client property.`
-      );
-    }
-
-    const endpointConfig = getEndpointConfig(pipe);
-
-    if (!endpointConfig) {
-      // Non-endpoint pipes get a stub that throws a clear error
-      pipeAccessors[name] = {
-        query: async () => {
-          throw new Error(
-            `Pipe "${name}" is not exposed as an endpoint. ` +
-              `Set "endpoint: true" in the pipe definition to enable querying.`
-          );
-        },
-      };
-      continue;
-    }
-
-    // Use the Tinybird pipe name (snake_case)
-    const tinybirdName = pipe._name;
-    pipeAccessors[name] = {
-      query: async (params?: unknown) => {
-        const client = await getClient();
-        return client.query(tinybirdName, (params ?? {}) as Record<string, unknown>);
-      },
-    };
-  }
-
-  // Build datasource accessors for top-level access
-  const datasourceAccessors: Record<
-    string,
-    {
-      ingest: (event: unknown) => Promise<IngestResult>;
-      append: (options: AppendOptions) => Promise<AppendResult>;
-      replace: (options: AppendOptions) => Promise<AppendResult>;
-      delete: (options: DeleteOptions) => Promise<DeleteResult>;
-      truncate: (options?: TruncateOptions) => Promise<TruncateResult>;
-    }
-  > = {};
-  for (const [name, datasource] of Object.entries(datasources)) {
-    if (RESERVED_CLIENT_NAMES.has(name)) {
-      throw new Error(
-        `Name conflict in createTinybirdClient(): "${name}" is reserved by the client API. ` +
-          `Rename this datasource to expose it as a top-level client property.`
-      );
-    }
-
-    const tinybirdName = datasource._name;
-
-    datasourceAccessors[name] = {
-      ingest: async (event: unknown) => {
-        const client = await getClient();
-        return client.datasources.ingest(tinybirdName, event as Record<string, unknown>);
-      },
-      append: async (options: AppendOptions) => {
-        const client = await getClient();
-        return client.datasources.append(tinybirdName, options);
-      },
-      replace: async (options: AppendOptions) => {
-        const client = await getClient();
-        return client.datasources.replace(tinybirdName, options);
-      },
-      delete: async (options: DeleteOptions) => {
-        const client = await getClient();
-        return client.datasources.delete(tinybirdName, options);
-      },
-      truncate: async (options: TruncateOptions = {}) => {
-        const client = await getClient();
-        return client.datasources.truncate(tinybirdName, options);
-      },
-    };
-  }
-
-  // Create the typed client object
-  return {
-    ...datasourceAccessors,
-    ...pipeAccessors,
-    sql: async <T = unknown>(sql: string, options: QueryOptions = {}) => {
-      const client = await getClient();
-      return client.sql<T>(sql, options);
-    },
-    get tokens(): TokensNamespace {
-      // Synchronous access - will throw if not initialized
-      if (!_client) {
-        throw new Error(
-          "Client not initialized. Call a query or ingest method first, or access client asynchronously."
-        );
-      }
-      return _client.tokens;
-    },
-    get datasources(): DatasourcesNamespace {
-      // Synchronous access - will throw if not initialized
-      if (!_client) {
-        throw new Error(
-          "Client not initialized. Call a query or ingest method first, or access client asynchronously."
-        );
-      }
-      return _client.datasources;
-    },
-    get client(): TinybirdClient {
-      // Synchronous client access - will throw if not initialized
-      if (!_client) {
-        throw new Error(
-          "Client not initialized. Call a query or ingest method first, or access client asynchronously."
-        );
-      }
-      return _client;
-    },
-  } as ProjectClient<TDatasources, TPipes>;
+interface TinybirdConstructor {
+  new <TDatasources extends DatasourcesDefinition, TPipes extends PipesDefinition>(
+    config: TinybirdClientConfig<TDatasources, TPipes>
+  ): ProjectClient<TDatasources, TPipes>;
 }
 
 /**
- * Create a typed Tinybird client
+ * Typed Tinybird client
  *
  * Creates a client with typed pipe query and datasource methods based on
- * the provided
- * datasources and pipes. This is the recommended way to create a Tinybird client
- * when using the SDK's auto-generated client file.
- *
- * @param config - Client configuration with datasources and pipes
- * @returns A typed client with pipe query and datasource methods
+ * the provided datasources and pipes.
  *
  * @example
  * ```ts
- * import { createTinybirdClient } from '@tinybirdco/sdk';
+ * import { Tinybird } from '@tinybirdco/sdk';
  * import { pageViews, events } from './datasources';
  * import { topPages } from './pipes';
  *
- * export const tinybird = createTinybirdClient({
+ * export const tinybird = new Tinybird({
  *   datasources: { pageViews, events },
  *   pipes: { topPages },
  * });
@@ -444,17 +284,169 @@ function buildProjectClient<
  * });
  * ```
  */
+export const Tinybird: TinybirdConstructor = class Tinybird<
+  TDatasources extends DatasourcesDefinition = DatasourcesDefinition,
+  TPipes extends PipesDefinition = PipesDefinition
+> {
+  #client: TinybirdClient | null = null;
+  readonly #options: {
+    baseUrl?: string;
+    token?: string;
+    configDir?: string;
+    devMode?: boolean;
+  };
+
+  constructor(config: TinybirdClientConfig<TDatasources, TPipes>) {
+    this.#options = {
+      baseUrl: config.baseUrl,
+      token: config.token,
+      configDir: config.configDir,
+      devMode: config.devMode,
+    };
+
+    // Build pipe accessors with query methods
+    for (const [name, pipe] of Object.entries(config.pipes)) {
+      if (name in config.datasources) {
+        throw new Error(
+          `Name conflict: "${name}" is defined as both datasource and pipe. ` +
+            `Rename one of them to expose both as top-level client properties.`
+        );
+      }
+      if (RESERVED_CLIENT_NAMES.has(name)) {
+        throw new Error(
+          `Name conflict: "${name}" is reserved by the client API. ` +
+            `Rename this pipe to expose it as a top-level client property.`
+        );
+      }
+
+      const endpointConfig = getEndpointConfig(pipe);
+
+      if (!endpointConfig) {
+        (this as Record<string, unknown>)[name] = {
+          query: async () => {
+            throw new Error(
+              `Pipe "${name}" is not exposed as an endpoint. ` +
+                `Set "endpoint: true" in the pipe definition to enable querying.`
+            );
+          },
+        };
+        continue;
+      }
+
+      const tinybirdName = pipe._name;
+      (this as Record<string, unknown>)[name] = {
+        query: async (params?: unknown) => {
+          const client = await this.#getClient();
+          return client.query(tinybirdName, (params ?? {}) as Record<string, unknown>);
+        },
+      };
+    }
+
+    // Build datasource accessors for top-level access
+    for (const [name, datasource] of Object.entries(config.datasources)) {
+      if (RESERVED_CLIENT_NAMES.has(name)) {
+        throw new Error(
+          `Name conflict: "${name}" is reserved by the client API. ` +
+            `Rename this datasource to expose it as a top-level client property.`
+        );
+      }
+
+      const tinybirdName = datasource._name;
+
+      (this as Record<string, unknown>)[name] = {
+        ingest: async (event: unknown) => {
+          const client = await this.#getClient();
+          return client.datasources.ingest(tinybirdName, event as Record<string, unknown>);
+        },
+        append: async (options: AppendOptions) => {
+          const client = await this.#getClient();
+          return client.datasources.append(tinybirdName, options);
+        },
+        replace: async (options: AppendOptions) => {
+          const client = await this.#getClient();
+          return client.datasources.replace(tinybirdName, options);
+        },
+        delete: async (options: DeleteOptions) => {
+          const client = await this.#getClient();
+          return client.datasources.delete(tinybirdName, options);
+        },
+        truncate: async (options: TruncateOptions = {}) => {
+          const client = await this.#getClient();
+          return client.datasources.truncate(tinybirdName, options);
+        },
+      };
+    }
+  }
+
+  async #getClient(): Promise<TinybirdClient> {
+    if (!this.#client) {
+      const { createClient } = await import("../client/base.js");
+      const { resolveToken } = await import("../client/preview.js");
+
+      const baseUrl =
+        this.#options.baseUrl ?? process.env.TINYBIRD_URL ?? "https://api.tinybird.co";
+      const token = await resolveToken({ baseUrl, token: this.#options.token });
+
+      this.#client = createClient({
+        baseUrl,
+        token,
+        devMode: this.#options.devMode ?? process.env.NODE_ENV === "development",
+        configDir: this.#options.configDir,
+      });
+    }
+    return this.#client;
+  }
+
+  /** Execute raw SQL queries */
+  async sql<T = unknown>(sqlQuery: string, options: QueryOptions = {}): Promise<QueryResult<T>> {
+    const client = await this.#getClient();
+    return client.sql<T>(sqlQuery, options);
+  }
+
+  /** Token operations (JWT creation, etc.) */
+  get tokens(): TokensNamespace {
+    if (!this.#client) {
+      throw new Error(
+        "Client not initialized. Call a query or ingest method first, or access client asynchronously."
+      );
+    }
+    return this.#client.tokens;
+  }
+
+  /** Datasource operations (ingest/append/replace/delete/truncate) */
+  get datasources(): DatasourcesNamespace {
+    if (!this.#client) {
+      throw new Error(
+        "Client not initialized. Call a query or ingest method first, or access client asynchronously."
+      );
+    }
+    return this.#client.datasources;
+  }
+
+  /** Raw client for advanced usage */
+  get client(): TinybirdClient {
+    if (!this.#client) {
+      throw new Error(
+        "Client not initialized. Call a query or ingest method first, or access client asynchronously."
+      );
+    }
+    return this.#client;
+  }
+} as unknown as TinybirdConstructor;
+
+/**
+ * Create a typed Tinybird client
+ *
+ * @deprecated Use `new Tinybird(...)` instead. This function is kept for backward compatibility.
+ *
+ * @param config - Client configuration with datasources and pipes
+ * @returns A typed client with pipe query and datasource methods
+ */
 export function createTinybirdClient<
   TDatasources extends DatasourcesDefinition,
   TPipes extends PipesDefinition
->(
-  config: TinybirdClientConfig<TDatasources, TPipes>
-): ProjectClient<TDatasources, TPipes> {
-  return buildProjectClient(
-    config.datasources,
-    config.pipes,
-    { baseUrl: config.baseUrl, token: config.token, configDir: config.configDir, devMode: config.devMode }
-  );
+>(config: TinybirdClientConfig<TDatasources, TPipes>): ProjectClient<TDatasources, TPipes> {
+  return new Tinybird(config);
 }
 
 /**
