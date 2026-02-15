@@ -184,7 +184,7 @@ describe("Init Command", () => {
       expect(content).toContain("TopPagesOutput");
 
       // Check client content
-      expect(content).toContain("createTinybirdClient");
+      expect(content).toContain("new Tinybird");
     });
 
     it("skips tinybird.ts if it already exists", async () => {

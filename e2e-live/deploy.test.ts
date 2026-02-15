@@ -57,7 +57,7 @@ function writeProductionTestEntities(projectDir: string): void {
   const content = `import {
   defineDatasource,
   defineEndpoint,
-  createTinybirdClient,
+  Tinybird,
   node,
   t,
   engine,
@@ -96,7 +96,7 @@ export const prodDeployRows = defineEndpoint("${ENDPOINT_NAME}", {
   },
 });
 
-export const tinybird = createTinybirdClient({
+export const tinybird = new Tinybird({
   datasources: { prodDeployEvents },
   pipes: { prodDeployRows },
 });

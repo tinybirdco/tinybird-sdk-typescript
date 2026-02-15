@@ -198,7 +198,7 @@ describe("E2E: Init + Build Happy Path", () => {
       expect(content).toContain("defineDatasource");
       expect(content).toContain("export const topPages");
       expect(content).toContain("defineEndpoint");
-      expect(content).toContain("createTinybirdClient");
+      expect(content).toContain("new Tinybird");
       expect(content).toContain("export const tinybird");
     });
 

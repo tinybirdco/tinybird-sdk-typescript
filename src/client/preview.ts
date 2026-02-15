@@ -164,7 +164,7 @@ export async function resolveToken(options?: {
 
   if (!configuredToken) {
     throw new Error(
-      "TINYBIRD_TOKEN is not configured. Set it in your environment or pass it to createTinybirdClient()."
+      "TINYBIRD_TOKEN is not configured. Set it in your environment or pass it to new Tinybird({...})."
     );
   }
 

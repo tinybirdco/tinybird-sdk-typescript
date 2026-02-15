@@ -267,7 +267,7 @@ export function generateClientFile(
     " * Generated from existing workspace resources.",
     " */",
     "",
-    'import { createTinybirdClient } from "@tinybirdco/sdk";',
+    'import { Tinybird } from "@tinybirdco/sdk";',
     // Node imports for deriving configDir from import.meta.url (monorepo support)
     'import { fileURLToPath } from "url";',
     'import { dirname } from "path";',
@@ -313,7 +313,7 @@ export function generateClientFile(
   lines.push("const __configDir = dirname(fileURLToPath(import.meta.url));");
   lines.push("");
   lines.push("// Create the typed Tinybird client");
-  lines.push("export const tinybird = createTinybirdClient({");
+  lines.push("export const tinybird = new Tinybird({");
 
   if (datasources.length > 0) {
     const dsNames = datasources.map((ds) => toCamelCase(ds.name)).join(", ");
@@ -417,7 +417,7 @@ export function generateCombinedFile(
   ];
 
   // Build imports
-  const sdkImports: string[] = ["createTinybirdClient", "t"];
+  const sdkImports: string[] = ["Tinybird", "t"];
 
   if (datasources.length > 0) {
     sdkImports.push("defineDatasource", "engine", "type InferRow");
@@ -505,7 +505,7 @@ export function generateCombinedFile(
   lines.push("// This ensures tinybird.json is found regardless of where the app runs from");
   lines.push("const __configDir = dirname(fileURLToPath(import.meta.url));");
   lines.push("");
-  lines.push("export const tinybird = createTinybirdClient({");
+  lines.push("export const tinybird = new Tinybird({");
   lines.push(`  datasources: { ${dsNames} },`);
   lines.push(`  pipes: { ${pipeNames} },`);
   lines.push("  configDir: __configDir,");
