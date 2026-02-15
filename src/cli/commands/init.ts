@@ -40,7 +40,7 @@ const TINYBIRD_CONTENT = `/**
 import {
   defineDatasource,
   defineEndpoint,
-  createTinybirdClient,
+  Tinybird,
   node,
   t,
   p,
@@ -115,7 +115,7 @@ export type TopPagesOutput = InferOutputRow<typeof topPages>;
 // Client
 // ============================================================================
 
-export const tinybird = createTinybirdClient({
+export const tinybird = new Tinybird({
   datasources: { pageViews },
   pipes: { topPages },
 });

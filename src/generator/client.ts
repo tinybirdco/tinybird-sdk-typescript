@@ -127,7 +127,7 @@ export function generateClientFile(options: GenerateClientOptions): GeneratedCli
     reexportLines.push(`export { ${allExports.join(", ")} } from "${relativePath}";`);
   }
 
-  // Build createTinybirdClient call
+  // Build Tinybird constructor call
   const datasourceNames = Object.keys(entities.datasources);
   const pipeNames = Object.keys(entities.pipes);
 

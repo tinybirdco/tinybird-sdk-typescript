@@ -99,6 +99,6 @@ describeLive("E2E Live: init", () => {
     );
     expect(generatedClient).toContain("defineDatasource");
     expect(generatedClient).toContain("defineEndpoint");
-    expect(generatedClient).toContain("createTinybirdClient");
+    expect(generatedClient).toContain("new Tinybird");
   });
 });

@@ -304,7 +304,7 @@ describe("generateClientFile", () => {
 
     const file = generateClientFile(datasources, pipes);
 
-    expect(file).toContain('import { createTinybirdClient } from "@tinybirdco/sdk"');
+    expect(file).toContain('import { Tinybird } from "@tinybirdco/sdk"');
     expect(file).toContain('import { events, type EventsRow } from "./datasources.js"');
     expect(file).toContain('import { topEvents, type TopEventsParams, type TopEventsOutput } from "./pipes.js"');
     expect(file).toContain("datasources: { events }");
@@ -321,7 +321,7 @@ describe("generateClientFile", () => {
     expect(file).toContain('import { dirname } from "path"');
     // Should derive __configDir from import.meta.url
     expect(file).toContain("const __configDir = dirname(fileURLToPath(import.meta.url))");
-    // Should pass configDir to createTinybirdClient
+    // Should pass configDir to Tinybird constructor
     expect(file).toContain("configDir: __configDir");
   });
 
@@ -386,6 +386,6 @@ describe("generateAllFiles", () => {
     expect(result.pipeCount).toBe(1);
     expect(result.datasourcesContent).toContain("defineDatasource");
     expect(result.pipesContent).toContain("defineEndpoint");
-    expect(result.clientContent).toContain("createTinybirdClient");
+    expect(result.clientContent).toContain("new Tinybird");
   });
 });
