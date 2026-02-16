@@ -45,7 +45,7 @@ export default function Home() {
 
   const trackEvent = async (eventName: string) => {
     const event: EventsRow = {
-      timestamp: new Date(),
+      timestamp: new Date().toISOString().replace("T", " ").slice(0, 19),
       session_id: crypto.randomUUID(),
       user_id: null,
       event_name: eventName,

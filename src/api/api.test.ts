@@ -116,7 +116,7 @@ describe("TinybirdApi", () => {
     });
 
     const result = await api.query<{ pathname: string; views: number }>("top_pages", {
-      start_date: new Date("2024-01-01T00:00:00.000Z"),
+      start_date: "2024-01-01 00:00:00",
       limit: 5,
       tags: ["a", "b"],
     });
@@ -124,9 +124,22 @@ describe("TinybirdApi", () => {
     expect(result.rows).toBe(1);
     expect(result.data[0]).toEqual({ pathname: "/", views: 1 });
     expect(fromParam).toBe(TINYBIRD_FROM_PARAM);
-    expect(startDateParam).toBe("2024-01-01T00:00:00.000Z");
+    expect(startDateParam).toBe("2024-01-01 00:00:00");
     expect(limitParam).toBe("5");
     expect(tagsParams).toEqual(["a", "b"]);
+  });
+
+  it("throws when query params include Date values", async () => {
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+    });
+
+    await expect(
+      api.query("top_pages", {
+        start_date: new Date("2024-01-01T00:00:00.000Z"),
+      })
+    ).rejects.toThrow("Date values are not supported for query parameter");
   });
 
   it("ingests rows via tinybirdApi.ingest", async () => {
@@ -160,11 +173,11 @@ describe("TinybirdApi", () => {
     });
 
     const result = await api.ingest("events", {
-      timestamp: new Date("2024-01-01T00:00:00.000Z"),
+      timestamp: "2024-01-01 00:00:00",
       count: 10n,
       payload: new Map([["k", "v"]]),
       nested: {
-        when: new Date("2024-01-02T00:00:00.000Z"),
+        when: "2024-01-02 00:00:00",
       },
     });
 
@@ -174,11 +187,24 @@ describe("TinybirdApi", () => {
     expect(fromParam).toBe(TINYBIRD_FROM_PARAM);
     expect(contentType).toBe("application/x-ndjson");
     expect(parsedBody).toEqual({
-      timestamp: "2024-01-01T00:00:00.000Z",
+      timestamp: "2024-01-01 00:00:00",
       count: "10",
       payload: { k: "v" },
-      nested: { when: "2024-01-02T00:00:00.000Z" },
+      nested: { when: "2024-01-02 00:00:00" },
     });
+  });
+
+  it("throws when ingest payload includes Date values", async () => {
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+    });
+
+    await expect(
+      api.ingest("events", {
+        timestamp: new Date("2024-01-01T00:00:00.000Z"),
+      })
+    ).rejects.toThrow("Date values are not supported in ingest payloads");
   });
 
   it("executes raw SQL via tinybirdApi.sql", async () => {

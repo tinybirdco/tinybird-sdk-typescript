@@ -180,10 +180,10 @@ describe('Datasource Generator', () => {
       expect(result.content).toContain('is_deleted Bool `json:$.is_deleted` DEFAULT 0');
     });
 
-    it('formats Date default values for DateTime type', () => {
+    it('formats string default values for DateTime type', () => {
       const ds = defineDatasource('test_ds', {
         schema: {
-          created_at: t.dateTime().default(new Date('2024-01-15T10:30:00Z')),
+          created_at: t.dateTime().default('2024-01-15 10:30:00'),
         },
       });
 
@@ -191,10 +191,10 @@ describe('Datasource Generator', () => {
       expect(result.content).toContain("created_at DateTime `json:$.created_at` DEFAULT '2024-01-15 10:30:00'");
     });
 
-    it('formats Date default values for Date type', () => {
+    it('formats string default values for Date type', () => {
       const ds = defineDatasource('test_ds', {
         schema: {
-          birth_date: t.date().default(new Date('2024-01-15T10:30:00Z')),
+          birth_date: t.date().default('2024-01-15'),
         },
       });
 

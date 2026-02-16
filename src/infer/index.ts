@@ -52,7 +52,7 @@ type InferColumn<T> = T extends TypeValidator<infer U, string, TypeModifiers>
  * });
  *
  * type EventRow = InferRow<typeof events>;
- * // { id: string; count: number; timestamp: Date }
+ * // { id: string; count: number; timestamp: string }
  * ```
  */
 export type InferRow<T> = T extends DatasourceDefinition<infer S>
@@ -156,10 +156,10 @@ export type InferOutputRow<T> = T extends PipeDefinition<ParamsDefinition, infer
  * });
  *
  * type Event = InferEvent<typeof events>;
- * // { id: string; timestamp: Date }
+ * // { id: string; timestamp: string }
  *
  * // Use for type-safe event ingestion
- * const event: Event = { id: '123', timestamp: new Date() };
+ * const event: Event = { id: '123', timestamp: '2024-01-01 00:00:00' };
  * ```
  */
 export type InferEvent<T> = InferRow<T>;

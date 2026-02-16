@@ -173,13 +173,13 @@ export const p = {
 
   // ============ Date/Time Types ============
 
-  /** Date parameter (YYYY-MM-DD format) */
+  /** Date parameter (YYYY-MM-DD format, e.g. 2024-01-15) */
   date: () => createParamValidator<string, "Date">("Date"),
 
-  /** DateTime parameter (YYYY-MM-DD HH:MM:SS format) */
+  /** DateTime parameter (YYYY-MM-DD HH:MM:SS format, e.g. 2024-01-15 10:30:00) */
   dateTime: () => createParamValidator<string, "DateTime">("DateTime"),
 
-  /** DateTime64 parameter with sub-second precision */
+  /** DateTime64 parameter (YYYY-MM-DD HH:MM:SS[.fraction] format, e.g. 2024-01-15 10:30:00.123) */
   dateTime64: () => createParamValidator<string, "DateTime64">("DateTime64"),
 
   // ============ Array Types ============

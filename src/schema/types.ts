@@ -203,25 +203,25 @@ export const t = {
 
   // ============ Date/Time Types ============
 
-  /** Date - date without time (YYYY-MM-DD) */
-  date: () => createValidator<Date, "Date">("Date"),
+  /** Date - string in YYYY-MM-DD format (e.g. 2024-01-15) */
+  date: () => createValidator<string, "Date">("Date"),
 
-  /** Date32 - extended date range */
-  date32: () => createValidator<Date, "Date32">("Date32"),
+  /** Date32 - string in YYYY-MM-DD format (e.g. 2024-01-15, extended date range) */
+  date32: () => createValidator<string, "Date32">("Date32"),
 
-  /** DateTime - date and time with second precision */
+  /** DateTime - string in YYYY-MM-DD HH:MM:SS format (e.g. 2024-01-15 10:30:00) */
   dateTime: (timezone?: string) =>
     timezone
-      ? createValidator<Date, `DateTime('${string}')`>(`DateTime('${timezone}')`)
-      : createValidator<Date, "DateTime">("DateTime"),
+      ? createValidator<string, `DateTime('${string}')`>(`DateTime('${timezone}')`)
+      : createValidator<string, "DateTime">("DateTime"),
 
-  /** DateTime64 - date and time with sub-second precision */
+  /** DateTime64 - string in YYYY-MM-DD HH:MM:SS[.fraction] format (e.g. 2024-01-15 10:30:00.123) */
   dateTime64: (precision: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 = 3, timezone?: string) =>
     timezone
-      ? createValidator<Date, `DateTime64(${number}, '${string}')`>(
+      ? createValidator<string, `DateTime64(${number}, '${string}')`>(
           `DateTime64(${precision}, '${timezone}')`
         )
-      : createValidator<Date, `DateTime64(${number})`>(`DateTime64(${precision})`),
+      : createValidator<string, `DateTime64(${number})`>(`DateTime64(${precision})`),
 
   // ============ Complex Types ============
 
