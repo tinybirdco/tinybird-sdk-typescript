@@ -212,14 +212,22 @@ export class TinybirdApi {
 
       if (Array.isArray(value)) {
         for (const item of value) {
+          if (item instanceof Date) {
+            throw new Error(
+              `Date values are not supported for query parameter "${key}". ` +
+                "Pass a string in YYYY-MM-DD HH:MM:SS format (or YYYY-MM-DD HH:MM:SS.sss for DateTime64)."
+            );
+          }
           url.searchParams.append(key, String(item));
         }
         continue;
       }
 
       if (value instanceof Date) {
-        url.searchParams.set(key, value.toISOString());
-        continue;
+        throw new Error(
+          `Date values are not supported for query parameter "${key}". ` +
+            "Pass a string in YYYY-MM-DD HH:MM:SS format (or YYYY-MM-DD HH:MM:SS.sss for DateTime64)."
+        );
       }
 
       url.searchParams.set(key, String(value));
@@ -581,7 +589,10 @@ export class TinybirdApi {
 
   private serializeValue(value: unknown): unknown {
     if (value instanceof Date) {
-      return value.toISOString();
+      throw new Error(
+        "Date values are not supported in ingest payloads. " +
+          "Pass strings in YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, or YYYY-MM-DD HH:MM:SS.sss format."
+      );
     }
 
     if (value instanceof Map) {

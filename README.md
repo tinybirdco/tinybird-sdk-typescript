@@ -159,7 +159,7 @@ import { tinybird, type PageViewsRow } from "@tinybird/client";
 
 // Type-safe data ingestion
 await tinybird.pageViews.ingest({
-  timestamp: new Date(),
+  timestamp: "2024-01-15 10:30:00",
   pathname: "/home",
   session_id: "abc123",
   country: "US",
@@ -167,8 +167,8 @@ await tinybird.pageViews.ingest({
 
 // Type-safe queries with autocomplete
 const result = await tinybird.topPages.query({
-  start_date: new Date("2024-01-01"),
-  end_date: new Date(),
+  start_date: "2024-01-01 00:00:00",
+  end_date: "2024-01-31 23:59:59",
   limit: 5,
 });
 
@@ -184,7 +184,7 @@ import { tinybird } from "@tinybird/client";
 
 // Ingest one row as JSON
 await tinybird.pageViews.ingest({
-  timestamp: new Date(),
+  timestamp: "2024-01-15 10:30:00",
   pathname: "/pricing",
   session_id: "session_123",
   country: "US",
@@ -239,10 +239,10 @@ const topPages = await api.query<TopPagesRow, TopPagesParams>("top_pages", {
 });
 
 // Ingest one row into datasource (with optional type parameter)
-interface EventRow { timestamp: Date; event_name: string; pathname: string }
+interface EventRow { timestamp: string; event_name: string; pathname: string }
 
 await api.ingest<EventRow>("events", {
-  timestamp: new Date(),
+  timestamp: "2024-01-15 10:30:00",
   event_name: "page_view",
   pathname: "/home",
 });
@@ -912,11 +912,11 @@ import { pageViews, topPages } from "./tinybird/datasources";
 
 // Infer the row type for a datasource
 type PageViewRow = InferRow<typeof pageViews>;
-// { timestamp: Date, pathname: string, session_id: string, country: string | null }
+// { timestamp: string, pathname: string, session_id: string, country: string | null }
 
 // Infer the parameters for a pipe
 type TopPagesParams = InferParams<typeof topPages>;
-// { start_date: Date, end_date: Date, limit?: number }
+// { start_date: string, end_date: string, limit?: number }
 
 // Infer the output type for a pipe
 type TopPagesOutput = InferOutputRow<typeof topPages>;

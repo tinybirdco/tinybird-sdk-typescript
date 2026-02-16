@@ -272,13 +272,13 @@ interface TinybirdConstructor {
  *
  * // Query a pipe (fully typed)
  * const result = await tinybird.topPages.query({
- *   start_date: new Date('2024-01-01'),
- *   end_date: new Date('2024-01-31'),
+ *   start_date: '2024-01-01 00:00:00',
+ *   end_date: '2024-01-31 23:59:59',
  * });
  *
  * // Ingest an event (fully typed)
  * await tinybird.pageViews.ingest({
- *   timestamp: new Date(),
+ *   timestamp: '2024-01-15 10:30:00',
  *   pathname: '/home',
  *   session_id: 'abc123',
  * });

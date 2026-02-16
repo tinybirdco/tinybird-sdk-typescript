@@ -53,7 +53,7 @@ interface ResolvedTokenInfo {
  *
  * // Ingest an event
  * await client.ingest('events', {
- *   timestamp: new Date().toISOString(),
+ *   timestamp: '2024-01-15 10:30:00',
  *   event_type: 'page_view',
  *   user_id: 'user_123',
  * });
