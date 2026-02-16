@@ -1,6 +1,6 @@
 /**
  * Connection definition for Tinybird
- * Define external connections (Kafka, etc.) as TypeScript with full type safety
+ * Define external connections (Kafka, S3, etc.) as TypeScript with full type safety
  */
 
 // Symbol for brand typing - use Symbol.for() for global registry
@@ -51,12 +51,49 @@ export interface KafkaConnectionDefinition {
 }
 
 /**
- * A connection definition - union of all connection types
+ * Options for defining an S3 connection
  */
-export type ConnectionDefinition = KafkaConnectionDefinition;
+export interface S3ConnectionOptions {
+  /** S3 bucket region (for example: us-east-1) */
+  region: string;
+  /** IAM role ARN used by Tinybird to access the bucket */
+  arn?: string;
+  /** S3 access key for key/secret auth */
+  accessKey?: string;
+  /** S3 secret key for key/secret auth */
+  secret?: string;
+}
 
 /**
- * Create a Kafka connection
+ * S3-specific connection definition
+ */
+export interface S3ConnectionDefinition {
+  readonly [CONNECTION_BRAND]: true;
+  /** Connection name */
+  readonly _name: string;
+  /** Type marker for inference */
+  readonly _type: "connection";
+  /** Connection type */
+  readonly _connectionType: "s3";
+  /** S3 options */
+  readonly options: S3ConnectionOptions;
+}
+
+/**
+ * A connection definition - union of all connection types
+ */
+export type ConnectionDefinition = KafkaConnectionDefinition | S3ConnectionDefinition;
+
+function validateConnectionName(name: string): void {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+    throw new Error(
+      `Invalid connection name: "${name}". Must start with a letter or underscore and contain only alphanumeric characters and underscores.`
+    );
+  }
+}
+
+/**
+ * Define a Kafka connection
  *
  * @param name - The connection name (must be valid identifier)
  * @param options - Kafka connection configuration
@@ -64,9 +101,9 @@ export type ConnectionDefinition = KafkaConnectionDefinition;
  *
  * @example
  * ```ts
- * import { createKafkaConnection } from '@tinybirdco/sdk';
+ * import { defineKafkaConnection } from '@tinybirdco/sdk';
  *
- * export const myKafka = createKafkaConnection('my_kafka', {
+ * export const myKafka = defineKafkaConnection('my_kafka', {
  *   bootstrapServers: 'kafka.example.com:9092',
  *   securityProtocol: 'SASL_SSL',
  *   saslMechanism: 'PLAIN',
@@ -75,22 +112,54 @@ export type ConnectionDefinition = KafkaConnectionDefinition;
  * });
  * ```
  */
-export function createKafkaConnection(
+export function defineKafkaConnection(
   name: string,
   options: KafkaConnectionOptions
 ): KafkaConnectionDefinition {
-  // Validate name is a valid identifier
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
-    throw new Error(
-      `Invalid connection name: "${name}". Must start with a letter or underscore and contain only alphanumeric characters and underscores.`
-    );
-  }
+  validateConnectionName(name);
 
   return {
     [CONNECTION_BRAND]: true,
     _name: name,
     _type: "connection",
     _connectionType: "kafka",
+    options,
+  };
+}
+
+/**
+ * @deprecated Use defineKafkaConnection instead.
+ */
+export const createKafkaConnection = defineKafkaConnection;
+
+/**
+ * Define an S3 connection
+ *
+ * @param name - The connection name (must be valid identifier)
+ * @param options - S3 connection configuration
+ * @returns A connection definition that can be used in a project
+ */
+export function defineS3Connection(
+  name: string,
+  options: S3ConnectionOptions
+): S3ConnectionDefinition {
+  validateConnectionName(name);
+
+  if (!options.arn && !(options.accessKey && options.secret)) {
+    throw new Error(
+      "S3 connection requires either `arn` or both `accessKey` and `secret`."
+    );
+  }
+
+  if ((options.accessKey && !options.secret) || (!options.accessKey && options.secret)) {
+    throw new Error("S3 connection `accessKey` and `secret` must be provided together.");
+  }
+
+  return {
+    [CONNECTION_BRAND]: true,
+    _name: name,
+    _type: "connection",
+    _connectionType: "s3",
     options,
   };
 }
@@ -112,6 +181,13 @@ export function isConnectionDefinition(value: unknown): value is ConnectionDefin
  */
 export function isKafkaConnectionDefinition(value: unknown): value is KafkaConnectionDefinition {
   return isConnectionDefinition(value) && value._connectionType === "kafka";
+}
+
+/**
+ * Check if a value is an S3 connection definition
+ */
+export function isS3ConnectionDefinition(value: unknown): value is S3ConnectionDefinition {
+  return isConnectionDefinition(value) && value._connectionType === "s3";
 }
 
 /**

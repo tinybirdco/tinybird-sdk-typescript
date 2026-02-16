@@ -23,11 +23,11 @@ const EXPECTED_COMPLEX_OUTPUT = `/**
  * Review endpoint output schemas and any defaults before production use.
  */
 
-import { createKafkaConnection, defineDatasource, definePipe, defineMaterializedView, defineCopyPipe, node, t, engine, column, p } from "@tinybirdco/sdk";
+import { defineKafkaConnection, defineDatasource, definePipe, defineMaterializedView, defineCopyPipe, node, t, engine, column, p } from "@tinybirdco/sdk";
 
 // Connections
 
-export const stream = createKafkaConnection("stream", {
+export const stream = defineKafkaConnection("stream", {
   bootstrapServers: "localhost:9092",
   securityProtocol: "SASL_SSL",
   saslMechanism: "PLAIN",
@@ -191,11 +191,11 @@ const EXPECTED_PARTIAL_OUTPUT = `/**
  * Review endpoint output schemas and any defaults before production use.
  */
 
-import { createKafkaConnection, defineDatasource, definePipe, defineMaterializedView, defineCopyPipe, node, t, engine, p } from "@tinybirdco/sdk";
+import { defineKafkaConnection, defineDatasource, definePipe, defineMaterializedView, defineCopyPipe, node, t, engine, p } from "@tinybirdco/sdk";
 
 // Connections
 
-export const stream = createKafkaConnection("stream", {
+export const stream = defineKafkaConnection("stream", {
   bootstrapServers: "localhost:9092",
 });
 

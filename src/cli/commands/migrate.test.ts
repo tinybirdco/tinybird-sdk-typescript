@@ -15,11 +15,11 @@ const EXPECTED_COMPLEX_OUTPUT = `/**
  * Review endpoint output schemas and any defaults before production use.
  */
 
-import { createKafkaConnection, defineDatasource, definePipe, defineMaterializedView, defineCopyPipe, node, t, engine, column, p } from "@tinybirdco/sdk";
+import { defineKafkaConnection, defineDatasource, definePipe, defineMaterializedView, defineCopyPipe, node, t, engine, column, p } from "@tinybirdco/sdk";
 
 // Connections
 
-export const stream = createKafkaConnection("stream", {
+export const stream = defineKafkaConnection("stream", {
   bootstrapServers: "localhost:9092",
   securityProtocol: "SASL_SSL",
   saslMechanism: "PLAIN",
@@ -183,11 +183,11 @@ const EXPECTED_PARTIAL_OUTPUT = `/**
  * Review endpoint output schemas and any defaults before production use.
  */
 
-import { createKafkaConnection, defineDatasource, definePipe, defineMaterializedView, defineCopyPipe, node, t, engine, p } from "@tinybirdco/sdk";
+import { defineKafkaConnection, defineDatasource, definePipe, defineMaterializedView, defineCopyPipe, node, t, engine, p } from "@tinybirdco/sdk";
 
 // Connections
 
-export const stream = createKafkaConnection("stream", {
+export const stream = defineKafkaConnection("stream", {
   bootstrapServers: "localhost:9092",
 });
 
@@ -560,5 +560,59 @@ TOKEN endpoint_token READ
     expect(result.migrated).toHaveLength(3);
     expect(result.outputContent).toBe(EXPECTED_PARTIAL_OUTPUT);
     expect(fs.existsSync(result.outputPath)).toBe(false);
+  });
+
+  it("migrates s3 connection and import datasource directives", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "s3sample.connection",
+      `TYPE s3
+S3_REGION "us-east-1"
+S3_ARN "arn:aws:iam::123456789012:role/tinybird-s3-access"
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events_landing.datasource",
+      `SCHEMA >
+    timestamp DateTime,
+    session_id String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "timestamp"
+IMPORT_CONNECTION_NAME s3sample
+IMPORT_BUCKET_URI s3://my-bucket/events/*.csv
+IMPORT_SCHEDULE @auto
+IMPORT_FROM_TIMESTAMP 2024-01-01T00:00:00Z
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.migrated.filter((resource) => resource.kind === "connection")).toHaveLength(1);
+    expect(result.migrated.filter((resource) => resource.kind === "datasource")).toHaveLength(1);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain("defineS3Connection");
+    expect(output).toContain('export const s3sample = defineS3Connection("s3sample", {');
+    expect(output).toContain('region: "us-east-1"');
+    expect(output).toContain(
+      'arn: "arn:aws:iam::123456789012:role/tinybird-s3-access"'
+    );
+    expect(output).toContain("s3: {");
+    expect(output).toContain("connection: s3sample");
+    expect(output).toContain('bucketUri: "s3://my-bucket/events/*.csv"');
+    expect(output).toContain('schedule: "@auto"');
+    expect(output).toContain('fromTimestamp: "2024-01-01T00:00:00Z"');
   });
 });

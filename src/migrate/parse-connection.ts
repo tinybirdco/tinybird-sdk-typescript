@@ -1,14 +1,18 @@
-import type { KafkaConnectionModel, ResourceFile } from "./types.js";
+import type { KafkaConnectionModel, ResourceFile, S3ConnectionModel } from "./types.js";
 import {
   MigrationParseError,
   isBlank,
   parseDirectiveLine,
+  parseQuotedValue,
   splitLines,
 } from "./parser-utils.js";
 
-export function parseConnectionFile(resource: ResourceFile): KafkaConnectionModel {
+export function parseConnectionFile(
+  resource: ResourceFile
+): KafkaConnectionModel | S3ConnectionModel {
   const lines = splitLines(resource.content);
   let connectionType: string | undefined;
+
   let bootstrapServers: string | undefined;
   let securityProtocol:
     | "SASL_SSL"
@@ -25,6 +29,11 @@ export function parseConnectionFile(resource: ResourceFile): KafkaConnectionMode
   let secret: string | undefined;
   let sslCaPem: string | undefined;
 
+  let region: string | undefined;
+  let arn: string | undefined;
+  let accessKey: string | undefined;
+  let accessSecret: string | undefined;
+
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (isBlank(line)) {
@@ -34,7 +43,7 @@ export function parseConnectionFile(resource: ResourceFile): KafkaConnectionMode
     const { key: directive, value } = parseDirectiveLine(line);
     switch (directive) {
       case "TYPE":
-        connectionType = value;
+        connectionType = parseQuotedValue(value);
         break;
       case "KAFKA_BOOTSTRAP_SERVERS":
         bootstrapServers = value;
@@ -75,6 +84,18 @@ export function parseConnectionFile(resource: ResourceFile): KafkaConnectionMode
       case "KAFKA_SSL_CA_PEM":
         sslCaPem = value;
         break;
+      case "S3_REGION":
+        region = parseQuotedValue(value);
+        break;
+      case "S3_ARN":
+        arn = parseQuotedValue(value);
+        break;
+      case "S3_ACCESS_KEY":
+        accessKey = parseQuotedValue(value);
+        break;
+      case "S3_SECRET":
+        accessSecret = parseQuotedValue(value);
+        break;
       default:
         throw new MigrationParseError(
           resource.filePath,
@@ -94,35 +115,92 @@ export function parseConnectionFile(resource: ResourceFile): KafkaConnectionMode
     );
   }
 
-  if (connectionType !== "kafka") {
-    throw new MigrationParseError(
-      resource.filePath,
-      "connection",
-      resource.name,
-      `Unsupported connection type in strict mode: "${connectionType}"`
-    );
+  if (connectionType === "kafka") {
+    if (region || arn || accessKey || accessSecret) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "connection",
+        resource.name,
+        "S3 directives are not valid for kafka connections."
+      );
+    }
+
+    if (!bootstrapServers) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "connection",
+        resource.name,
+        "KAFKA_BOOTSTRAP_SERVERS is required for kafka connections."
+      );
+    }
+
+    return {
+      kind: "connection",
+      name: resource.name,
+      filePath: resource.filePath,
+      connectionType: "kafka",
+      bootstrapServers,
+      securityProtocol,
+      saslMechanism,
+      key,
+      secret,
+      sslCaPem,
+    };
   }
 
-  if (!bootstrapServers) {
-    throw new MigrationParseError(
-      resource.filePath,
-      "connection",
-      resource.name,
-      "KAFKA_BOOTSTRAP_SERVERS is required for kafka connections."
-    );
+  if (connectionType === "s3") {
+    if (bootstrapServers || securityProtocol || saslMechanism || key || secret || sslCaPem) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "connection",
+        resource.name,
+        "Kafka directives are not valid for s3 connections."
+      );
+    }
+
+    if (!region) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "connection",
+        resource.name,
+        "S3_REGION is required for s3 connections."
+      );
+    }
+
+    if (!arn && !(accessKey && accessSecret)) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "connection",
+        resource.name,
+        "S3 connections require S3_ARN or both S3_ACCESS_KEY and S3_SECRET."
+      );
+    }
+
+    if ((accessKey && !accessSecret) || (!accessKey && accessSecret)) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "connection",
+        resource.name,
+        "S3_ACCESS_KEY and S3_SECRET must be provided together."
+      );
+    }
+
+    return {
+      kind: "connection",
+      name: resource.name,
+      filePath: resource.filePath,
+      connectionType: "s3",
+      region,
+      arn,
+      accessKey,
+      secret: accessSecret,
+    };
   }
 
-  return {
-    kind: "connection",
-    name: resource.name,
-    filePath: resource.filePath,
-    connectionType: "kafka",
-    bootstrapServers,
-    securityProtocol,
-    saslMechanism,
-    key,
-    secret,
-    sslCaPem,
-  };
+  throw new MigrationParseError(
+    resource.filePath,
+    "connection",
+    resource.name,
+    `Unsupported connection type in strict mode: "${connectionType}"`
+  );
 }
-

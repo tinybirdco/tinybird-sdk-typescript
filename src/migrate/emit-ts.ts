@@ -6,6 +6,7 @@ import type {
   KafkaConnectionModel,
   ParsedResource,
   PipeModel,
+  S3ConnectionModel,
 } from "./types.js";
 
 function escapeString(value: string): string {
@@ -243,6 +244,20 @@ function emitDatasource(ds: DatasourceModel): string {
     lines.push("  },");
   }
 
+  if (ds.s3) {
+    const connectionVar = toCamelCase(ds.s3.connectionName);
+    lines.push("  s3: {");
+    lines.push(`    connection: ${connectionVar},`);
+    lines.push(`    bucketUri: ${escapeString(ds.s3.bucketUri)},`);
+    if (ds.s3.schedule) {
+      lines.push(`    schedule: ${escapeString(ds.s3.schedule)},`);
+    }
+    if (ds.s3.fromTimestamp) {
+      lines.push(`    fromTimestamp: ${escapeString(ds.s3.fromTimestamp)},`);
+    }
+    lines.push("  },");
+  }
+
   if (ds.forwardQuery) {
     lines.push("  forwardQuery: `");
     lines.push(ds.forwardQuery.replace(/`/g, "\\`").replace(/\${/g, "\\${"));
@@ -270,27 +285,47 @@ function emitDatasource(ds: DatasourceModel): string {
   return lines.join("\n");
 }
 
-function emitConnection(connection: KafkaConnectionModel): string {
+function emitConnection(connection: KafkaConnectionModel | S3ConnectionModel): string {
   const variableName = toCamelCase(connection.name);
   const lines: string[] = [];
+
+  if (connection.connectionType === "kafka") {
+    lines.push(
+      `export const ${variableName} = defineKafkaConnection(${escapeString(connection.name)}, {`
+    );
+    lines.push(`  bootstrapServers: ${escapeString(connection.bootstrapServers)},`);
+    if (connection.securityProtocol) {
+      lines.push(`  securityProtocol: ${escapeString(connection.securityProtocol)},`);
+    }
+    if (connection.saslMechanism) {
+      lines.push(`  saslMechanism: ${escapeString(connection.saslMechanism)},`);
+    }
+    if (connection.key) {
+      lines.push(`  key: ${escapeString(connection.key)},`);
+    }
+    if (connection.secret) {
+      lines.push(`  secret: ${escapeString(connection.secret)},`);
+    }
+    if (connection.sslCaPem) {
+      lines.push(`  sslCaPem: ${escapeString(connection.sslCaPem)},`);
+    }
+    lines.push("});");
+    lines.push("");
+    return lines.join("\n");
+  }
+
   lines.push(
-    `export const ${variableName} = createKafkaConnection(${escapeString(connection.name)}, {`
+    `export const ${variableName} = defineS3Connection(${escapeString(connection.name)}, {`
   );
-  lines.push(`  bootstrapServers: ${escapeString(connection.bootstrapServers)},`);
-  if (connection.securityProtocol) {
-    lines.push(`  securityProtocol: ${escapeString(connection.securityProtocol)},`);
+  lines.push(`  region: ${escapeString(connection.region)},`);
+  if (connection.arn) {
+    lines.push(`  arn: ${escapeString(connection.arn)},`);
   }
-  if (connection.saslMechanism) {
-    lines.push(`  saslMechanism: ${escapeString(connection.saslMechanism)},`);
-  }
-  if (connection.key) {
-    lines.push(`  key: ${escapeString(connection.key)},`);
+  if (connection.accessKey) {
+    lines.push(`  accessKey: ${escapeString(connection.accessKey)},`);
   }
   if (connection.secret) {
     lines.push(`  secret: ${escapeString(connection.secret)},`);
-  }
-  if (connection.sslCaPem) {
-    lines.push(`  sslCaPem: ${escapeString(connection.sslCaPem)},`);
   }
   lines.push("});");
   lines.push("");
@@ -398,7 +433,8 @@ function emitPipe(pipe: PipeModel): string {
 
 export function emitMigrationFileContent(resources: ParsedResource[]): string {
   const connections = resources.filter(
-    (resource): resource is KafkaConnectionModel => resource.kind === "connection"
+    (resource): resource is KafkaConnectionModel | S3ConnectionModel =>
+      resource.kind === "connection"
   );
   const datasources = resources.filter(
     (resource): resource is DatasourceModel => resource.kind === "datasource"
@@ -412,7 +448,21 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
   );
   const needsParams = pipes.some((pipe) => pipe.params.length > 0);
 
-  const imports = new Set<string>(["createKafkaConnection", "defineDatasource", "definePipe", "defineMaterializedView", "defineCopyPipe", "node", "t", "engine"]);
+  const imports = new Set<string>([
+    "defineDatasource",
+    "definePipe",
+    "defineMaterializedView",
+    "defineCopyPipe",
+    "node",
+    "t",
+    "engine",
+  ]);
+  if (connections.some((connection) => connection.connectionType === "kafka")) {
+    imports.add("defineKafkaConnection");
+  }
+  if (connections.some((connection) => connection.connectionType === "s3")) {
+    imports.add("defineS3Connection");
+  }
   if (needsColumn) {
     imports.add("column");
   }
@@ -420,13 +470,27 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
     imports.add("p");
   }
 
+  const orderedImports = [
+    "defineKafkaConnection",
+    "defineS3Connection",
+    "defineDatasource",
+    "definePipe",
+    "defineMaterializedView",
+    "defineCopyPipe",
+    "node",
+    "t",
+    "engine",
+    "column",
+    "p",
+  ].filter((name) => imports.has(name));
+
   const lines: string[] = [];
   lines.push("/**");
   lines.push(" * Generated by tinybird migrate.");
   lines.push(" * Review endpoint output schemas and any defaults before production use.");
   lines.push(" */");
   lines.push("");
-  lines.push(`import { ${Array.from(imports).join(", ")} } from "@tinybirdco/sdk";`);
+  lines.push(`import { ${orderedImports.join(", ")} } from "@tinybirdco/sdk";`);
   lines.push("");
 
   if (connections.length > 0) {

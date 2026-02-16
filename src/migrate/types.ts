@@ -43,6 +43,13 @@ export interface DatasourceKafkaModel {
   autoOffsetReset?: "earliest" | "latest";
 }
 
+export interface DatasourceS3Model {
+  connectionName: string;
+  bucketUri: string;
+  schedule?: string;
+  fromTimestamp?: string;
+}
+
 export interface DatasourceTokenModel {
   name: string;
   scope: "READ" | "APPEND";
@@ -56,6 +63,7 @@ export interface DatasourceModel {
   columns: DatasourceColumnModel[];
   engine: DatasourceEngineModel;
   kafka?: DatasourceKafkaModel;
+  s3?: DatasourceS3Model;
   forwardQuery?: string;
   tokens: DatasourceTokenModel[];
   sharedWith: string[];
@@ -112,7 +120,22 @@ export interface KafkaConnectionModel {
   sslCaPem?: string;
 }
 
-export type ParsedResource = DatasourceModel | PipeModel | KafkaConnectionModel;
+export interface S3ConnectionModel {
+  kind: "connection";
+  name: string;
+  filePath: string;
+  connectionType: "s3";
+  region: string;
+  arn?: string;
+  accessKey?: string;
+  secret?: string;
+}
+
+export type ParsedResource =
+  | DatasourceModel
+  | PipeModel
+  | KafkaConnectionModel
+  | S3ConnectionModel;
 
 export interface MigrationResult {
   success: boolean;
@@ -122,4 +145,3 @@ export interface MigrationResult {
   dryRun: boolean;
   outputContent?: string;
 }
-

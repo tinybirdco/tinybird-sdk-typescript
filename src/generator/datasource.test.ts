@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateDatasource, generateAllDatasources } from './datasource.js';
 import { defineDatasource } from '../schema/datasource.js';
-import { createKafkaConnection } from '../schema/connection.js';
+import { defineKafkaConnection, defineS3Connection } from '../schema/connection.js';
 import { defineToken } from '../schema/token.js';
 import { t } from '../schema/types.js';
 import { engine } from '../schema/engines.js';
@@ -312,7 +312,7 @@ describe('Datasource Generator', () => {
 
   describe('Kafka configuration', () => {
     it('includes Kafka connection name and topic', () => {
-      const kafkaConn = createKafkaConnection('my_kafka', {
+      const kafkaConn = defineKafkaConnection('my_kafka', {
         bootstrapServers: 'kafka.example.com:9092',
       });
 
@@ -335,7 +335,7 @@ describe('Datasource Generator', () => {
     });
 
     it('includes Kafka group ID when provided', () => {
-      const kafkaConn = createKafkaConnection('my_kafka', {
+      const kafkaConn = defineKafkaConnection('my_kafka', {
         bootstrapServers: 'kafka.example.com:9092',
       });
 
@@ -358,7 +358,7 @@ describe('Datasource Generator', () => {
     });
 
     it('includes auto offset reset when provided', () => {
-      const kafkaConn = createKafkaConnection('my_kafka', {
+      const kafkaConn = defineKafkaConnection('my_kafka', {
         bootstrapServers: 'kafka.example.com:9092',
       });
 
@@ -381,7 +381,7 @@ describe('Datasource Generator', () => {
     });
 
     it('generates complete Kafka datasource with all options', () => {
-      const kafkaConn = createKafkaConnection('my_kafka', {
+      const kafkaConn = defineKafkaConnection('my_kafka', {
         bootstrapServers: 'kafka.example.com:9092',
         securityProtocol: 'SASL_SSL',
         saslMechanism: 'PLAIN',
@@ -414,6 +414,58 @@ describe('Datasource Generator', () => {
       expect(result.content).toContain('KAFKA_TOPIC events');
       expect(result.content).toContain('KAFKA_GROUP_ID my-consumer-group');
       expect(result.content).toContain('KAFKA_AUTO_OFFSET_RESET earliest');
+    });
+  });
+
+  describe('S3 configuration', () => {
+    it('includes S3 connection name and bucket uri', () => {
+      const s3Conn = defineS3Connection('my_s3', {
+        region: 'us-east-1',
+        arn: 'arn:aws:iam::123456789012:role/tinybird-s3-access',
+      });
+
+      const ds = defineDatasource('s3_events', {
+        schema: {
+          timestamp: t.dateTime(),
+          event: t.string(),
+        },
+        engine: engine.mergeTree({ sortingKey: ['timestamp'] }),
+        s3: {
+          connection: s3Conn,
+          bucketUri: 's3://my-bucket/events/*.csv',
+        },
+      });
+
+      const result = generateDatasource(ds);
+
+      expect(result.content).toContain('IMPORT_CONNECTION_NAME my_s3');
+      expect(result.content).toContain('IMPORT_BUCKET_URI s3://my-bucket/events/*.csv');
+    });
+
+    it('includes optional S3 schedule and from timestamp', () => {
+      const s3Conn = defineS3Connection('my_s3', {
+        region: 'us-east-1',
+        arn: 'arn:aws:iam::123456789012:role/tinybird-s3-access',
+      });
+
+      const ds = defineDatasource('s3_events', {
+        schema: {
+          timestamp: t.dateTime(),
+          event: t.string(),
+        },
+        engine: engine.mergeTree({ sortingKey: ['timestamp'] }),
+        s3: {
+          connection: s3Conn,
+          bucketUri: 's3://my-bucket/events/*.csv',
+          schedule: '@auto',
+          fromTimestamp: '2024-01-01T00:00:00Z',
+        },
+      });
+
+      const result = generateDatasource(ds);
+
+      expect(result.content).toContain('IMPORT_SCHEDULE @auto');
+      expect(result.content).toContain('IMPORT_FROM_TIMESTAMP 2024-01-01T00:00:00Z');
     });
   });
 

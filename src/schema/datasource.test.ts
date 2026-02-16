@@ -9,6 +9,7 @@ import {
 } from "./datasource.js";
 import { t } from "./types.js";
 import { engine } from "./engines.js";
+import { defineKafkaConnection, defineS3Connection } from "./connection.js";
 
 describe("Datasource Schema", () => {
   describe("defineDatasource", () => {
@@ -84,6 +85,30 @@ describe("Datasource Schema", () => {
         schema: { id: t.string() },
       });
       expect(ds2._name).toBe("events_v2");
+    });
+
+    it("throws when both kafka and s3 ingestion are configured", () => {
+      const kafkaConn = defineKafkaConnection("my_kafka", {
+        bootstrapServers: "kafka.example.com:9092",
+      });
+      const s3Conn = defineS3Connection("my_s3", {
+        region: "us-east-1",
+        arn: "arn:aws:iam::123456789012:role/tinybird-s3-access",
+      });
+
+      expect(() =>
+        defineDatasource("events", {
+          schema: { id: t.string() },
+          kafka: {
+            connection: kafkaConn,
+            topic: "events",
+          },
+          s3: {
+            connection: s3Conn,
+            bucketUri: "s3://my-bucket/events/*.csv",
+          },
+        })
+      ).toThrow("Datasource cannot define both `kafka` and `s3` ingestion options.");
     });
   });
 

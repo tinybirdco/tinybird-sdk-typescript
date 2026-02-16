@@ -9,7 +9,7 @@ The SDK is organized into layers that handle different responsibilities:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      User Code                              │
-│   defineDatasource, definePipe, createKafkaConnection, etc. │
+│   defineDatasource, definePipe, defineKafkaConnection, etc. │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -46,7 +46,7 @@ Provides TypeScript-first schema definitions with branded types for type safety.
 - `engines.ts` - Table engine configurations (`engine.mergeTree()`, etc.)
 - `datasource.ts` - `defineDatasource()` for table definitions
 - `pipe.ts` - `definePipe()`, `defineEndpoint()`, `defineMaterializedView()`, `defineCopyPipe()`
-- `connection.ts` - `createKafkaConnection()` for external connections
+- `connection.ts` - `defineKafkaConnection()` for external connections
 - `project.ts` - `defineProject()` to aggregate all resources
 
 **Key Patterns:**
@@ -221,11 +221,11 @@ Utility types for inferring TypeScript types from schema definitions.
 
 ### Kafka Connection
 
-Kafka connections are defined with `createKafkaConnection()` and referenced in datasources:
+Kafka connections are defined with `defineKafkaConnection()` and referenced in datasources:
 
 ```typescript
 // Define connection
-const myKafka = createKafkaConnection('my_kafka', {
+const myKafka = defineKafkaConnection('my_kafka', {
   bootstrapServers: 'kafka.example.com:9092',
   securityProtocol: 'SASL_SSL',
   saslMechanism: 'PLAIN',
