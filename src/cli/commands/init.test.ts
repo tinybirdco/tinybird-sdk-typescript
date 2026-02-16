@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { runInit, findExistingDatafiles } from "./init.js";
+import { runInit, findExistingDatafiles, findSyntaxHighlightingVsix } from "./init.js";
 
 // Mock the auth module to avoid browser login
 vi.mock("../auth.js", () => ({
@@ -542,6 +542,26 @@ describe("Init Command", () => {
       expect(result.success).toBe(true);
       expect(result.installTools).toEqual(["skills", "syntax-highlighting"]);
       expect(result.installedTools).toBeUndefined();
+    });
+  });
+
+  describe("syntax highlighting VSIX lookup", () => {
+    it("finds the packaged VSIX when cwd is outside a git repo", () => {
+      const originalCwd = process.cwd();
+      const externalCwd = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-init-cwd-"));
+
+      try {
+        process.chdir(externalCwd);
+        const vsixPath = findSyntaxHighlightingVsix(externalCwd);
+
+        expect(vsixPath).toBeDefined();
+        expect(path.basename(vsixPath ?? "")).toMatch(
+          /^tinybird-ts-sdk-extension.*\.vsix$/
+        );
+      } finally {
+        process.chdir(originalCwd);
+        fs.rmSync(externalCwd, { recursive: true, force: true });
+      }
     });
   });
 

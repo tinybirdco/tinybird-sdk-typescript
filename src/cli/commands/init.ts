@@ -6,6 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
+import { fileURLToPath } from "url";
 import {
   hasValidToken,
   getRelativeTinybirdDir,
@@ -1134,6 +1135,10 @@ const SKILLS_INSTALL_ARGS = [
 ];
 const SYNTAX_EXTENSION_DIR = path.join("extension");
 const SYNTAX_EXTENSION_PREFIX = "tinybird-ts-sdk-extension";
+const SDK_MODULE_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../.."
+);
 
 async function installSelectedTools(
   cwd: string,
@@ -1295,8 +1300,10 @@ function isCommandAvailable(command: string): boolean {
   }
 }
 
-function findSyntaxHighlightingVsix(cwd: string): string | undefined {
+export function findSyntaxHighlightingVsix(cwd: string): string | undefined {
   const searchRoots = new Set<string>();
+  searchRoots.add(SDK_MODULE_ROOT);
+
   const gitRoot = getGitRoot();
   if (gitRoot) {
     searchRoots.add(gitRoot);
