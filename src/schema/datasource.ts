@@ -5,7 +5,7 @@
 
 import type { AnyTypeValidator } from "./types.js";
 import type { EngineConfig } from "./engines.js";
-import type { KafkaConnectionDefinition } from "./connection.js";
+import type { KafkaConnectionDefinition, S3ConnectionDefinition } from "./connection.js";
 import type { TokenDefinition, DatasourceTokenScope } from "./token.js";
 
 // Symbol for brand typing - use Symbol.for() for global registry
@@ -69,6 +69,20 @@ export interface KafkaConfig {
 }
 
 /**
+ * S3 import configuration for a datasource
+ */
+export interface S3Config {
+  /** S3 connection to use */
+  connection: S3ConnectionDefinition;
+  /** S3 bucket URI, for example: s3://my-bucket/path/*.csv */
+  bucketUri: string;
+  /** Import schedule, for example: @auto or @once */
+  schedule?: string;
+  /** Incremental import lower bound timestamp expression */
+  fromTimestamp?: string;
+}
+
+/**
  * Options for defining a datasource
  */
 export interface DatasourceOptions<TSchema extends SchemaDefinition> {
@@ -95,6 +109,8 @@ export interface DatasourceOptions<TSchema extends SchemaDefinition> {
   forwardQuery?: string;
   /** Kafka ingestion configuration */
   kafka?: KafkaConfig;
+  /** S3 ingestion configuration */
+  s3?: S3Config;
 }
 
 /**
@@ -150,6 +166,10 @@ export function defineDatasource<TSchema extends SchemaDefinition>(
     throw new Error(
       `Invalid datasource name: "${name}". Must start with a letter or underscore and contain only alphanumeric characters and underscores.`
     );
+  }
+
+  if (options.kafka && options.s3) {
+    throw new Error("Datasource cannot define both `kafka` and `s3` ingestion options.");
   }
 
   return {

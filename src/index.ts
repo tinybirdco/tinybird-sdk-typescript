@@ -109,16 +109,27 @@ export type {
   DatasourceTokenReference,
   ExtractSchema,
   KafkaConfig,
+  S3Config,
 } from "./schema/datasource.js";
 
 // ============ Connection ============
-export { createKafkaConnection, isConnectionDefinition, isKafkaConnectionDefinition, getConnectionType } from "./schema/connection.js";
+export {
+  defineKafkaConnection,
+  createKafkaConnection,
+  defineS3Connection,
+  isConnectionDefinition,
+  isKafkaConnectionDefinition,
+  isS3ConnectionDefinition,
+  getConnectionType,
+} from "./schema/connection.js";
 export type {
   ConnectionDefinition,
   KafkaConnectionDefinition,
   KafkaConnectionOptions,
   KafkaSecurityProtocol,
   KafkaSaslMechanism,
+  S3ConnectionDefinition,
+  S3ConnectionOptions,
 } from "./schema/connection.js";
 
 // ============ Token ============

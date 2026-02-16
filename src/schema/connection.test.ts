@@ -1,15 +1,17 @@
 import { describe, it, expect } from "vitest";
 import {
-  createKafkaConnection,
+  defineKafkaConnection,
+  defineS3Connection,
   isConnectionDefinition,
   isKafkaConnectionDefinition,
+  isS3ConnectionDefinition,
   getConnectionType,
 } from "./connection.js";
 
 describe("Connection Schema", () => {
-  describe("createKafkaConnection", () => {
+  describe("defineKafkaConnection", () => {
     it("creates a Kafka connection with required fields", () => {
-      const conn = createKafkaConnection("my_kafka", {
+      const conn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",
       });
 
@@ -20,7 +22,7 @@ describe("Connection Schema", () => {
     });
 
     it("creates a Kafka connection with all options", () => {
-      const conn = createKafkaConnection("my_kafka", {
+      const conn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",
         securityProtocol: "SASL_SSL",
         saslMechanism: "PLAIN",
@@ -37,19 +39,19 @@ describe("Connection Schema", () => {
     });
 
     it("supports different SASL mechanisms", () => {
-      const scramConn = createKafkaConnection("scram_kafka", {
+      const scramConn = defineKafkaConnection("scram_kafka", {
         bootstrapServers: "kafka.example.com:9092",
         saslMechanism: "SCRAM-SHA-256",
       });
       expect(scramConn.options.saslMechanism).toBe("SCRAM-SHA-256");
 
-      const scram512Conn = createKafkaConnection("scram512_kafka", {
+      const scram512Conn = defineKafkaConnection("scram512_kafka", {
         bootstrapServers: "kafka.example.com:9092",
         saslMechanism: "SCRAM-SHA-512",
       });
       expect(scram512Conn.options.saslMechanism).toBe("SCRAM-SHA-512");
 
-      const oauthConn = createKafkaConnection("oauth_kafka", {
+      const oauthConn = defineKafkaConnection("oauth_kafka", {
         bootstrapServers: "kafka.example.com:9092",
         saslMechanism: "OAUTHBEARER",
       });
@@ -57,13 +59,13 @@ describe("Connection Schema", () => {
     });
 
     it("supports different security protocols", () => {
-      const plaintext = createKafkaConnection("plaintext_kafka", {
+      const plaintext = defineKafkaConnection("plaintext_kafka", {
         bootstrapServers: "localhost:9092",
         securityProtocol: "PLAINTEXT",
       });
       expect(plaintext.options.securityProtocol).toBe("PLAINTEXT");
 
-      const saslPlaintext = createKafkaConnection("sasl_plaintext_kafka", {
+      const saslPlaintext = defineKafkaConnection("sasl_plaintext_kafka", {
         bootstrapServers: "localhost:9092",
         securityProtocol: "SASL_PLAINTEXT",
       });
@@ -72,40 +74,88 @@ describe("Connection Schema", () => {
 
     it("throws error for invalid connection name", () => {
       expect(() =>
-        createKafkaConnection("123invalid", {
+        defineKafkaConnection("123invalid", {
           bootstrapServers: "kafka.example.com:9092",
         })
       ).toThrow("Invalid connection name");
 
       expect(() =>
-        createKafkaConnection("my-connection", {
+        defineKafkaConnection("my-connection", {
           bootstrapServers: "kafka.example.com:9092",
         })
       ).toThrow("Invalid connection name");
 
       expect(() =>
-        createKafkaConnection("", {
+        defineKafkaConnection("", {
           bootstrapServers: "kafka.example.com:9092",
         })
       ).toThrow("Invalid connection name");
     });
 
     it("allows valid naming patterns", () => {
-      const conn1 = createKafkaConnection("_private_kafka", {
+      const conn1 = defineKafkaConnection("_private_kafka", {
         bootstrapServers: "kafka.example.com:9092",
       });
       expect(conn1._name).toBe("_private_kafka");
 
-      const conn2 = createKafkaConnection("kafka_v2", {
+      const conn2 = defineKafkaConnection("kafka_v2", {
         bootstrapServers: "kafka.example.com:9092",
       });
       expect(conn2._name).toBe("kafka_v2");
     });
   });
 
+  describe("defineS3Connection", () => {
+    it("creates an S3 connection with IAM role auth", () => {
+      const conn = defineS3Connection("my_s3", {
+        region: "us-east-1",
+        arn: "arn:aws:iam::123456789012:role/tinybird-s3-access",
+      });
+
+      expect(conn._name).toBe("my_s3");
+      expect(conn._type).toBe("connection");
+      expect(conn._connectionType).toBe("s3");
+      expect(conn.options.region).toBe("us-east-1");
+      expect(conn.options.arn).toBe("arn:aws:iam::123456789012:role/tinybird-s3-access");
+    });
+
+    it("creates an S3 connection with access key auth", () => {
+      const conn = defineS3Connection("my_s3", {
+        region: "us-east-1",
+        accessKey: '{{ tb_secret("S3_ACCESS_KEY") }}',
+        secret: '{{ tb_secret("S3_SECRET") }}',
+      });
+
+      expect(conn.options.accessKey).toBe('{{ tb_secret("S3_ACCESS_KEY") }}');
+      expect(conn.options.secret).toBe('{{ tb_secret("S3_SECRET") }}');
+    });
+
+    it("throws when auth config is incomplete", () => {
+      expect(() =>
+        defineS3Connection("my_s3", {
+          region: "us-east-1",
+        })
+      ).toThrow("S3 connection requires either `arn` or both `accessKey` and `secret`.");
+
+      expect(() =>
+        defineS3Connection("my_s3", {
+          region: "us-east-1",
+          accessKey: "key-only",
+        })
+      ).toThrow("S3 connection requires either `arn` or both `accessKey` and `secret`.");
+
+      expect(() =>
+        defineS3Connection("my_s3", {
+          region: "us-east-1",
+          secret: "secret-only",
+        })
+      ).toThrow("S3 connection requires either `arn` or both `accessKey` and `secret`.");
+    });
+  });
+
   describe("isConnectionDefinition", () => {
     it("returns true for valid connection", () => {
-      const conn = createKafkaConnection("my_kafka", {
+      const conn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",
       });
 
@@ -124,7 +174,7 @@ describe("Connection Schema", () => {
 
   describe("isKafkaConnectionDefinition", () => {
     it("returns true for Kafka connection", () => {
-      const conn = createKafkaConnection("my_kafka", {
+      const conn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",
       });
 
@@ -137,13 +187,38 @@ describe("Connection Schema", () => {
     });
   });
 
+  describe("isS3ConnectionDefinition", () => {
+    it("returns true for S3 connection", () => {
+      const conn = defineS3Connection("my_s3", {
+        region: "us-east-1",
+        arn: "arn:aws:iam::123456789012:role/tinybird-s3-access",
+      });
+
+      expect(isS3ConnectionDefinition(conn)).toBe(true);
+    });
+
+    it("returns false for non-S3 objects", () => {
+      expect(isS3ConnectionDefinition({})).toBe(false);
+      expect(isS3ConnectionDefinition(null)).toBe(false);
+    });
+  });
+
   describe("getConnectionType", () => {
     it("returns the connection type", () => {
-      const conn = createKafkaConnection("my_kafka", {
+      const conn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",
       });
 
       expect(getConnectionType(conn)).toBe("kafka");
+    });
+
+    it("returns the s3 connection type", () => {
+      const conn = defineS3Connection("my_s3", {
+        region: "us-east-1",
+        arn: "arn:aws:iam::123456789012:role/tinybird-s3-access",
+      });
+
+      expect(getConnectionType(conn)).toBe("s3");
     });
   });
 });

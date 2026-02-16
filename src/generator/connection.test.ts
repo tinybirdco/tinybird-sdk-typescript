@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { generateConnection, generateAllConnections } from "./connection.js";
-import { createKafkaConnection } from "../schema/connection.js";
+import { defineKafkaConnection, defineS3Connection } from "../schema/connection.js";
 
 describe("Connection Generator", () => {
   describe("generateConnection", () => {
     it("generates basic Kafka connection with required fields", () => {
-      const conn = createKafkaConnection("my_kafka", {
+      const conn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",
       });
 
@@ -17,7 +17,7 @@ describe("Connection Generator", () => {
     });
 
     it("includes security protocol when provided", () => {
-      const conn = createKafkaConnection("my_kafka", {
+      const conn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",
         securityProtocol: "SASL_SSL",
       });
@@ -28,7 +28,7 @@ describe("Connection Generator", () => {
     });
 
     it("includes SASL mechanism when provided", () => {
-      const conn = createKafkaConnection("my_kafka", {
+      const conn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",
         saslMechanism: "PLAIN",
       });
@@ -39,7 +39,7 @@ describe("Connection Generator", () => {
     });
 
     it("includes key and secret when provided", () => {
-      const conn = createKafkaConnection("my_kafka", {
+      const conn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",
         key: '{{ tb_secret("KAFKA_KEY") }}',
         secret: '{{ tb_secret("KAFKA_SECRET") }}',
@@ -52,7 +52,7 @@ describe("Connection Generator", () => {
     });
 
     it("includes SSL CA PEM when provided", () => {
-      const conn = createKafkaConnection("my_kafka", {
+      const conn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",
         sslCaPem: '{{ tb_secret("KAFKA_CA_CERT") }}',
       });
@@ -63,7 +63,7 @@ describe("Connection Generator", () => {
     });
 
     it("generates full Kafka connection with all options", () => {
-      const conn = createKafkaConnection("my_kafka", {
+      const conn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",
         securityProtocol: "SASL_SSL",
         saslMechanism: "SCRAM-SHA-256",
@@ -85,7 +85,7 @@ describe("Connection Generator", () => {
     });
 
     it("supports PLAINTEXT security protocol", () => {
-      const conn = createKafkaConnection("local_kafka", {
+      const conn = defineKafkaConnection("local_kafka", {
         bootstrapServers: "localhost:9092",
         securityProtocol: "PLAINTEXT",
       });
@@ -99,7 +99,7 @@ describe("Connection Generator", () => {
       const mechanisms = ["PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512", "OAUTHBEARER"] as const;
 
       mechanisms.forEach((mechanism) => {
-        const conn = createKafkaConnection("my_kafka", {
+        const conn = defineKafkaConnection("my_kafka", {
           bootstrapServers: "kafka.example.com:9092",
           saslMechanism: mechanism,
         });
@@ -109,21 +109,52 @@ describe("Connection Generator", () => {
         expect(result.content).toContain(`KAFKA_SASL_MECHANISM ${mechanism}`);
       });
     });
+
+    it("generates basic S3 connection with IAM role auth", () => {
+      const conn = defineS3Connection("my_s3", {
+        region: "us-east-1",
+        arn: "arn:aws:iam::123456789012:role/tinybird-s3-access",
+      });
+
+      const result = generateConnection(conn);
+
+      expect(result.name).toBe("my_s3");
+      expect(result.content).toContain("TYPE s3");
+      expect(result.content).toContain("S3_REGION us-east-1");
+      expect(result.content).toContain(
+        "S3_ARN arn:aws:iam::123456789012:role/tinybird-s3-access"
+      );
+    });
+
+    it("generates S3 connection with access key auth", () => {
+      const conn = defineS3Connection("my_s3", {
+        region: "us-east-1",
+        accessKey: '{{ tb_secret("S3_ACCESS_KEY") }}',
+        secret: '{{ tb_secret("S3_SECRET") }}',
+      });
+
+      const result = generateConnection(conn);
+
+      expect(result.content).toContain("TYPE s3");
+      expect(result.content).toContain('S3_ACCESS_KEY {{ tb_secret("S3_ACCESS_KEY") }}');
+      expect(result.content).toContain('S3_SECRET {{ tb_secret("S3_SECRET") }}');
+    });
   });
 
   describe("generateAllConnections", () => {
     it("generates all connections", () => {
-      const conn1 = createKafkaConnection("kafka1", {
+      const conn1 = defineKafkaConnection("kafka1", {
         bootstrapServers: "kafka1.example.com:9092",
       });
-      const conn2 = createKafkaConnection("kafka2", {
-        bootstrapServers: "kafka2.example.com:9092",
+      const conn2 = defineS3Connection("s3_logs", {
+        region: "us-east-1",
+        arn: "arn:aws:iam::123456789012:role/tinybird-s3-access",
       });
 
-      const results = generateAllConnections({ kafka1: conn1, kafka2: conn2 });
+      const results = generateAllConnections({ kafka1: conn1, s3_logs: conn2 });
 
       expect(results).toHaveLength(2);
-      expect(results.map((r) => r.name).sort()).toEqual(["kafka1", "kafka2"]);
+      expect(results.map((r) => r.name).sort()).toEqual(["kafka1", "s3_logs"]);
     });
 
     it("returns empty array for empty connections", () => {

@@ -4,6 +4,7 @@
  */
 
 import type { ConnectionDefinition, KafkaConnectionDefinition } from "../schema/connection.js";
+import { isS3ConnectionDefinition, type S3ConnectionDefinition } from "../schema/connection.js";
 
 /**
  * Generated connection content
@@ -49,6 +50,31 @@ function generateKafkaConnection(connection: KafkaConnectionDefinition): string 
 }
 
 /**
+ * Generate an S3 connection content
+ */
+function generateS3Connection(connection: S3ConnectionDefinition): string {
+  const parts: string[] = [];
+  const options = connection.options;
+
+  parts.push("TYPE s3");
+  parts.push(`S3_REGION ${options.region}`);
+
+  if (options.arn) {
+    parts.push(`S3_ARN ${options.arn}`);
+  }
+
+  if (options.accessKey) {
+    parts.push(`S3_ACCESS_KEY ${options.accessKey}`);
+  }
+
+  if (options.secret) {
+    parts.push(`S3_SECRET ${options.secret}`);
+  }
+
+  return parts.join("\n");
+}
+
+/**
  * Generate a .connection file content from a ConnectionDefinition
  *
  * @param connection - The connection definition
@@ -56,7 +82,7 @@ function generateKafkaConnection(connection: KafkaConnectionDefinition): string 
  *
  * @example
  * ```ts
- * const myKafka = createKafkaConnection('my_kafka', {
+ * const myKafka = defineKafkaConnection('my_kafka', {
  *   bootstrapServers: 'kafka.example.com:9092',
  *   securityProtocol: 'SASL_SSL',
  *   saslMechanism: 'PLAIN',
@@ -81,8 +107,10 @@ export function generateConnection(
 
   if (connection._connectionType === "kafka") {
     content = generateKafkaConnection(connection as KafkaConnectionDefinition);
+  } else if (isS3ConnectionDefinition(connection)) {
+    content = generateS3Connection(connection);
   } else {
-    throw new Error(`Unsupported connection type: ${connection._connectionType}`);
+    throw new Error("Unsupported connection type.");
   }
 
   return {

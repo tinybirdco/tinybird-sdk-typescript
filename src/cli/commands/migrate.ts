@@ -129,15 +129,18 @@ export async function runMigrate(
   }
 
   for (const datasource of parsedDatasources) {
+    const referencedConnectionName =
+      datasource.kafka?.connectionName ?? datasource.s3?.connectionName;
+
     if (
-      datasource.kafka &&
-      !migratedConnectionNames.has(datasource.kafka.connectionName)
+      referencedConnectionName &&
+      !migratedConnectionNames.has(referencedConnectionName)
     ) {
       errors.push({
         filePath: datasource.filePath,
         resourceName: datasource.name,
         resourceKind: datasource.kind,
-        message: `Datasource references missing/unmigrated connection "${datasource.kafka.connectionName}".`,
+        message: `Datasource references missing/unmigrated connection "${referencedConnectionName}".`,
       });
       continue;
     }
@@ -237,4 +240,3 @@ export async function runMigrate(
     outputContent,
   };
 }
-

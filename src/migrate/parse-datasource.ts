@@ -233,6 +233,11 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
   let kafkaGroupId: string | undefined;
   let kafkaAutoOffsetReset: "earliest" | "latest" | undefined;
 
+  let importConnectionName: string | undefined;
+  let importBucketUri: string | undefined;
+  let importSchedule: string | undefined;
+  let importFromTimestamp: string | undefined;
+
   let i = 0;
   while (i < lines.length) {
     const rawLine = lines[i] ?? "";
@@ -365,6 +370,18 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
         }
         kafkaAutoOffsetReset = value;
         break;
+      case "IMPORT_CONNECTION_NAME":
+        importConnectionName = parseQuotedValue(value);
+        break;
+      case "IMPORT_BUCKET_URI":
+        importBucketUri = parseQuotedValue(value);
+        break;
+      case "IMPORT_SCHEDULE":
+        importSchedule = parseQuotedValue(value);
+        break;
+      case "IMPORT_FROM_TIMESTAMP":
+        importFromTimestamp = parseQuotedValue(value);
+        break;
       case "TOKEN":
         tokens.push(parseToken(resource.filePath, resource.name, value));
         break;
@@ -426,6 +443,34 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
     );
   }
 
+  const s3 =
+    importConnectionName || importBucketUri || importSchedule || importFromTimestamp
+      ? {
+          connectionName: importConnectionName ?? "",
+          bucketUri: importBucketUri ?? "",
+          schedule: importSchedule,
+          fromTimestamp: importFromTimestamp,
+        }
+      : undefined;
+
+  if (s3 && (!s3.connectionName || !s3.bucketUri)) {
+    throw new MigrationParseError(
+      resource.filePath,
+      "datasource",
+      resource.name,
+      "IMPORT_CONNECTION_NAME and IMPORT_BUCKET_URI are required when S3 import directives are used."
+    );
+  }
+
+  if (kafka && s3) {
+    throw new MigrationParseError(
+      resource.filePath,
+      "datasource",
+      resource.name,
+      "Datasource cannot mix Kafka directives with S3 import directives."
+    );
+  }
+
   return {
     kind: "datasource",
     name: resource.name,
@@ -445,9 +490,9 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
       settings,
     },
     kafka,
+    s3,
     forwardQuery,
     tokens,
     sharedWith,
   };
 }
-

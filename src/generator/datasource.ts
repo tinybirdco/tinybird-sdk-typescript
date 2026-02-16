@@ -3,7 +3,14 @@
  * Converts DatasourceDefinition to native .datasource file format
  */
 
-import type { DatasourceDefinition, SchemaDefinition, ColumnDefinition, KafkaConfig, TokenConfig } from "../schema/datasource.js";
+import type {
+  DatasourceDefinition,
+  SchemaDefinition,
+  ColumnDefinition,
+  KafkaConfig,
+  S3Config,
+  TokenConfig,
+} from "../schema/datasource.js";
 import type { AnyTypeValidator, TypeModifiers } from "../schema/types.js";
 import { getColumnType, getColumnJsonPath } from "../schema/datasource.js";
 import { getEngineClause, type EngineConfig } from "../schema/engines.js";
@@ -164,6 +171,26 @@ function generateKafkaConfig(kafka: KafkaConfig): string {
 }
 
 /**
+ * Generate S3 import configuration lines
+ */
+function generateS3Config(s3: S3Config): string {
+  const parts: string[] = [];
+
+  parts.push(`IMPORT_CONNECTION_NAME ${s3.connection._name}`);
+  parts.push(`IMPORT_BUCKET_URI ${s3.bucketUri}`);
+
+  if (s3.schedule) {
+    parts.push(`IMPORT_SCHEDULE ${s3.schedule}`);
+  }
+
+  if (s3.fromTimestamp) {
+    parts.push(`IMPORT_FROM_TIMESTAMP ${s3.fromTimestamp}`);
+  }
+
+  return parts.join("\n");
+}
+
+/**
  * Generate forward query section
  */
 function generateForwardQuery(forwardQuery?: string): string | null {
@@ -261,6 +288,10 @@ export function generateDatasource(
 ): GeneratedDatasource {
   const parts: string[] = [];
 
+  if (datasource.options.kafka && datasource.options.s3) {
+    throw new Error("Datasource cannot define both `kafka` and `s3` ingestion options.");
+  }
+
   // Add description if present
   if (datasource.options.description) {
     parts.push(`DESCRIPTION >\n    ${datasource.options.description}`);
@@ -281,6 +312,12 @@ export function generateDatasource(
   if (datasource.options.kafka) {
     parts.push("");
     parts.push(generateKafkaConfig(datasource.options.kafka));
+  }
+
+  // Add S3 configuration if present
+  if (datasource.options.s3) {
+    parts.push("");
+    parts.push(generateS3Config(datasource.options.s3));
   }
 
   // Add forward query if present
