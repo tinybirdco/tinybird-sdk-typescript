@@ -42,7 +42,8 @@
   "files": [
     "dist",
     "bin",
-    "src"
+    "src",
+    "extension/*.vsix"
   ],
   "scripts": {
     "build": "tsc",
