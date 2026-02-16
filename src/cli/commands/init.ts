@@ -17,7 +17,7 @@ import {
   type DevMode,
 } from "../config.js";
 import { browserLogin } from "../auth.js";
-import { saveTinybirdToken } from "../env.js";
+import { saveTinybirdBaseUrl, saveTinybirdToken } from "../env.js";
 import { selectRegion } from "../region-selector.js";
 import { getGitRoot } from "../git.js";
 import { fetchAllResources } from "../../api/resources.js";
@@ -1000,6 +1000,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
 
         // Update config with selected region's baseUrl
         const baseUrl = authResult.baseUrl ?? regionResult.apiHost;
+        saveTinybirdBaseUrl(cwd, baseUrl);
         const currentConfigPath = findExistingConfigPath(cwd);
         if (currentConfigPath && currentConfigPath.endsWith(".json")) {
           updateConfig(currentConfigPath, { baseUrl });

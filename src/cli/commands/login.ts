@@ -5,7 +5,7 @@
 import * as path from "path";
 import { browserLogin, type LoginOptions, type AuthResult } from "../auth.js";
 import { updateConfig, findConfigFile } from "../config.js";
-import { saveTinybirdToken } from "../env.js";
+import { saveTinybirdBaseUrl, saveTinybirdToken } from "../env.js";
 import { getApiHostWithRegionSelection } from "../region-selector.js";
 
 /**
@@ -87,6 +87,8 @@ export async function runLogin(options: RunLoginOptions = {}): Promise<LoginResu
   // Save token to .env.local (in same directory as config file)
   try {
     saveTinybirdToken(configDir, authResult.token);
+    const baseUrl = authResult.baseUrl ?? apiHost;
+    saveTinybirdBaseUrl(configDir, baseUrl);
 
     // Update baseUrl in config file if it changed (only for JSON configs)
     if (authResult.baseUrl && configPath.endsWith(".json")) {

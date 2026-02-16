@@ -17,11 +17,23 @@ vi.mock("../region-selector.js", () => ({
   }),
 }));
 
+import { browserLogin } from "../auth.js";
+import { selectRegion } from "../region-selector.js";
+
+const mockedBrowserLogin = vi.mocked(browserLogin);
+const mockedSelectRegion = vi.mocked(selectRegion);
+
 describe("Init Command", () => {
   let tempDir: string;
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-init-test-"));
+    vi.clearAllMocks();
+    mockedSelectRegion.mockResolvedValue({
+      success: true,
+      apiHost: "https://api.tinybird.co",
+    });
+    mockedBrowserLogin.mockResolvedValue({ success: false });
   });
 
   afterEach(() => {
@@ -550,6 +562,62 @@ describe("Init Command", () => {
         process.chdir(originalCwd);
         fs.rmSync(externalCwd, { recursive: true, force: true });
       }
+    });
+  });
+
+  describe("login flow", () => {
+    it("saves TINYBIRD_URL during init login", async () => {
+      mockedBrowserLogin.mockResolvedValue({
+        success: true,
+        token: "new-token-123",
+        baseUrl: "https://api.us-east.tinybird.co",
+        workspaceName: "test-workspace",
+      });
+
+      const result = await runInit({
+        cwd: tempDir,
+        skipLogin: false,
+        devMode: "branch",
+        clientPath: "lib/tinybird.ts",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.loggedIn).toBe(true);
+
+      const envContent = fs.readFileSync(
+        path.join(tempDir, ".env.local"),
+        "utf-8"
+      );
+      expect(envContent).toContain("TINYBIRD_TOKEN=new-token-123");
+      expect(envContent).toContain("TINYBIRD_URL=https://api.us-east.tinybird.co");
+    });
+
+    it("uses selected region as TINYBIRD_URL when auth response has no baseUrl", async () => {
+      mockedSelectRegion.mockResolvedValue({
+        success: true,
+        apiHost: "https://api.eu-west.tinybird.co",
+      });
+      mockedBrowserLogin.mockResolvedValue({
+        success: true,
+        token: "new-token-456",
+        workspaceName: "test-workspace",
+      });
+
+      const result = await runInit({
+        cwd: tempDir,
+        skipLogin: false,
+        devMode: "branch",
+        clientPath: "lib/tinybird.ts",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.loggedIn).toBe(true);
+
+      const envContent = fs.readFileSync(
+        path.join(tempDir, ".env.local"),
+        "utf-8"
+      );
+      expect(envContent).toContain("TINYBIRD_URL=https://api.eu-west.tinybird.co");
     });
   });
 });
