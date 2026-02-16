@@ -526,6 +526,59 @@ In local mode:
 
 ## Defining Resources
 
+### Connections
+
+```typescript
+import { defineKafkaConnection, defineS3Connection } from "@tinybirdco/sdk";
+
+export const eventsKafka = defineKafkaConnection("events_kafka", {
+  bootstrapServers: "kafka.example.com:9092",
+  securityProtocol: "SASL_SSL",
+  saslMechanism: "PLAIN",
+  key: '{{ tb_secret("KAFKA_KEY") }}',
+  secret: '{{ tb_secret("KAFKA_SECRET") }}',
+});
+
+export const landingS3 = defineS3Connection("landing_s3", {
+  region: "us-east-1",
+  arn: "arn:aws:iam::123456789012:role/tinybird-s3-access",
+});
+```
+
+Use connections from datasources:
+
+```typescript
+import { defineDatasource, t, engine } from "@tinybirdco/sdk";
+import { eventsKafka, landingS3 } from "./connections";
+
+export const kafkaEvents = defineDatasource("kafka_events", {
+  schema: {
+    timestamp: t.dateTime(),
+    payload: t.string(),
+  },
+  engine: engine.mergeTree({ sortingKey: ["timestamp"] }),
+  kafka: {
+    connection: eventsKafka,
+    topic: "events",
+    groupId: "events-consumer",
+    autoOffsetReset: "earliest",
+  },
+});
+
+export const s3Landing = defineDatasource("s3_landing", {
+  schema: {
+    timestamp: t.dateTime(),
+    session_id: t.string(),
+  },
+  engine: engine.mergeTree({ sortingKey: ["timestamp"] }),
+  s3: {
+    connection: landingS3,
+    bucketUri: "s3://my-bucket/events/*.csv",
+    schedule: "@auto",
+  },
+});
+```
+
 ### Datasources
 
 ```typescript
