@@ -161,7 +161,7 @@ describe("Login Command", () => {
       );
     });
 
-    it("creates .env.local with token", async () => {
+    it("creates .env.local with token and base URL", async () => {
       mockedBrowserLogin.mockResolvedValue({
         success: true,
         token: "new-token-123",
@@ -178,19 +178,20 @@ describe("Login Command", () => {
         "utf-8"
       );
       expect(envContent).toContain("TINYBIRD_TOKEN=new-token-123");
+      expect(envContent).toContain("TINYBIRD_URL=https://api.tinybird.co");
     });
 
     it("updates existing token in .env.local", async () => {
       // Create existing .env.local with old token
       fs.writeFileSync(
         path.join(tempDir, ".env.local"),
-        "TINYBIRD_TOKEN=old-token\nOTHER_VAR=value\n"
+        "TINYBIRD_TOKEN=old-token\nTINYBIRD_URL=https://old.tinybird.co\nOTHER_VAR=value\n"
       );
 
       mockedBrowserLogin.mockResolvedValue({
         success: true,
         token: "new-token-456",
-        baseUrl: "https://api.tinybird.co",
+        baseUrl: "https://api.us-east.tinybird.co",
         workspaceName: "test-workspace",
       });
 
@@ -203,8 +204,10 @@ describe("Login Command", () => {
         "utf-8"
       );
       expect(envContent).toContain("TINYBIRD_TOKEN=new-token-456");
+      expect(envContent).toContain("TINYBIRD_URL=https://api.us-east.tinybird.co");
       expect(envContent).toContain("OTHER_VAR=value");
       expect(envContent).not.toContain("old-token");
+      expect(envContent).not.toContain("https://old.tinybird.co");
     });
 
     it("appends token to existing .env.local without TINYBIRD_TOKEN", async () => {
@@ -231,6 +234,7 @@ describe("Login Command", () => {
       );
       expect(envContent).toContain("OTHER_VAR=value");
       expect(envContent).toContain("TINYBIRD_TOKEN=new-token-789");
+      expect(envContent).toContain("TINYBIRD_URL=https://api.tinybird.co");
     });
 
     it("saves .env.local in same directory as tinybird.json (monorepo)", async () => {
@@ -312,6 +316,12 @@ describe("Login Command", () => {
       );
       // Original baseUrl preserved
       expect(config.baseUrl).toBe("https://api.tinybird.co");
+
+      const envContent = fs.readFileSync(
+        path.join(tempDir, ".env.local"),
+        "utf-8"
+      );
+      expect(envContent).toContain("TINYBIRD_URL=https://api.tinybird.co");
     });
   });
 
