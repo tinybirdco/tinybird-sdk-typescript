@@ -95,8 +95,18 @@ function parseColumnLine(filePath: string, resourceName: string, rawLine: string
     );
   }
 
-  const columnName = line.slice(0, firstSpace).trim();
+  const rawColumnName = line.slice(0, firstSpace).trim();
+  const columnName = normalizeColumnName(rawColumnName);
   let rest = line.slice(firstSpace + 1).trim();
+
+  if (!columnName) {
+    throw new MigrationParseError(
+      filePath,
+      "datasource",
+      resourceName,
+      `Invalid schema column name: "${rawLine}"`
+    );
+  }
 
   const codecMatch = rest.match(/\s+CODEC\((.+)\)\s*$/);
   const codec = codecMatch ? codecMatch[1].trim() : undefined;
@@ -134,6 +144,17 @@ function parseColumnLine(filePath: string, resourceName: string, rawLine: string
     defaultExpression,
     codec,
   };
+}
+
+function normalizeColumnName(value: string): string {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith("`") && trimmed.endsWith("`")) ||
+    (trimmed.startsWith('"') && trimmed.endsWith('"'))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
 }
 
 function parseEngineSettings(value: string): Record<string, string | number | boolean> {

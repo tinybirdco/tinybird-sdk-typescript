@@ -767,4 +767,36 @@ ENGINE_SORTING_KEY "event_id"
     expect(output).toContain("event_type: t.string()");
     expect(output).not.toContain("jsonPaths: false");
   });
+
+  it("normalizes backticked schema column names to valid object keys", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "backticked.datasource",
+      `SCHEMA >
+    \`_is_deleted\` UInt8 \`json:$._is_deleted\`,
+    \`id\` UUID \`json:$.id\`
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('_is_deleted: column(t.uint8(), { jsonPath: "$._is_deleted" })');
+    expect(output).toContain('id: column(t.uuid(), { jsonPath: "$.id" })');
+    expect(output).not.toContain("`_is_deleted`:");
+    expect(output).not.toContain("`id`:");
+  });
 });

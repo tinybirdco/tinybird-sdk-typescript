@@ -13,6 +13,10 @@ function escapeString(value: string): string {
   return JSON.stringify(value);
 }
 
+function emitObjectKey(key: string): string {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : escapeString(key);
+}
+
 function normalizedBaseType(type: string): string {
   let current = type.trim();
   let updated = true;
@@ -193,6 +197,7 @@ function emitDatasource(ds: DatasourceModel): string {
   lines.push("  schema: {");
   for (const column of ds.columns) {
     let validator = strictColumnTypeToValidator(column.type);
+    const columnKey = emitObjectKey(column.name);
 
     if (column.defaultExpression !== undefined) {
       const parsedDefault = parseLiteralFromDatafile(column.defaultExpression);
@@ -217,10 +222,10 @@ function emitDatasource(ds: DatasourceModel): string {
 
     if (column.jsonPath) {
       lines.push(
-        `    ${column.name}: column(${validator}, { jsonPath: ${escapeString(column.jsonPath)} }),`
+        `    ${columnKey}: column(${validator}, { jsonPath: ${escapeString(column.jsonPath)} }),`
       );
     } else {
-      lines.push(`    ${column.name}: ${validator},`);
+      lines.push(`    ${columnKey}: ${validator},`);
     }
   }
   lines.push("  },");
@@ -370,7 +375,7 @@ function emitPipe(pipe: PipeModel): string {
           param.required,
           param.defaultValue
         );
-        lines.push(`    ${param.name}: ${validator},`);
+        lines.push(`    ${emitObjectKey(param.name)}: ${validator},`);
       }
       lines.push("  },");
     }
@@ -415,7 +420,7 @@ function emitPipe(pipe: PipeModel): string {
     }
     lines.push("  output: {");
     for (const columnName of endpointOutputColumns) {
-      lines.push(`    ${columnName}: t.string(),`);
+      lines.push(`    ${emitObjectKey(columnName)}: t.string(),`);
     }
     lines.push("  },");
   }
