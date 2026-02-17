@@ -741,6 +741,55 @@ export const manualReport = defineCopyPipe("manual_report", {
 });
 ```
 
+### Sink Pipes
+
+Use sink pipes to publish query results to external systems. The SDK supports only Kafka and S3 sinks.
+
+```typescript
+import { defineSinkPipe, node } from "@tinybirdco/sdk";
+import { eventsKafka, landingS3 } from "./connections";
+
+// Kafka sink
+export const kafkaEventsSink = defineSinkPipe("kafka_events_sink", {
+  sink: {
+    connection: eventsKafka,
+    topic: "events_export",
+    schedule: "@on-demand",
+    strategy: "append",
+  },
+  nodes: [
+    node({
+      name: "publish",
+      sql: `
+        SELECT timestamp, payload
+        FROM kafka_events
+      `,
+    }),
+  ],
+});
+
+// S3 sink
+export const s3EventsSink = defineSinkPipe("s3_events_sink", {
+  sink: {
+    connection: landingS3,
+    bucketUri: "s3://my-bucket/exports/",
+    fileTemplate: "events_{date}",
+    format: "csv",
+    schedule: "@once",
+    strategy: "replace",
+  },
+  nodes: [
+    node({
+      name: "export",
+      sql: `
+        SELECT timestamp, session_id
+        FROM s3_landing
+      `,
+    }),
+  ],
+});
+```
+
 ### Static Tokens
 
 Define reusable tokens for resource access control:
