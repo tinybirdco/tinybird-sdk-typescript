@@ -358,6 +358,7 @@ Behavior:
 - Processes files, directories, and glob patterns.
 - Continues through all matches and reports migratable resources plus per-file errors.
 - In strict mode (default), exits with non-zero status if any errors are found.
+- Infers parameter defaults from scalar SQL placeholders (for example `{{String(env, 'prod')}}`) while treating `{{Array(ids, 'String')}}` second arguments as element types, not defaults.
 - Writes one output file by default: `./tinybird.migration.ts`.
 
 ### `tinybird dev`
@@ -529,14 +530,14 @@ In local mode:
 ### Connections
 
 ```typescript
-import { defineKafkaConnection, defineS3Connection } from "@tinybirdco/sdk";
+import { defineKafkaConnection, defineS3Connection, secret } from "@tinybirdco/sdk";
 
 export const eventsKafka = defineKafkaConnection("events_kafka", {
   bootstrapServers: "kafka.example.com:9092",
   securityProtocol: "SASL_SSL",
   saslMechanism: "PLAIN",
-  key: '{{ tb_secret("KAFKA_KEY") }}',
-  secret: '{{ tb_secret("KAFKA_SECRET") }}',
+  key: secret("KAFKA_KEY"),
+  secret: secret("KAFKA_SECRET"),
 });
 
 export const landingS3 = defineS3Connection("landing_s3", {
