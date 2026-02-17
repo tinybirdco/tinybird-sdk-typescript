@@ -97,6 +97,9 @@ export type {
   VersionedCollapsingMergeTreeConfig,
 } from "./schema/engines.js";
 
+// ============ Utilities ============
+export { secret } from "./schema/secret.js";
+
 // ============ Datasource ============
 export { defineDatasource, isDatasourceDefinition, column, getColumnType, getColumnJsonPath, getColumnNames } from "./schema/datasource.js";
 export type {

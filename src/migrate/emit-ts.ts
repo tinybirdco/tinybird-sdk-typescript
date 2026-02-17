@@ -14,6 +14,79 @@ function escapeString(value: string): string {
   return JSON.stringify(value);
 }
 
+function emitObjectKey(key: string): string {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : escapeString(key);
+}
+
+interface ParsedSecretTemplate {
+  name: string;
+  defaultValue?: string;
+}
+
+function parseTbSecretTemplate(value: string): ParsedSecretTemplate | null {
+  const trimmed = value.trim();
+  const regex =
+    /^\{\{\s*tb_secret\(\s*["']([^"']+)["'](?:\s*,\s*["']([^"']*)["'])?\s*\)\s*\}\}$/;
+  const match = trimmed.match(regex);
+  if (!match) {
+    return null;
+  }
+  return {
+    name: match[1] ?? "",
+    defaultValue: match[2],
+  };
+}
+
+function emitStringOrSecret(value: string): string {
+  const parsed = parseTbSecretTemplate(value);
+  if (!parsed) {
+    return escapeString(value);
+  }
+  if (parsed.defaultValue !== undefined) {
+    return `secret(${escapeString(parsed.name)}, ${escapeString(parsed.defaultValue)})`;
+  }
+  return `secret(${escapeString(parsed.name)})`;
+}
+
+function hasSecretTemplate(resources: ParsedResource[]): boolean {
+  const values: string[] = [];
+
+  for (const resource of resources) {
+    if (resource.kind === "connection") {
+      if (resource.connectionType === "kafka") {
+        values.push(resource.bootstrapServers);
+        if (resource.key) values.push(resource.key);
+        if (resource.secret) values.push(resource.secret);
+        if (resource.sslCaPem) values.push(resource.sslCaPem);
+        if (resource.schemaRegistryUrl) values.push(resource.schemaRegistryUrl);
+      } else {
+        values.push(resource.region);
+        if (resource.arn) values.push(resource.arn);
+        if (resource.accessKey) values.push(resource.accessKey);
+        if (resource.secret) values.push(resource.secret);
+      }
+      continue;
+    }
+
+    if (resource.kind === "datasource") {
+      if (resource.description) values.push(resource.description);
+      if (resource.kafka) {
+        values.push(resource.kafka.topic);
+        if (resource.kafka.groupId) values.push(resource.kafka.groupId);
+        if (resource.kafka.autoOffsetReset) values.push(resource.kafka.autoOffsetReset);
+      }
+      if (resource.s3) {
+        values.push(resource.s3.bucketUri);
+        if (resource.s3.schedule) values.push(resource.s3.schedule);
+        if (resource.s3.fromTimestamp) values.push(resource.s3.fromTimestamp);
+      }
+      continue;
+    }
+  }
+
+  return values.some((value) => parseTbSecretTemplate(value) !== null);
+}
+
 function normalizedBaseType(type: string): string {
   let current = type.trim();
   let updated = true;
@@ -148,6 +221,9 @@ function emitEngineOptions(engine: DatasourceEngineModel): string {
   if (engine.ver) {
     options.push(`ver: ${escapeString(engine.ver)}`);
   }
+  if (engine.isDeleted) {
+    options.push(`isDeleted: ${escapeString(engine.isDeleted)}`);
+  }
   if (engine.sign) {
     options.push(`sign: ${escapeString(engine.sign)}`);
   }
@@ -177,13 +253,6 @@ function emitDatasource(ds: DatasourceModel): string {
   const variableName = toCamelCase(ds.name);
   const lines: string[] = [];
   const hasJsonPath = ds.columns.some((column) => column.jsonPath !== undefined);
-  const hasMissingJsonPath = ds.columns.some((column) => column.jsonPath === undefined);
-
-  if (hasJsonPath && hasMissingJsonPath) {
-    throw new Error(
-      `Datasource "${ds.name}" has mixed json path usage. This is not representable in strict mode.`
-    );
-  }
 
   if (ds.description) {
     lines.push("/**");
@@ -195,7 +264,7 @@ function emitDatasource(ds: DatasourceModel): string {
 
   lines.push(`export const ${variableName} = defineDatasource(${escapeString(ds.name)}, {`);
   if (ds.description !== undefined) {
-    lines.push(`  description: ${escapeString(ds.description)},`);
+    lines.push(`  description: ${emitStringOrSecret(ds.description)},`);
   }
   if (!hasJsonPath) {
     lines.push("  jsonPaths: false,");
@@ -204,6 +273,7 @@ function emitDatasource(ds: DatasourceModel): string {
   lines.push("  schema: {");
   for (const column of ds.columns) {
     let validator = strictColumnTypeToValidator(column.type);
+    const columnKey = emitObjectKey(column.name);
 
     if (column.defaultExpression !== undefined) {
       const parsedDefault = parseLiteralFromDatafile(column.defaultExpression);
@@ -227,12 +297,9 @@ function emitDatasource(ds: DatasourceModel): string {
     }
 
     if (column.jsonPath) {
-      lines.push(
-        `    ${column.name}: column(${validator}, { jsonPath: ${escapeString(column.jsonPath)} }),`
-      );
-    } else {
-      lines.push(`    ${column.name}: ${validator},`);
+      validator += `.jsonPath(${escapeString(column.jsonPath)})`;
     }
+    lines.push(`    ${columnKey}: ${validator},`);
   }
   lines.push("  },");
   if (ds.engine) {
@@ -243,12 +310,15 @@ function emitDatasource(ds: DatasourceModel): string {
     const connectionVar = toCamelCase(ds.kafka.connectionName);
     lines.push("  kafka: {");
     lines.push(`    connection: ${connectionVar},`);
-    lines.push(`    topic: ${escapeString(ds.kafka.topic)},`);
+    lines.push(`    topic: ${emitStringOrSecret(ds.kafka.topic)},`);
     if (ds.kafka.groupId) {
-      lines.push(`    groupId: ${escapeString(ds.kafka.groupId)},`);
+      lines.push(`    groupId: ${emitStringOrSecret(ds.kafka.groupId)},`);
     }
     if (ds.kafka.autoOffsetReset) {
-      lines.push(`    autoOffsetReset: ${escapeString(ds.kafka.autoOffsetReset)},`);
+      lines.push(`    autoOffsetReset: ${emitStringOrSecret(ds.kafka.autoOffsetReset)},`);
+    }
+    if (ds.kafka.storeRawValue !== undefined) {
+      lines.push(`    storeRawValue: ${ds.kafka.storeRawValue},`);
     }
     lines.push("  },");
   }
@@ -257,12 +327,12 @@ function emitDatasource(ds: DatasourceModel): string {
     const connectionVar = toCamelCase(ds.s3.connectionName);
     lines.push("  s3: {");
     lines.push(`    connection: ${connectionVar},`);
-    lines.push(`    bucketUri: ${escapeString(ds.s3.bucketUri)},`);
+    lines.push(`    bucketUri: ${emitStringOrSecret(ds.s3.bucketUri)},`);
     if (ds.s3.schedule) {
-      lines.push(`    schedule: ${escapeString(ds.s3.schedule)},`);
+      lines.push(`    schedule: ${emitStringOrSecret(ds.s3.schedule)},`);
     }
     if (ds.s3.fromTimestamp) {
-      lines.push(`    fromTimestamp: ${escapeString(ds.s3.fromTimestamp)},`);
+      lines.push(`    fromTimestamp: ${emitStringOrSecret(ds.s3.fromTimestamp)},`);
     }
     lines.push("  },");
   }
@@ -302,21 +372,24 @@ function emitConnection(connection: KafkaConnectionModel | S3ConnectionModel): s
     lines.push(
       `export const ${variableName} = defineKafkaConnection(${escapeString(connection.name)}, {`
     );
-    lines.push(`  bootstrapServers: ${escapeString(connection.bootstrapServers)},`);
+    lines.push(`  bootstrapServers: ${emitStringOrSecret(connection.bootstrapServers)},`);
     if (connection.securityProtocol) {
-      lines.push(`  securityProtocol: ${escapeString(connection.securityProtocol)},`);
+      lines.push(`  securityProtocol: ${emitStringOrSecret(connection.securityProtocol)},`);
     }
     if (connection.saslMechanism) {
-      lines.push(`  saslMechanism: ${escapeString(connection.saslMechanism)},`);
+      lines.push(`  saslMechanism: ${emitStringOrSecret(connection.saslMechanism)},`);
     }
     if (connection.key) {
-      lines.push(`  key: ${escapeString(connection.key)},`);
+      lines.push(`  key: ${emitStringOrSecret(connection.key)},`);
     }
     if (connection.secret) {
-      lines.push(`  secret: ${escapeString(connection.secret)},`);
+      lines.push(`  secret: ${emitStringOrSecret(connection.secret)},`);
+    }
+    if (connection.schemaRegistryUrl) {
+      lines.push(`  schemaRegistryUrl: ${emitStringOrSecret(connection.schemaRegistryUrl)},`);
     }
     if (connection.sslCaPem) {
-      lines.push(`  sslCaPem: ${escapeString(connection.sslCaPem)},`);
+      lines.push(`  sslCaPem: ${emitStringOrSecret(connection.sslCaPem)},`);
     }
     lines.push("});");
     lines.push("");
@@ -326,15 +399,15 @@ function emitConnection(connection: KafkaConnectionModel | S3ConnectionModel): s
   lines.push(
     `export const ${variableName} = defineS3Connection(${escapeString(connection.name)}, {`
   );
-  lines.push(`  region: ${escapeString(connection.region)},`);
+  lines.push(`  region: ${emitStringOrSecret(connection.region)},`);
   if (connection.arn) {
-    lines.push(`  arn: ${escapeString(connection.arn)},`);
+    lines.push(`  arn: ${emitStringOrSecret(connection.arn)},`);
   }
   if (connection.accessKey) {
-    lines.push(`  accessKey: ${escapeString(connection.accessKey)},`);
+    lines.push(`  accessKey: ${emitStringOrSecret(connection.accessKey)},`);
   }
   if (connection.secret) {
-    lines.push(`  secret: ${escapeString(connection.secret)},`);
+    lines.push(`  secret: ${emitStringOrSecret(connection.secret)},`);
   }
   lines.push("});");
   lines.push("");
@@ -378,7 +451,7 @@ function emitPipe(pipe: PipeModel): string {
           param.defaultValue
         );
         const validator = applyParamDescription(validatorWithOptional, param.description);
-        lines.push(`    ${param.name}: ${validator},`);
+        lines.push(`    ${emitObjectKey(param.name)}: ${validator},`);
       }
       lines.push("  },");
     }
@@ -423,7 +496,7 @@ function emitPipe(pipe: PipeModel): string {
     }
     lines.push("  output: {");
     for (const columnName of endpointOutputColumns) {
-      lines.push(`    ${columnName}: t.string(),`);
+      lines.push(`    ${emitObjectKey(columnName)}: t.string(),`);
     }
     lines.push("  },");
   }
@@ -453,10 +526,8 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
     (resource): resource is PipeModel => resource.kind === "pipe"
   );
 
-  const needsColumn = datasources.some((ds) =>
-    ds.columns.some((column) => column.jsonPath !== undefined)
-  );
   const needsParams = pipes.some((pipe) => pipe.params.length > 0);
+  const needsSecret = hasSecretTemplate(resources);
 
   const imports = new Set<string>([
     "defineDatasource",
@@ -472,14 +543,14 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
   if (connections.some((connection) => connection.connectionType === "s3")) {
     imports.add("defineS3Connection");
   }
-  if (needsColumn) {
-    imports.add("column");
-  }
   if (needsParams) {
     imports.add("p");
   }
   if (datasources.some((datasource) => datasource.engine !== undefined)) {
     imports.add("engine");
+  }
+  if (needsSecret) {
+    imports.add("secret");
   }
 
   const orderedImports = [
@@ -492,7 +563,7 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
     "node",
     "t",
     "engine",
-    "column",
+    "secret",
     "p",
   ].filter((name) => imports.has(name));
 

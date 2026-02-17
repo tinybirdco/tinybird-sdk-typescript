@@ -263,6 +263,43 @@ describe('Datasource Generator', () => {
       expect(schemaLines[1]).toContain(',');
       expect(schemaLines[2]).not.toContain(',');
     });
+
+    it('autogenerates jsonPath when jsonPaths is enabled and no explicit path is set', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          event_id: t.string().nullable(),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('event_id Nullable(String) `json:$.event_id`');
+    });
+
+    it('uses explicit jsonPath from validator modifier when jsonPaths is enabled', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          event_id: t.string().nullable().jsonPath('$.explicit_path'),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('event_id Nullable(String) `json:$.explicit_path`');
+      expect(result.content).not.toContain('`json:$.event_id`');
+    });
+
+    it('omits json paths when jsonPaths is false even if column has explicit jsonPath modifier', () => {
+      const ds = defineDatasource('test_ds', {
+        jsonPaths: false,
+        schema: {
+          event_id: t.string().nullable().jsonPath('$.explicit_path'),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('event_id Nullable(String)');
+      expect(result.content).not.toContain('`json:$.explicit_path`');
+      expect(result.content).not.toContain('`json:$.event_id`');
+    });
   });
 
   describe('generateAllDatasources', () => {
@@ -378,6 +415,29 @@ describe('Datasource Generator', () => {
       const result = generateDatasource(ds);
 
       expect(result.content).toContain('KAFKA_AUTO_OFFSET_RESET earliest');
+    });
+
+    it('includes store raw value when provided', () => {
+      const kafkaConn = defineKafkaConnection('my_kafka', {
+        bootstrapServers: 'kafka.example.com:9092',
+      });
+
+      const ds = defineDatasource('kafka_events', {
+        schema: {
+          timestamp: t.dateTime(),
+          event: t.string(),
+        },
+        engine: engine.mergeTree({ sortingKey: ['timestamp'] }),
+        kafka: {
+          connection: kafkaConn,
+          topic: 'events',
+          storeRawValue: true,
+        },
+      });
+
+      const result = generateDatasource(ds);
+
+      expect(result.content).toContain('KAFKA_STORE_RAW_VALUE True');
     });
 
     it('generates complete Kafka datasource with all options', () => {

@@ -3,7 +3,7 @@
  * Define table schemas as TypeScript with full type safety
  */
 
-import type { AnyTypeValidator } from "./types.js";
+import { getModifiers, isTypeValidator, type AnyTypeValidator } from "./types.js";
 import type { EngineConfig } from "./engines.js";
 import type { KafkaConnectionDefinition, S3ConnectionDefinition } from "./connection.js";
 import type { TokenDefinition, DatasourceTokenScope } from "./token.js";
@@ -66,6 +66,8 @@ export interface KafkaConfig {
   groupId?: string;
   /** Where to start reading: 'earliest' or 'latest' (default: 'latest') */
   autoOffsetReset?: "earliest" | "latest";
+  /** Whether to store the raw Kafka value payload */
+  storeRawValue?: boolean;
 }
 
 /**
@@ -207,9 +209,18 @@ export function getColumnType(column: AnyTypeValidator | ColumnDefinition): AnyT
  * Get the JSON path for a column if defined
  */
 export function getColumnJsonPath(column: AnyTypeValidator | ColumnDefinition): string | undefined {
-  if ("jsonPath" in column) {
+  if (isTypeValidator(column)) {
+    return getModifiers(column).jsonPath;
+  }
+
+  if (column.jsonPath !== undefined) {
     return column.jsonPath;
   }
+
+  if (isTypeValidator(column.type)) {
+    return getModifiers(column.type).jsonPath;
+  }
+
   return undefined;
 }
 

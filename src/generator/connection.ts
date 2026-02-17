@@ -42,6 +42,10 @@ function generateKafkaConnection(connection: KafkaConnectionDefinition): string 
     parts.push(`KAFKA_SECRET ${options.secret}`);
   }
 
+  if (options.schemaRegistryUrl) {
+    parts.push(`KAFKA_SCHEMA_REGISTRY_URL ${options.schemaRegistryUrl}`);
+  }
+
   if (options.sslCaPem) {
     parts.push(`KAFKA_SSL_CA_PEM ${options.sslCaPem}`);
   }

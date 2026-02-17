@@ -170,6 +170,22 @@ describe("Datasource Schema", () => {
 
       expect(result).toBeUndefined();
     });
+
+    it("returns jsonPath from validator modifier", () => {
+      const validator = t.string().jsonPath("$.user.id");
+      const result = getColumnJsonPath(validator);
+
+      expect(result).toBe("$.user.id");
+    });
+
+    it("prefers column definition jsonPath over validator modifier", () => {
+      const col = column(t.string().jsonPath("$.from_validator"), {
+        jsonPath: "$.from_column",
+      });
+      const result = getColumnJsonPath(col);
+
+      expect(result).toBe("$.from_column");
+    });
   });
 
   describe("getColumnNames", () => {

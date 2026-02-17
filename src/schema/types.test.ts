@@ -115,6 +115,20 @@ describe('Type Validators (t.*)', () => {
     });
   });
 
+  describe('jsonPath modifier', () => {
+    it('sets jsonPath in modifiers', () => {
+      const type = t.string().jsonPath('$.payload.id');
+      expect(type._modifiers.jsonPath).toBe('$.payload.id');
+    });
+
+    it('supports chaining with other modifiers', () => {
+      const type = t.string().nullable().jsonPath('$.user.name');
+      expect(type._tinybirdType).toBe('Nullable(String)');
+      expect(type._modifiers.nullable).toBe(true);
+      expect(type._modifiers.jsonPath).toBe('$.user.name');
+    });
+  });
+
   describe('Complex types', () => {
     it('generates Array type', () => {
       const type = t.array(t.string());
