@@ -887,4 +887,34 @@ KAFKA_GROUP_ID events-group
     expect(output).not.toContain("const secret = (name: string, defaultValue?: string) =>");
     expect(output).toContain('groupId: "events-group",');
   });
+
+  it("treats Array placeholder second argument as type instead of default", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "array_param.pipe",
+      `NODE base
+SQL >
+    SELECT id
+    FROM events
+    WHERE schema_id IN {{Array(schema_ids, 'String')}}
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain("schema_ids: p.array(p.string()),");
+    expect(output).not.toContain('schema_ids: p.array(p.string()).optional("String"),');
+    expect(output).not.toContain('optional("String")');
+  });
 });

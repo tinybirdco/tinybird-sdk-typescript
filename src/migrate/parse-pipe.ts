@@ -131,6 +131,14 @@ function parseParamDefault(rawValue: string): string | number {
   throw new Error(`Unsupported parameter default value: "${rawValue}"`);
 }
 
+function isQuotedStringLiteral(value: string): boolean {
+  const trimmed = value.trim();
+  return (
+    (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+    (trimmed.startsWith('"') && trimmed.endsWith('"'))
+  );
+}
+
 function inferParamsFromSql(
   sql: string,
   filePath: string,
@@ -175,15 +183,27 @@ function inferParamsFromSql(
 
     let defaultValue: string | number | undefined;
     if (args.length > 1) {
-      try {
-        defaultValue = parseParamDefault(args[1] ?? "");
-      } catch (error) {
-        throw new MigrationParseError(
-          filePath,
-          "pipe",
-          resourceName,
-          (error as Error).message
-        );
+      if (mappedType === "Array") {
+        const arrayElementType = args[1]?.trim() ?? "";
+        if (!arrayElementType || !isQuotedStringLiteral(arrayElementType)) {
+          throw new MigrationParseError(
+            filePath,
+            "pipe",
+            resourceName,
+            `Unsupported Array placeholder syntax in strict mode: "${match[0]}"`
+          );
+        }
+      } else {
+        try {
+          defaultValue = parseParamDefault(args[1] ?? "");
+        } catch (error) {
+          throw new MigrationParseError(
+            filePath,
+            "pipe",
+            resourceName,
+            (error as Error).message
+          );
+        }
       }
     }
 
