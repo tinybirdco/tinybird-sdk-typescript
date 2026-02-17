@@ -241,6 +241,9 @@ export function getEngineClause(config: EngineConfig): string {
   if (config.type === "ReplacingMergeTree" && config.ver) {
     parts.push(`ENGINE_VER "${config.ver}"`);
   }
+  if (config.type === "ReplacingMergeTree" && config.isDeleted) {
+    parts.push(`ENGINE_IS_DELETED "${config.isDeleted}"`);
+  }
 
   if (config.type === "CollapsingMergeTree" || config.type === "VersionedCollapsingMergeTree") {
     parts.push(`ENGINE_SIGN "${config.sign}"`);

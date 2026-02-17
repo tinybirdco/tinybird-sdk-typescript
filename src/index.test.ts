@@ -10,4 +10,8 @@ describe("root public exports", () => {
     expect(typeof sdk.defineProject).toBe("function");
     expect(typeof sdk.Tinybird).toBe("function");
   });
+
+  it("exports secret utility", () => {
+    expect(typeof sdk.secret).toBe("function");
+  });
 });

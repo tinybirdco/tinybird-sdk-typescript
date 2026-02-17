@@ -15,7 +15,7 @@ const EXPECTED_COMPLEX_OUTPUT = `/**
  * Review endpoint output schemas and any defaults before production use.
  */
 
-import { defineKafkaConnection, defineDatasource, definePipe, defineMaterializedView, defineCopyPipe, node, t, engine, column, p } from "@tinybirdco/sdk";
+import { defineKafkaConnection, defineDatasource, definePipe, defineMaterializedView, defineCopyPipe, node, t, engine, p } from "@tinybirdco/sdk";
 
 // Connections
 
@@ -36,12 +36,12 @@ export const stream = defineKafkaConnection("stream", {
 export const events = defineDatasource("events", {
   description: "Events from Kafka stream",
   schema: {
-    event_id: column(t.string(), { jsonPath: "$.event_id" }),
-    user_id: column(t.uint64(), { jsonPath: "$.user.id" }),
-    env: column(t.string().default("prod"), { jsonPath: "$.env" }),
-    is_test: column(t.bool().default(false), { jsonPath: "$.meta.is_test" }),
-    updated_at: column(t.dateTime(), { jsonPath: "$.updated_at" }),
-    payload: column(t.string().default("{}").codec("ZSTD(1)"), { jsonPath: "$.payload" }),
+    event_id: t.string().jsonPath("$.event_id"),
+    user_id: t.uint64().jsonPath("$.user.id"),
+    env: t.string().default("prod").jsonPath("$.env"),
+    is_test: t.bool().default(false).jsonPath("$.meta.is_test"),
+    updated_at: t.dateTime().jsonPath("$.updated_at"),
+    payload: t.string().default("{}").codec("ZSTD(1)").jsonPath("$.payload"),
   },
   engine: engine.replacingMergeTree({ sortingKey: ["event_id", "user_id"], partitionKey: "toYYYYMM(updated_at)", primaryKey: "event_id", ttl: "updated_at + toIntervalDay(30)", ver: "updated_at", settings: { "index_granularity": 8192, "enable_mixed_granularity_parts": true } }),
   kafka: {
@@ -614,5 +614,277 @@ IMPORT_FROM_TIMESTAMP 2024-01-01T00:00:00Z
     expect(output).toContain('bucketUri: "s3://my-bucket/events/*.csv"');
     expect(output).toContain('schedule: "@auto"');
     expect(output).toContain('fromTimestamp: "2024-01-01T00:00:00Z"');
+  });
+
+  it("migrates KAFKA_STORE_RAW_VALUE datasource directive", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "stream.connection",
+      `TYPE kafka
+KAFKA_BOOTSTRAP_SERVERS localhost:9092
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events.datasource",
+      `SCHEMA >
+    event_id String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "event_id"
+KAFKA_CONNECTION_NAME stream
+KAFKA_TOPIC events_topic
+KAFKA_STORE_RAW_VALUE True
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain("kafka: {");
+    expect(output).toContain("connection: stream");
+    expect(output).toContain('topic: "events_topic"');
+    expect(output).toContain("storeRawValue: true");
+  });
+
+  it("migrates kafka schema registry and engine is deleted directives", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "stream.connection",
+      `TYPE kafka
+KAFKA_BOOTSTRAP_SERVERS kafka.example.com:9092
+KAFKA_SCHEMA_REGISTRY_URL https://registry-user:registry-pass@registry.example.com
+# Optional registry auth details
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events.datasource",
+      `SCHEMA >
+    event_id String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "event_id"
+KAFKA_CONNECTION_NAME stream
+KAFKA_TOPIC events_topic
+KAFKA_STORE_RAW_VALUE True
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events_state.datasource",
+      `SCHEMA >
+    # logical delete marker
+    _is_deleted UInt8,
+    event_id String,
+    version_ts DateTime
+
+ENGINE "ReplacingMergeTree"
+ENGINE_SORTING_KEY "event_id"
+ENGINE_VER "version_ts"
+ENGINE_IS_DELETED "_is_deleted"
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events_state_mv.pipe",
+      `NODE latest
+SQL >
+    SELECT
+      toUInt8(0) AS _is_deleted,
+      event_id,
+      now() AS version_ts
+    FROM events
+# materialized definition
+TYPE MATERIALIZED
+DATASOURCE events_state
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain(
+      'schemaRegistryUrl: "https://registry-user:registry-pass@registry.example.com"'
+    );
+    expect(output).toContain("storeRawValue: true");
+    expect(output).toContain(
+      'engine: engine.replacingMergeTree({ sortingKey: "event_id", ver: "version_ts", isDeleted: "_is_deleted" })'
+    );
+  });
+
+  it("migrates datasource with mixed explicit and default json paths", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "mixed_paths.datasource",
+      `SCHEMA >
+    event_id String \`json:$.payload.id\`,
+    event_type String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "event_id"
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('event_id: t.string().jsonPath("$.payload.id")');
+    expect(output).toContain("event_type: t.string()");
+    expect(output).not.toContain("jsonPaths: false");
+  });
+
+  it("normalizes backticked schema column names to valid object keys", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "backticked.datasource",
+      `SCHEMA >
+    \`_is_deleted\` UInt8 \`json:$._is_deleted\`,
+    \`id\` UUID \`json:$.id\`
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('_is_deleted: t.uint8().jsonPath("$._is_deleted")');
+    expect(output).toContain('id: t.uuid().jsonPath("$.id")');
+    expect(output).not.toContain("`_is_deleted`:");
+    expect(output).not.toContain("`id`:");
+  });
+
+  it("emits secret helper for tb_secret template values", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "stream.connection",
+      `TYPE kafka
+KAFKA_BOOTSTRAP_SERVERS localhost:9092
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events.datasource",
+      `SCHEMA >
+    id UUID
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+KAFKA_CONNECTION_NAME stream
+KAFKA_TOPIC events_topic
+KAFKA_GROUP_ID {{ tb_secret("KAFKA_GROUP_ID_LOCAL_ds_accounts", "accounts_1737295200") }}
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('import {');
+    expect(output).toContain('secret } from "@tinybirdco/sdk";');
+    expect(output).not.toContain("const secret = (name: string, defaultValue?: string) =>");
+    expect(output).toContain(
+      'groupId: secret("KAFKA_GROUP_ID_LOCAL_ds_accounts", "accounts_1737295200"),'
+    );
+    expect(output).not.toContain(
+      'groupId: "{{ tb_secret(\\"KAFKA_GROUP_ID_LOCAL_ds_accounts\\", \\"accounts_1737295200\\") }}",'
+    );
+  });
+
+  it("does not emit secret helper when no tb_secret template values are present", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "stream.connection",
+      `TYPE kafka
+KAFKA_BOOTSTRAP_SERVERS localhost:9092
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events.datasource",
+      `SCHEMA >
+    id UUID
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+KAFKA_CONNECTION_NAME stream
+KAFKA_TOPIC events_topic
+KAFKA_GROUP_ID events-group
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).not.toContain(", secret,");
+    expect(output).not.toContain("const secret = (name: string, defaultValue?: string) =>");
+    expect(output).toContain('groupId: "events-group",');
   });
 });

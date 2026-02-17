@@ -51,6 +51,19 @@ describe("Connection Generator", () => {
       expect(result.content).toContain('KAFKA_SECRET {{ tb_secret("KAFKA_SECRET") }}');
     });
 
+    it("includes schema registry URL when provided", () => {
+      const conn = defineKafkaConnection("my_kafka", {
+        bootstrapServers: "kafka.example.com:9092",
+        schemaRegistryUrl: "https://registry-user:registry-pass@registry.example.com",
+      });
+
+      const result = generateConnection(conn);
+
+      expect(result.content).toContain(
+        "KAFKA_SCHEMA_REGISTRY_URL https://registry-user:registry-pass@registry.example.com"
+      );
+    });
+
     it("includes SSL CA PEM when provided", () => {
       const conn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",

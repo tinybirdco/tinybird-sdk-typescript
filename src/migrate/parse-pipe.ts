@@ -45,7 +45,10 @@ function readIndentedBlock(lines: string[], startIndex: number): BlockReadResult
 
 function nextNonBlank(lines: string[], startIndex: number): number {
   let i = startIndex;
-  while (i < lines.length && isBlank(lines[i] ?? "")) {
+  while (
+    i < lines.length &&
+    (isBlank(lines[i] ?? "") || (lines[i] ?? "").trim().startsWith("#"))
+  ) {
     i += 1;
   }
   return i;
@@ -267,7 +270,7 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
   let i = 0;
   while (i < lines.length) {
     const line = (lines[i] ?? "").trim();
-    if (!line) {
+    if (!line || line.startsWith("#")) {
       i += 1;
       continue;
     }
@@ -515,4 +518,3 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
     inferredOutputColumns,
   };
 }
-

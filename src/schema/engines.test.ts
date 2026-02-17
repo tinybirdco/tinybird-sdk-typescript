@@ -44,6 +44,14 @@ describe('Engine Configurations', () => {
       });
       expect(config.ver).toBe('updated_at');
     });
+
+    it('supports isDeleted column', () => {
+      const config = engine.replacingMergeTree({
+        sortingKey: ['id'],
+        isDeleted: '_is_deleted',
+      });
+      expect(config.isDeleted).toBe('_is_deleted');
+    });
   });
 
   describe('SummingMergeTree', () => {
@@ -136,6 +144,16 @@ describe('Engine Configurations', () => {
       const clause = getEngineClause(config);
       expect(clause).toContain('ENGINE "ReplacingMergeTree"');
       expect(clause).toContain('ENGINE_VER "updated_at"');
+    });
+
+    it('includes ReplacingMergeTree isDeleted column', () => {
+      const config = engine.replacingMergeTree({
+        sortingKey: ['id'],
+        isDeleted: '_is_deleted',
+      });
+      const clause = getEngineClause(config);
+      expect(clause).toContain('ENGINE "ReplacingMergeTree"');
+      expect(clause).toContain('ENGINE_IS_DELETED "_is_deleted"');
     });
 
     it('includes SummingMergeTree columns', () => {

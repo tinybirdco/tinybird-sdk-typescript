@@ -27,6 +27,7 @@ export function parseConnectionFile(
     | undefined;
   let key: string | undefined;
   let secret: string | undefined;
+  let schemaRegistryUrl: string | undefined;
   let sslCaPem: string | undefined;
 
   let region: string | undefined;
@@ -36,7 +37,7 @@ export function parseConnectionFile(
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
-    if (isBlank(line)) {
+    if (isBlank(line) || line.startsWith("#")) {
       continue;
     }
 
@@ -80,6 +81,9 @@ export function parseConnectionFile(
         break;
       case "KAFKA_SECRET":
         secret = value;
+        break;
+      case "KAFKA_SCHEMA_REGISTRY_URL":
+        schemaRegistryUrl = value;
         break;
       case "KAFKA_SSL_CA_PEM":
         sslCaPem = value;
@@ -144,12 +148,21 @@ export function parseConnectionFile(
       saslMechanism,
       key,
       secret,
+      schemaRegistryUrl,
       sslCaPem,
     };
   }
 
   if (connectionType === "s3") {
-    if (bootstrapServers || securityProtocol || saslMechanism || key || secret || sslCaPem) {
+    if (
+      bootstrapServers ||
+      securityProtocol ||
+      saslMechanism ||
+      key ||
+      secret ||
+      schemaRegistryUrl ||
+      sslCaPem
+    ) {
       throw new MigrationParseError(
         resource.filePath,
         "connection",
