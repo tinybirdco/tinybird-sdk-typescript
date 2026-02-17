@@ -836,7 +836,9 @@ KAFKA_GROUP_ID {{ tb_secret("KAFKA_GROUP_ID_LOCAL_ds_accounts", "accounts_173729
     expect(result.errors).toHaveLength(0);
 
     const output = fs.readFileSync(result.outputPath, "utf-8");
-    expect(output).toContain("const secret = (name: string, defaultValue?: string) =>");
+    expect(output).toContain('import {');
+    expect(output).toContain('secret } from "@tinybirdco/sdk";');
+    expect(output).not.toContain("const secret = (name: string, defaultValue?: string) =>");
     expect(output).toContain(
       'groupId: secret("KAFKA_GROUP_ID_LOCAL_ds_accounts", "accounts_1737295200"),'
     );
@@ -881,6 +883,7 @@ KAFKA_GROUP_ID events-group
     expect(result.errors).toHaveLength(0);
 
     const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).not.toContain(", secret,");
     expect(output).not.toContain("const secret = (name: string, defaultValue?: string) =>");
     expect(output).toContain('groupId: "events-group",');
   });

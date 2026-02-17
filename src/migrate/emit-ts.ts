@@ -517,6 +517,7 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
   );
 
   const needsParams = pipes.some((pipe) => pipe.params.length > 0);
+  const needsSecret = hasSecretTemplate(resources);
 
   const imports = new Set<string>([
     "defineDatasource",
@@ -536,6 +537,9 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
   if (needsParams) {
     imports.add("p");
   }
+  if (needsSecret) {
+    imports.add("secret");
+  }
 
   const orderedImports = [
     "defineKafkaConnection",
@@ -547,6 +551,7 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
     "node",
     "t",
     "engine",
+    "secret",
     "p",
   ].filter((name) => imports.has(name));
 
@@ -558,16 +563,6 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
   lines.push("");
   lines.push(`import { ${orderedImports.join(", ")} } from "@tinybirdco/sdk";`);
   lines.push("");
-
-  if (hasSecretTemplate(resources)) {
-    lines.push(
-      "const secret = (name: string, defaultValue?: string) =>",
-      "  defaultValue === undefined",
-      "    ? `{{ tb_secret(\"${name}\") }}`",
-      "    : `{{ tb_secret(\"${name}\", \"${defaultValue}\") }}`;"
-    );
-    lines.push("");
-  }
 
   if (connections.length > 0) {
     lines.push("// Connections");
