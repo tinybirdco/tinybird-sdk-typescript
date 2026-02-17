@@ -107,7 +107,7 @@ export const eventsEndpoint = definePipe("events_endpoint", {
 SELECT event_id, user_id, payload
 FROM events
 WHERE user_id = {{UInt64(user_id)}}
-  AND env = {{String(env, 'prod')}}
+AND env = {{String(env, 'prod')}}
       \`,
     }),
     node({
@@ -614,5 +614,374 @@ IMPORT_FROM_TIMESTAMP 2024-01-01T00:00:00Z
     expect(output).toContain('bucketUri: "s3://my-bucket/events/*.csv"');
     expect(output).toContain('schedule: "@auto"');
     expect(output).toContain('fromTimestamp: "2024-01-01T00:00:00Z"');
+  });
+
+  it("migrates TYPE copy in lowercase", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "copy_target.datasource",
+      `SCHEMA >
+    id String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+`
+    );
+
+    writeFile(
+      tempDir,
+      "copy_lower.pipe",
+      `NODE copy_node
+SQL >
+    SELECT id
+    FROM copy_target
+TYPE copy
+TARGET_DATASOURCE copy_target
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('export const copyLower = defineCopyPipe("copy_lower", {');
+    expect(output).toContain("datasource: copyTarget,");
+  });
+
+  it("migrates TYPE ENDPOINT in uppercase", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "endpoint_upper.pipe",
+      `NODE endpoint
+SQL >
+    SELECT 1 AS id
+    FROM system.numbers
+    LIMIT 1
+TYPE ENDPOINT
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('export const endpointUpper = definePipe("endpoint_upper", {');
+    expect(output).toContain("endpoint: true,");
+  });
+
+  it("parses multiline datasource blocks with flexible indentation", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "flex.datasource",
+      `DESCRIPTION >
+  Flexible indentation description
+
+SCHEMA >
+  id String,
+  env String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+FORWARD_QUERY >
+  SELECT id, env
+  FROM upstream_ds
+SHARED_WITH >
+  workspace_a,
+  workspace_b
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('description: "Flexible indentation description"');
+    expect(output).toContain("forwardQuery: `");
+    expect(output).toContain("SELECT id, env");
+    expect(output).toContain("FROM upstream_ds");
+    expect(output).toContain('sharedWith: ["workspace_a", "workspace_b"],');
+  });
+
+  it("parses node SQL blocks with flexible indentation", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "flex_pipe.pipe",
+      `NODE endpoint_node
+DESCRIPTION >
+  Endpoint node description
+SQL >
+  %
+  SELECT 1 AS id
+  FROM system.numbers
+TYPE endpoint
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('description: "Endpoint node description"');
+    expect(output).toContain("SELECT 1 AS id");
+    expect(output).toContain("FROM system.numbers");
+    expect(output).toContain("endpoint: true,");
+  });
+
+  it("migrates datasource without engine directives", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "no_engine.datasource",
+      `SCHEMA >
+  id String,
+  name String
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('export const noEngine = defineDatasource("no_engine", {');
+    expect(output).not.toContain("engine:");
+    expect(output).not.toContain(", engine,");
+  });
+
+  it("infers MergeTree when engine options exist without ENGINE directive", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "implicit_engine.datasource",
+      `SCHEMA >
+  id String,
+  event_date Date
+
+ENGINE_SORTING_KEY "id"
+ENGINE_PARTITION_KEY "toYYYYMM(event_date)"
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('export const implicitEngine = defineDatasource("implicit_engine", {');
+    expect(output).toContain(
+      'engine: engine.mergeTree({ sortingKey: "id", partitionKey: "toYYYYMM(event_date)" }),'
+    );
+  });
+
+  it("supports quoted datasource token names with spaces", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "token_spaces.datasource",
+      `TOKEN "ingestion (Data Source append)" APPEND
+
+SCHEMA >
+  id String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain(
+      '{ name: "ingestion (Data Source append)", permissions: ["APPEND"] },'
+    );
+  });
+
+  it("rejects unquoted datasource token names with spaces", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "bad_token.datasource",
+      `TOKEN ingestion data APPEND
+
+SCHEMA >
+  id String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]?.message).toContain("Unsupported TOKEN syntax in strict mode");
+  });
+
+  it("allows empty datasource DESCRIPTION block", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "empty_ds_desc.datasource",
+      `DESCRIPTION >
+
+SCHEMA >
+  id String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain(
+      'export const emptyDsDesc = defineDatasource("empty_ds_desc", {'
+    );
+    expect(output).toContain('description: "",');
+  });
+
+  it("allows empty node DESCRIPTION block", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "empty_node_desc.pipe",
+      `NODE helper
+DESCRIPTION >
+
+SQL >
+  SELECT 1 AS id
+TYPE endpoint
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('export const emptyNodeDesc = definePipe("empty_node_desc", {');
+    expect(output).toContain('description: "",');
+  });
+
+  it("supports keyword-style pipe param arguments", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "keyword_params.pipe",
+      `NODE endpoint
+SQL >
+  SELECT 1 AS id
+  WHERE tenant_id = {{ String(tenant_id, description="Tenant ID to filter", default="") }}
+    AND event_date >= {{ Date(from_date, description="Starting date", required=False) }}
+    AND days >= {{ Int32(days, 1, description="Days to include", required=True) }}
+TYPE endpoint
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('export const keywordParams = definePipe("keyword_params", {');
+    expect(output).toContain(
+      'tenant_id: p.string().optional("").describe("Tenant ID to filter"),'
+    );
+    expect(output).toContain(
+      'from_date: p.date().optional().describe("Starting date"),'
+    );
+    expect(output).toContain(
+      'days: p.int32().optional(1).describe("Days to include"),'
+    );
   });
 });

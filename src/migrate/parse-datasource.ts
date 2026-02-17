@@ -4,45 +4,44 @@ import {
   isBlank,
   parseDirectiveLine,
   parseQuotedValue,
+  readDirectiveBlock,
   splitCommaSeparated,
   splitLines,
   splitTopLevelComma,
-  stripIndent,
 } from "./parser-utils.js";
 
-interface BlockReadResult {
-  lines: string[];
-  nextIndex: number;
-}
+const DATASOURCE_DIRECTIVES = new Set([
+  "DESCRIPTION",
+  "SCHEMA",
+  "FORWARD_QUERY",
+  "SHARED_WITH",
+  "ENGINE",
+  "ENGINE_SORTING_KEY",
+  "ENGINE_PARTITION_KEY",
+  "ENGINE_PRIMARY_KEY",
+  "ENGINE_TTL",
+  "ENGINE_VER",
+  "ENGINE_SIGN",
+  "ENGINE_VERSION",
+  "ENGINE_SUMMING_COLUMNS",
+  "ENGINE_SETTINGS",
+  "KAFKA_CONNECTION_NAME",
+  "KAFKA_TOPIC",
+  "KAFKA_GROUP_ID",
+  "KAFKA_AUTO_OFFSET_RESET",
+  "IMPORT_CONNECTION_NAME",
+  "IMPORT_BUCKET_URI",
+  "IMPORT_SCHEDULE",
+  "IMPORT_FROM_TIMESTAMP",
+  "TOKEN",
+]);
 
-function readIndentedBlock(lines: string[], startIndex: number): BlockReadResult {
-  const collected: string[] = [];
-  let i = startIndex;
-
-  while (i < lines.length) {
-    const line = lines[i] ?? "";
-    if (line.startsWith("    ")) {
-      collected.push(stripIndent(line));
-      i += 1;
-      continue;
-    }
-
-    if (isBlank(line)) {
-      let j = i + 1;
-      while (j < lines.length && isBlank(lines[j] ?? "")) {
-        j += 1;
-      }
-      if (j < lines.length && (lines[j] ?? "").startsWith("    ")) {
-        collected.push("");
-        i += 1;
-        continue;
-      }
-    }
-
-    break;
+function isDatasourceDirectiveLine(line: string): boolean {
+  if (!line) {
+    return false;
   }
-
-  return { lines: collected, nextIndex: i };
+  const { key } = parseDirectiveLine(line);
+  return DATASOURCE_DIRECTIVES.has(key);
 }
 
 function findTokenOutsideContexts(input: string, token: string): number {
@@ -176,7 +175,15 @@ function parseEngineSettings(value: string): Record<string, string | number | bo
 }
 
 function parseToken(filePath: string, resourceName: string, value: string): DatasourceTokenModel {
-  const parts = value.split(/\s+/).filter(Boolean);
+  const trimmed = value.trim();
+  const quotedMatch = trimmed.match(/^"([^"]+)"\s+(READ|APPEND)$/);
+  if (quotedMatch) {
+    const name = quotedMatch[1];
+    const scope = quotedMatch[2] as "READ" | "APPEND";
+    return { name, scope };
+  }
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length < 2) {
     throw new MigrationParseError(
       filePath,
@@ -195,7 +202,11 @@ function parseToken(filePath: string, resourceName: string, value: string): Data
     );
   }
 
-  const name = parts[0];
+  const rawName = parts[0] ?? "";
+  const name =
+    rawName.startsWith('"') && rawName.endsWith('"') && rawName.length >= 2
+      ? rawName.slice(1, -1)
+      : rawName;
   const scope = parts[1];
   if (scope !== "READ" && scope !== "APPEND") {
     throw new MigrationParseError(
@@ -248,22 +259,14 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
     }
 
     if (line === "DESCRIPTION >") {
-      const block = readIndentedBlock(lines, i + 1);
-      if (block.lines.length === 0) {
-        throw new MigrationParseError(
-          resource.filePath,
-          "datasource",
-          resource.name,
-          "DESCRIPTION block is empty."
-        );
-      }
+      const block = readDirectiveBlock(lines, i + 1, isDatasourceDirectiveLine);
       description = block.lines.join("\n");
       i = block.nextIndex;
       continue;
     }
 
     if (line === "SCHEMA >") {
-      const block = readIndentedBlock(lines, i + 1);
+      const block = readDirectiveBlock(lines, i + 1, isDatasourceDirectiveLine);
       if (block.lines.length === 0) {
         throw new MigrationParseError(
           resource.filePath,
@@ -283,7 +286,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
     }
 
     if (line === "FORWARD_QUERY >") {
-      const block = readIndentedBlock(lines, i + 1);
+      const block = readDirectiveBlock(lines, i + 1, isDatasourceDirectiveLine);
       if (block.lines.length === 0) {
         throw new MigrationParseError(
           resource.filePath,
@@ -298,7 +301,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
     }
 
     if (line === "SHARED_WITH >") {
-      const block = readIndentedBlock(lines, i + 1);
+      const block = readDirectiveBlock(lines, i + 1, isDatasourceDirectiveLine);
       for (const sharedLine of block.lines) {
         const normalized = sharedLine.trim().replace(/,$/, "");
         if (normalized) {
@@ -406,16 +409,24 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
     );
   }
 
-  if (!engineType) {
-    throw new MigrationParseError(
-      resource.filePath,
-      "datasource",
-      resource.name,
-      "ENGINE directive is required."
-    );
+  const hasEngineDirectives =
+    sortingKey.length > 0 ||
+    partitionKey !== undefined ||
+    (primaryKey !== undefined && primaryKey.length > 0) ||
+    ttl !== undefined ||
+    ver !== undefined ||
+    sign !== undefined ||
+    version !== undefined ||
+    (summingColumns !== undefined && summingColumns.length > 0) ||
+    settings !== undefined;
+
+  if (!engineType && hasEngineDirectives) {
+    // Tinybird defaults to MergeTree when ENGINE is omitted.
+    // If engine-specific options are present, preserve them by inferring MergeTree.
+    engineType = "MergeTree";
   }
 
-  if (sortingKey.length === 0) {
+  if (engineType && sortingKey.length === 0) {
     throw new MigrationParseError(
       resource.filePath,
       "datasource",
@@ -477,18 +488,20 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
     filePath: resource.filePath,
     description,
     columns,
-    engine: {
-      type: engineType,
-      sortingKey,
-      partitionKey,
-      primaryKey,
-      ttl,
-      ver,
-      sign,
-      version,
-      summingColumns,
-      settings,
-    },
+    engine: engineType
+      ? {
+          type: engineType,
+          sortingKey,
+          partitionKey,
+          primaryKey,
+          ttl,
+          ver,
+          sign,
+          version,
+          summingColumns,
+          settings,
+        }
+      : undefined,
     kafka,
     s3,
     forwardQuery,

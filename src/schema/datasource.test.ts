@@ -24,6 +24,7 @@ describe("Datasource Schema", () => {
       expect(ds._name).toBe("events");
       expect(ds._type).toBe("datasource");
       expect(ds.options.schema).toBeDefined();
+      expect(ds.options.engine).toBeUndefined();
     });
 
     it("creates a datasource with description", () => {

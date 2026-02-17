@@ -3,44 +3,31 @@ import {
   MigrationParseError,
   isBlank,
   parseDirectiveLine,
+  readDirectiveBlock,
   splitLines,
   splitTopLevelComma,
-  stripIndent,
 } from "./parser-utils.js";
 
-interface BlockReadResult {
-  lines: string[];
-  nextIndex: number;
-}
+const PIPE_DIRECTIVES = new Set([
+  "DESCRIPTION",
+  "NODE",
+  "SQL",
+  "TYPE",
+  "CACHE",
+  "DATASOURCE",
+  "DEPLOYMENT_METHOD",
+  "TARGET_DATASOURCE",
+  "COPY_SCHEDULE",
+  "COPY_MODE",
+  "TOKEN",
+]);
 
-function readIndentedBlock(lines: string[], startIndex: number): BlockReadResult {
-  const collected: string[] = [];
-  let i = startIndex;
-
-  while (i < lines.length) {
-    const line = lines[i] ?? "";
-    if (line.startsWith("    ")) {
-      collected.push(stripIndent(line));
-      i += 1;
-      continue;
-    }
-
-    if (isBlank(line)) {
-      let j = i + 1;
-      while (j < lines.length && isBlank(lines[j] ?? "")) {
-        j += 1;
-      }
-      if (j < lines.length && (lines[j] ?? "").startsWith("    ")) {
-        collected.push("");
-        i += 1;
-        continue;
-      }
-    }
-
-    break;
+function isPipeDirectiveLine(line: string): boolean {
+  if (!line) {
+    return false;
   }
-
-  return { lines: collected, nextIndex: i };
+  const { key } = parseDirectiveLine(line);
+  return PIPE_DIRECTIVES.has(key);
 }
 
 function nextNonBlank(lines: string[], startIndex: number): number {
@@ -114,10 +101,13 @@ function mapTemplateFunctionToParamType(func: string): string | null {
   return null;
 }
 
-function parseParamDefault(rawValue: string): string | number {
+function parseParamDefault(rawValue: string): string | number | boolean {
   const trimmed = rawValue.trim();
   if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
     return Number(trimmed);
+  }
+  if (/^(true|false)$/i.test(trimmed)) {
+    return trimmed.toLowerCase() === "true";
   }
   if (
     (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
@@ -126,6 +116,92 @@ function parseParamDefault(rawValue: string): string | number {
     return trimmed.slice(1, -1);
   }
   throw new Error(`Unsupported parameter default value: "${rawValue}"`);
+}
+
+function parseKeywordArgument(rawArg: string): { key: string; value: string } | null {
+  const equalsIndex = rawArg.indexOf("=");
+  if (equalsIndex <= 0) {
+    return null;
+  }
+
+  const key = rawArg.slice(0, equalsIndex).trim();
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
+    return null;
+  }
+
+  const value = rawArg.slice(equalsIndex + 1).trim();
+  if (!value) {
+    return null;
+  }
+
+  return { key, value };
+}
+
+function parseRequiredFlag(rawValue: string): boolean {
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") {
+    return true;
+  }
+  if (normalized === "false" || normalized === "0") {
+    return false;
+  }
+  throw new Error(`Unsupported required value: "${rawValue}"`);
+}
+
+function parseParamOptions(rawArgs: string[]): {
+  defaultValue?: string | number | boolean;
+  required?: boolean;
+  description?: string;
+} {
+  let positionalDefault: string | number | boolean | undefined;
+  let keywordDefault: string | number | boolean | undefined;
+  let required: boolean | undefined;
+  let description: string | undefined;
+
+  for (const rawArg of rawArgs) {
+    const trimmed = rawArg.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const keyword = parseKeywordArgument(trimmed);
+    if (!keyword) {
+      if (positionalDefault === undefined) {
+        positionalDefault = parseParamDefault(trimmed);
+      }
+      continue;
+    }
+
+    const keyLower = keyword.key.toLowerCase();
+    if (keyLower === "default") {
+      keywordDefault = parseParamDefault(keyword.value);
+      continue;
+    }
+    if (keyLower === "required") {
+      required = parseRequiredFlag(keyword.value);
+      continue;
+    }
+    if (keyLower === "description") {
+      const parsedDescription = parseParamDefault(keyword.value);
+      if (typeof parsedDescription !== "string") {
+        throw new Error(`Unsupported description value: "${keyword.value}"`);
+      }
+      description = parsedDescription;
+      continue;
+    }
+  }
+
+  let defaultValue = keywordDefault ?? positionalDefault;
+  if (keywordDefault !== undefined && positionalDefault !== undefined) {
+    if (keywordDefault !== positionalDefault) {
+      throw new Error(
+        `Parameter has conflicting positional and keyword defaults: "${positionalDefault}" and "${keywordDefault}".`
+      );
+    }
+    defaultValue = positionalDefault;
+  }
+
+  return { defaultValue, required, description };
 }
 
 function inferParamsFromSql(
@@ -170,10 +246,15 @@ function inferParamsFromSql(
       );
     }
 
-    let defaultValue: string | number | undefined;
+    let defaultValue: string | number | boolean | undefined;
+    let required: boolean | undefined;
+    let description: string | undefined;
     if (args.length > 1) {
       try {
-        defaultValue = parseParamDefault(args[1] ?? "");
+        const parsedOptions = parseParamOptions(args.slice(1));
+        defaultValue = parsedOptions.defaultValue;
+        required = parsedOptions.required;
+        description = parsedOptions.description;
       } catch (error) {
         throw new MigrationParseError(
           filePath,
@@ -206,14 +287,21 @@ function inferParamsFromSql(
       }
       if (existing.defaultValue === undefined && defaultValue !== undefined) {
         existing.defaultValue = defaultValue;
-        existing.required = false;
       }
+      if (existing.description === undefined && description !== undefined) {
+        existing.description = description;
+      }
+      const optionalInAnyUsage =
+        existing.required === false || required === false || defaultValue !== undefined;
+      existing.required = !optionalInAnyUsage;
     } else {
+      const isRequired = required ?? defaultValue === undefined;
       params.set(paramName, {
         name: paramName,
         type: mappedType,
-        required: defaultValue === undefined,
+        required: isRequired,
         defaultValue,
+        description,
       });
     }
 
@@ -224,7 +312,13 @@ function inferParamsFromSql(
 }
 
 function parseToken(filePath: string, resourceName: string, value: string): PipeTokenModel {
-  const parts = value.split(/\s+/).filter(Boolean);
+  const trimmed = value.trim();
+  const quotedMatch = trimmed.match(/^"([^"]+)"(?:\s+(READ))?$/);
+  if (quotedMatch) {
+    return { name: quotedMatch[1] ?? "", scope: "READ" };
+  }
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length === 0) {
     throw new MigrationParseError(filePath, "pipe", resourceName, "Invalid TOKEN line.");
   }
@@ -237,7 +331,13 @@ function parseToken(filePath: string, resourceName: string, value: string): Pipe
     );
   }
 
-  const tokenName = parts[0];
+  const rawTokenName = parts[0] ?? "";
+  const tokenName =
+    rawTokenName.startsWith('"') &&
+    rawTokenName.endsWith('"') &&
+    rawTokenName.length >= 2
+      ? rawTokenName.slice(1, -1)
+      : rawTokenName;
   const scope = parts[1] ?? "READ";
   if (scope !== "READ") {
     throw new MigrationParseError(
@@ -273,17 +373,8 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
     }
 
     if (line === "DESCRIPTION >") {
-      const block = readIndentedBlock(lines, i + 1);
-      if (block.lines.length === 0) {
-        throw new MigrationParseError(
-          resource.filePath,
-          "pipe",
-          resource.name,
-          "DESCRIPTION block is empty."
-        );
-      }
-
-      if (!description) {
+      const block = readDirectiveBlock(lines, i + 1, isPipeDirectiveLine);
+      if (description === undefined) {
         description = block.lines.join("\n");
       } else if (nodes.length > 0) {
         nodes[nodes.length - 1] = {
@@ -318,15 +409,7 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
 
       let nodeDescription: string | undefined;
       if ((lines[i] ?? "").trim() === "DESCRIPTION >") {
-        const descriptionBlock = readIndentedBlock(lines, i + 1);
-        if (descriptionBlock.lines.length === 0) {
-          throw new MigrationParseError(
-            resource.filePath,
-            "pipe",
-            resource.name,
-            `Node "${nodeName}" has an empty DESCRIPTION block.`
-          );
-        }
+        const descriptionBlock = readDirectiveBlock(lines, i + 1, isPipeDirectiveLine);
         nodeDescription = descriptionBlock.lines.join("\n");
         i = descriptionBlock.nextIndex;
         i = nextNonBlank(lines, i);
@@ -340,7 +423,7 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
           `Node "${nodeName}" is missing SQL > block.`
         );
       }
-      const sqlBlock = readIndentedBlock(lines, i + 1);
+      const sqlBlock = readDirectiveBlock(lines, i + 1, isPipeDirectiveLine);
       if (sqlBlock.lines.length === 0) {
         throw new MigrationParseError(
           resource.filePath,
@@ -374,12 +457,13 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
 
     const { key, value } = parseDirectiveLine(line);
     switch (key) {
-      case "TYPE":
-        if (value === "endpoint") {
+      case "TYPE": {
+        const normalizedType = value.toLowerCase();
+        if (normalizedType === "endpoint") {
           pipeType = "endpoint";
-        } else if (value === "MATERIALIZED") {
+        } else if (normalizedType === "materialized") {
           pipeType = "materialized";
-        } else if (value === "COPY") {
+        } else if (normalizedType === "copy") {
           pipeType = "copy";
         } else {
           throw new MigrationParseError(
@@ -390,6 +474,7 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
           );
         }
         break;
+      }
       case "CACHE": {
         const ttl = Number(value);
         if (!Number.isFinite(ttl) || ttl < 0) {
@@ -515,4 +600,3 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
     inferredOutputColumns,
   };
 }
-

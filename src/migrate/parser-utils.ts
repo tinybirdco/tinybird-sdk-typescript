@@ -27,6 +27,42 @@ export function stripIndent(line: string): string {
   return line.trimStart();
 }
 
+export interface BlockReadResult {
+  lines: string[];
+  nextIndex: number;
+}
+
+export function readDirectiveBlock(
+  lines: string[],
+  startIndex: number,
+  isDirectiveLine: (line: string) => boolean
+): BlockReadResult {
+  const collected: string[] = [];
+  let i = startIndex;
+
+  while (i < lines.length) {
+    const line = (lines[i] ?? "").trim();
+    if (isDirectiveLine(line)) {
+      break;
+    }
+    collected.push(line);
+    i += 1;
+  }
+
+  let first = 0;
+  while (first < collected.length && collected[first] === "") {
+    first += 1;
+  }
+
+  let last = collected.length - 1;
+  while (last >= first && collected[last] === "") {
+    last -= 1;
+  }
+
+  const normalized = first <= last ? collected.slice(first, last + 1) : [];
+  return { lines: normalized, nextIndex: i };
+}
+
 export function splitCommaSeparated(input: string): string[] {
   return input
     .split(",")
@@ -157,4 +193,3 @@ export function splitTopLevelComma(input: string): string[] {
 
   return parts;
 }
-

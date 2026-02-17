@@ -3,6 +3,7 @@ import { toCamelCase } from "../codegen/utils.js";
 import { parseLiteralFromDatafile, toTsLiteral } from "./parser-utils.js";
 import type {
   DatasourceModel,
+  DatasourceEngineModel,
   KafkaConnectionModel,
   ParsedResource,
   PipeModel,
@@ -78,7 +79,7 @@ function strictParamBaseValidator(type: string): string {
 function applyParamOptional(
   baseValidator: string,
   required: boolean,
-  defaultValue: string | number | undefined
+  defaultValue: string | number | boolean | undefined
 ): string {
   const withDefault = defaultValue !== undefined;
   if (!withDefault && required) {
@@ -93,6 +94,13 @@ function applyParamOptional(
     return `${baseValidator}${optionalSuffix}`;
   }
   return `${baseValidator}${optionalSuffix}`;
+}
+
+function applyParamDescription(validator: string, description: string | undefined): string {
+  if (description === undefined) {
+    return validator;
+  }
+  return `${validator}.describe(${JSON.stringify(description)})`;
 }
 
 function engineFunctionName(type: string): string {
@@ -111,9 +119,8 @@ function engineFunctionName(type: string): string {
   return functionName;
 }
 
-function emitEngineOptions(ds: DatasourceModel): string {
+function emitEngineOptions(engine: DatasourceEngineModel): string {
   const options: string[] = [];
-  const { engine } = ds;
 
   if (engine.sortingKey.length === 1) {
     options.push(`sortingKey: ${escapeString(engine.sortingKey[0]!)}`);
@@ -187,7 +194,7 @@ function emitDatasource(ds: DatasourceModel): string {
   }
 
   lines.push(`export const ${variableName} = defineDatasource(${escapeString(ds.name)}, {`);
-  if (ds.description) {
+  if (ds.description !== undefined) {
     lines.push(`  description: ${escapeString(ds.description)},`);
   }
   if (!hasJsonPath) {
@@ -228,7 +235,9 @@ function emitDatasource(ds: DatasourceModel): string {
     }
   }
   lines.push("  },");
-  lines.push(`  engine: ${emitEngineOptions(ds)},`);
+  if (ds.engine) {
+    lines.push(`  engine: ${emitEngineOptions(ds.engine)},`);
+  }
 
   if (ds.kafka) {
     const connectionVar = toCamelCase(ds.kafka.connectionName);
@@ -354,7 +363,7 @@ function emitPipe(pipe: PipeModel): string {
     lines.push(`export const ${variableName} = definePipe(${escapeString(pipe.name)}, {`);
   }
 
-  if (pipe.description) {
+  if (pipe.description !== undefined) {
     lines.push(`  description: ${escapeString(pipe.description)},`);
   }
 
@@ -363,11 +372,12 @@ function emitPipe(pipe: PipeModel): string {
       lines.push("  params: {");
       for (const param of pipe.params) {
         const baseValidator = strictParamBaseValidator(param.type);
-        const validator = applyParamOptional(
+        const validatorWithOptional = applyParamOptional(
           baseValidator,
           param.required,
           param.defaultValue
         );
+        const validator = applyParamDescription(validatorWithOptional, param.description);
         lines.push(`    ${param.name}: ${validator},`);
       }
       lines.push("  },");
@@ -395,7 +405,7 @@ function emitPipe(pipe: PipeModel): string {
   for (const node of pipe.nodes) {
     lines.push("    node({");
     lines.push(`      name: ${escapeString(node.name)},`);
-    if (node.description) {
+    if (node.description !== undefined) {
       lines.push(`      description: ${escapeString(node.description)},`);
     }
     lines.push("      sql: `");
@@ -455,7 +465,6 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
     "defineCopyPipe",
     "node",
     "t",
-    "engine",
   ]);
   if (connections.some((connection) => connection.connectionType === "kafka")) {
     imports.add("defineKafkaConnection");
@@ -468,6 +477,9 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
   }
   if (needsParams) {
     imports.add("p");
+  }
+  if (datasources.some((datasource) => datasource.engine !== undefined)) {
+    imports.add("engine");
   }
 
   const orderedImports = [
