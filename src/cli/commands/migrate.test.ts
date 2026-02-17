@@ -15,7 +15,7 @@ const EXPECTED_COMPLEX_OUTPUT = `/**
  * Review endpoint output schemas and any defaults before production use.
  */
 
-import { defineKafkaConnection, defineDatasource, definePipe, defineMaterializedView, defineCopyPipe, node, t, engine, column, p } from "@tinybirdco/sdk";
+import { defineKafkaConnection, defineDatasource, definePipe, defineMaterializedView, defineCopyPipe, node, t, engine, p } from "@tinybirdco/sdk";
 
 // Connections
 
@@ -36,12 +36,12 @@ export const stream = defineKafkaConnection("stream", {
 export const events = defineDatasource("events", {
   description: "Events from Kafka stream",
   schema: {
-    event_id: column(t.string(), { jsonPath: "$.event_id" }),
-    user_id: column(t.uint64(), { jsonPath: "$.user.id" }),
-    env: column(t.string().default("prod"), { jsonPath: "$.env" }),
-    is_test: column(t.bool().default(false), { jsonPath: "$.meta.is_test" }),
-    updated_at: column(t.dateTime(), { jsonPath: "$.updated_at" }),
-    payload: column(t.string().default("{}").codec("ZSTD(1)"), { jsonPath: "$.payload" }),
+    event_id: t.string().jsonPath("$.event_id"),
+    user_id: t.uint64().jsonPath("$.user.id"),
+    env: t.string().default("prod").jsonPath("$.env"),
+    is_test: t.bool().default(false).jsonPath("$.meta.is_test"),
+    updated_at: t.dateTime().jsonPath("$.updated_at"),
+    payload: t.string().default("{}").codec("ZSTD(1)").jsonPath("$.payload"),
   },
   engine: engine.replacingMergeTree({ sortingKey: ["event_id", "user_id"], partitionKey: "toYYYYMM(updated_at)", primaryKey: "event_id", ttl: "updated_at + toIntervalDay(30)", ver: "updated_at", settings: { "index_granularity": 8192, "enable_mixed_granularity_parts": true } }),
   kafka: {
@@ -763,7 +763,7 @@ ENGINE_SORTING_KEY "event_id"
     expect(result.errors).toHaveLength(0);
 
     const output = fs.readFileSync(result.outputPath, "utf-8");
-    expect(output).toContain('event_id: column(t.string(), { jsonPath: "$.payload.id" })');
+    expect(output).toContain('event_id: t.string().jsonPath("$.payload.id")');
     expect(output).toContain("event_type: t.string()");
     expect(output).not.toContain("jsonPaths: false");
   });
@@ -794,8 +794,8 @@ ENGINE_SORTING_KEY "id"
     expect(result.errors).toHaveLength(0);
 
     const output = fs.readFileSync(result.outputPath, "utf-8");
-    expect(output).toContain('_is_deleted: column(t.uint8(), { jsonPath: "$._is_deleted" })');
-    expect(output).toContain('id: column(t.uuid(), { jsonPath: "$.id" })');
+    expect(output).toContain('_is_deleted: t.uint8().jsonPath("$._is_deleted")');
+    expect(output).toContain('id: t.uuid().jsonPath("$.id")');
     expect(output).not.toContain("`_is_deleted`:");
     expect(output).not.toContain("`id`:");
   });

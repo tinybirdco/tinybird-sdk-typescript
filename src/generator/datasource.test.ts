@@ -263,6 +263,29 @@ describe('Datasource Generator', () => {
       expect(schemaLines[1]).toContain(',');
       expect(schemaLines[2]).not.toContain(',');
     });
+
+    it('autogenerates jsonPath when jsonPaths is enabled and no explicit path is set', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          event_id: t.string().nullable(),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('event_id Nullable(String) `json:$.event_id`');
+    });
+
+    it('uses explicit jsonPath from validator modifier when jsonPaths is enabled', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          event_id: t.string().nullable().jsonPath('$.explicit_path'),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('event_id Nullable(String) `json:$.explicit_path`');
+      expect(result.content).not.toContain('`json:$.event_id`');
+    });
   });
 
   describe('generateAllDatasources', () => {

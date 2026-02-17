@@ -290,12 +290,9 @@ function emitDatasource(ds: DatasourceModel): string {
     }
 
     if (column.jsonPath) {
-      lines.push(
-        `    ${columnKey}: column(${validator}, { jsonPath: ${escapeString(column.jsonPath)} }),`
-      );
-    } else {
-      lines.push(`    ${columnKey}: ${validator},`);
+      validator += `.jsonPath(${escapeString(column.jsonPath)})`;
     }
+    lines.push(`    ${columnKey}: ${validator},`);
   }
   lines.push("  },");
   lines.push(`  engine: ${emitEngineOptions(ds)},`);
@@ -519,9 +516,6 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
     (resource): resource is PipeModel => resource.kind === "pipe"
   );
 
-  const needsColumn = datasources.some((ds) =>
-    ds.columns.some((column) => column.jsonPath !== undefined)
-  );
   const needsParams = pipes.some((pipe) => pipe.params.length > 0);
 
   const imports = new Set<string>([
@@ -539,9 +533,6 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
   if (connections.some((connection) => connection.connectionType === "s3")) {
     imports.add("defineS3Connection");
   }
-  if (needsColumn) {
-    imports.add("column");
-  }
   if (needsParams) {
     imports.add("p");
   }
@@ -556,7 +547,6 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
     "node",
     "t",
     "engine",
-    "column",
     "p",
   ].filter((name) => imports.has(name));
 
