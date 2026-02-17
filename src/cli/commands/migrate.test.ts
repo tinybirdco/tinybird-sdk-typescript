@@ -844,4 +844,44 @@ KAFKA_GROUP_ID {{ tb_secret("KAFKA_GROUP_ID_LOCAL_ds_accounts", "accounts_173729
       'groupId: "{{ tb_secret(\\"KAFKA_GROUP_ID_LOCAL_ds_accounts\\", \\"accounts_1737295200\\") }}",'
     );
   });
+
+  it("does not emit secret helper when no tb_secret template values are present", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "stream.connection",
+      `TYPE kafka
+KAFKA_BOOTSTRAP_SERVERS localhost:9092
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events.datasource",
+      `SCHEMA >
+    id UUID
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+KAFKA_CONNECTION_NAME stream
+KAFKA_TOPIC events_topic
+KAFKA_GROUP_ID events-group
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).not.toContain("const secret = (name: string, defaultValue?: string) =>");
+    expect(output).toContain('groupId: "events-group",');
+  });
 });

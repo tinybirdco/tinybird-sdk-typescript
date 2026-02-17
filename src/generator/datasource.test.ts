@@ -286,6 +286,20 @@ describe('Datasource Generator', () => {
       expect(result.content).toContain('event_id Nullable(String) `json:$.explicit_path`');
       expect(result.content).not.toContain('`json:$.event_id`');
     });
+
+    it('omits json paths when jsonPaths is false even if column has explicit jsonPath modifier', () => {
+      const ds = defineDatasource('test_ds', {
+        jsonPaths: false,
+        schema: {
+          event_id: t.string().nullable().jsonPath('$.explicit_path'),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('event_id Nullable(String)');
+      expect(result.content).not.toContain('`json:$.explicit_path`');
+      expect(result.content).not.toContain('`json:$.event_id`');
+    });
   });
 
   describe('generateAllDatasources', () => {
