@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   definePipe,
+  defineSinkPipe,
   defineMaterializedView,
   node,
   isPipeDefinition,
@@ -163,7 +164,7 @@ describe("Pipe Schema", () => {
         bootstrapServers: "localhost:9092",
       });
 
-      const pipe = definePipe("events_sink", {
+      const pipe = defineSinkPipe("events_sink", {
         nodes: [node({ name: "publish", sql: "SELECT * FROM events" })],
         sink: {
           connection: kafka,
@@ -185,7 +186,7 @@ describe("Pipe Schema", () => {
         arn: "arn:aws:iam::123456789012:role/tinybird-s3-access",
       });
 
-      const pipe = definePipe("exports_sink", {
+      const pipe = defineSinkPipe("exports_sink", {
         nodes: [node({ name: "export", sql: "SELECT * FROM events" })],
         sink: {
           connection: s3,
@@ -209,7 +210,7 @@ describe("Pipe Schema", () => {
       });
 
       expect(() =>
-        definePipe("bad_sink", {
+        defineSinkPipe("bad_sink", {
           nodes: [node({ name: "export", sql: "SELECT * FROM events" })],
           sink: {
             // Runtime validation rejects mismatched connection/type
@@ -218,6 +219,25 @@ describe("Pipe Schema", () => {
           },
         })
       ).toThrow("requires a Kafka connection");
+    });
+
+    it("throws when sink configuration is passed to definePipe", () => {
+      const kafka = defineKafkaConnection("events_kafka", {
+        bootstrapServers: "localhost:9092",
+      });
+
+      expect(() =>
+        definePipe(
+          "bad_via_define_pipe",
+          {
+            nodes: [node({ name: "export", sql: "SELECT * FROM events" })],
+            sink: {
+              connection: kafka,
+              topic: "events_out",
+            },
+          } as unknown as Parameters<typeof definePipe>[1]
+        )
+      ).toThrow("must be created with defineSinkPipe");
     });
   });
 
@@ -454,7 +474,7 @@ describe("Pipe Schema", () => {
               datasource: salesByHour,
             },
           })
-        ).toThrow("can only have one of: endpoint, materialized, copy, or sink");
+        ).toThrow("can only have one of: endpoint, materialized, or copy");
       });
 
     });

@@ -656,7 +656,7 @@ EXPORT_STRATEGY append
     expect(result.migrated.filter((resource) => resource.kind === "pipe")).toHaveLength(1);
 
     const output = fs.readFileSync(result.outputPath, "utf-8");
-    expect(output).toContain('export const eventsSink = definePipe("events_sink", {');
+    expect(output).toContain('export const eventsSink = defineSinkPipe("events_sink", {');
     expect(output).toContain("params: {");
     expect(output).toContain('env: p.string().optional("prod"),');
     expect(output).toContain("sink: {");

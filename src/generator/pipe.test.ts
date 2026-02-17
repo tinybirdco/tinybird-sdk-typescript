@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generatePipe, generateAllPipes } from './pipe.js';
-import { definePipe, defineMaterializedView, node } from '../schema/pipe.js';
+import { definePipe, defineMaterializedView, defineSinkPipe, node } from '../schema/pipe.js';
 import { defineDatasource } from '../schema/datasource.js';
 import { defineKafkaConnection, defineS3Connection } from '../schema/connection.js';
 import { defineToken } from '../schema/token.js';
@@ -479,7 +479,7 @@ GROUP BY day, country
         bootstrapServers: 'localhost:9092',
       });
 
-      const pipe = definePipe('events_sink', {
+      const pipe = defineSinkPipe('events_sink', {
         nodes: [node({ name: 'publish', sql: 'SELECT * FROM events' })],
         sink: {
           connection: kafka,
@@ -503,7 +503,7 @@ GROUP BY day, country
         arn: 'arn:aws:iam::123456789012:role/tinybird-s3-access',
       });
 
-      const pipe = definePipe('events_s3_sink', {
+      const pipe = defineSinkPipe('events_s3_sink', {
         nodes: [node({ name: 'export', sql: 'SELECT * FROM events' })],
         sink: {
           connection: s3,

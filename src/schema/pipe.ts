@@ -244,13 +244,38 @@ export interface PipeOptions<
   endpoint?: boolean | EndpointConfig;
   /** Materialized view configuration. Mutually exclusive with endpoint, copy, and sink. */
   materialized?: MaterializedConfig;
-  /** Copy pipe configuration. Mutually exclusive with endpoint, materialized, and sink. */
+  /** Copy pipe configuration. Mutually exclusive with endpoint and materialized. */
   copy?: CopyConfig;
-  /** Sink configuration (Kafka/S3 export). Mutually exclusive with endpoint, materialized, and copy. */
-  sink?: SinkConfig;
   /** Access tokens for this pipe */
   tokens?: readonly PipeTokenConfig[];
 }
+
+/**
+ * Options for defining a sink pipe
+ */
+export interface SinkPipeOptions<TParams extends ParamsDefinition> {
+  /** Human-readable description of the sink pipe */
+  description?: string;
+  /** Parameter definitions for query inputs */
+  params?: TParams;
+  /** Nodes in the transformation pipeline */
+  nodes: readonly NodeDefinition[];
+  /** Sink export configuration */
+  sink: SinkConfig;
+  /** Sink pipes are not endpoints */
+  endpoint?: never;
+  /** Sink pipes are not materialized views */
+  materialized?: never;
+  /** Sink pipes are not copy pipes */
+  copy?: never;
+  /** Access tokens for this sink pipe */
+  tokens?: readonly PipeTokenConfig[];
+}
+
+type PipeRuntimeOptions<
+  TParams extends ParamsDefinition,
+  TOutput extends OutputDefinition
+> = (PipeOptions<TParams, TOutput> & { sink?: never }) | SinkPipeOptions<TParams>;
 
 /**
  * Options for defining an endpoint (API-exposed pipe)
@@ -325,7 +350,7 @@ export interface PipeDefinition<
   /** Output schema (optional for reusable pipes) */
   readonly _output?: TOutput;
   /** Full options */
-  readonly options: PipeOptions<TParams, TOutput>;
+  readonly options: PipeRuntimeOptions<TParams, TOutput>;
 }
 
 /**
@@ -521,6 +546,12 @@ export function definePipe<
     throw new Error(`Pipe "${name}" must have at least one node.`);
   }
 
+  if ("sink" in (options as Record<string, unknown>)) {
+    throw new Error(
+      `Pipe "${name}" sink configuration must be created with defineSinkPipe().`
+    );
+  }
+
   // Validate output is provided for endpoints and materialized views
   if ((options.endpoint || options.materialized) && (!options.output || Object.keys(options.output).length === 0)) {
     throw new Error(
@@ -529,11 +560,10 @@ export function definePipe<
   }
 
   // Count how many types are configured
-  const typeCount = [options.endpoint, options.materialized, options.copy, options.sink]
-    .filter(Boolean).length;
+  const typeCount = [options.endpoint, options.materialized, options.copy].filter(Boolean).length;
   if (typeCount > 1) {
     throw new Error(
-      `Pipe "${name}" can only have one of: endpoint, materialized, copy, or sink configuration. ` +
+      `Pipe "${name}" can only have one of: endpoint, materialized, or copy configuration. ` +
         `A pipe must be at most one type.`
     );
   }
@@ -542,10 +572,6 @@ export function definePipe<
   if (options.materialized) {
     // output is guaranteed to be defined here because of the earlier validation
     validateMaterializedSchema(name, options.output!, options.materialized.datasource);
-  }
-
-  if (options.sink) {
-    validateSinkConfig(name, options.sink);
   }
 
   const params = (options.params ?? {}) as TParams;
@@ -559,7 +585,47 @@ export function definePipe<
     options: {
       ...options,
       params,
-    },
+    } as PipeRuntimeOptions<TParams, TOutput>,
+  };
+}
+
+/**
+ * Define a Tinybird sink pipe
+ *
+ * Sink pipes export query results to external systems via Kafka or S3.
+ *
+ * @param name - The sink pipe name (must be valid identifier)
+ * @param options - Sink pipe configuration
+ * @returns A pipe definition configured as a sink pipe
+ */
+export function defineSinkPipe<TParams extends ParamsDefinition>(
+  name: string,
+  options: SinkPipeOptions<TParams>
+): PipeDefinition<TParams, Record<string, never>> {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+    throw new Error(
+      `Invalid pipe name: "${name}". Must start with a letter or underscore and contain only alphanumeric characters and underscores.`
+    );
+  }
+
+  if (!options.nodes || options.nodes.length === 0) {
+    throw new Error(`Pipe "${name}" must have at least one node.`);
+  }
+
+  validateSinkConfig(name, options.sink);
+
+  const params = (options.params ?? {}) as TParams;
+
+  return {
+    [PIPE_BRAND]: true,
+    _name: name,
+    _type: "pipe",
+    _params: params,
+    _output: undefined,
+    options: {
+      ...options,
+      params,
+    } as PipeRuntimeOptions<TParams, Record<string, never>>,
   };
 }
 
@@ -873,7 +939,7 @@ export function isCopyPipe(pipe: PipeDefinition): boolean {
  * Get the sink configuration from a pipe
  */
 export function getSinkConfig(pipe: PipeDefinition): SinkConfig | null {
-  return pipe.options.sink ?? null;
+  return "sink" in pipe.options ? (pipe.options.sink ?? null) : null;
 }
 
 /**

@@ -350,6 +350,8 @@ function emitPipe(pipe: PipeModel): string {
     lines.push(`export const ${variableName} = defineMaterializedView(${escapeString(pipe.name)}, {`);
   } else if (pipe.type === "copy") {
     lines.push(`export const ${variableName} = defineCopyPipe(${escapeString(pipe.name)}, {`);
+  } else if (pipe.type === "sink") {
+    lines.push(`export const ${variableName} = defineSinkPipe(${escapeString(pipe.name)}, {`);
   } else {
     lines.push(`export const ${variableName} = definePipe(${escapeString(pipe.name)}, {`);
   }
@@ -493,6 +495,9 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
   if (needsParams) {
     imports.add("p");
   }
+  if (pipes.some((pipe) => pipe.type === "sink")) {
+    imports.add("defineSinkPipe");
+  }
 
   const orderedImports = [
     "defineKafkaConnection",
@@ -501,6 +506,7 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
     "definePipe",
     "defineMaterializedView",
     "defineCopyPipe",
+    "defineSinkPipe",
     "node",
     "t",
     "engine",
