@@ -799,4 +799,49 @@ ENGINE_SORTING_KEY "id"
     expect(output).not.toContain("`_is_deleted`:");
     expect(output).not.toContain("`id`:");
   });
+
+  it("emits secret helper for tb_secret template values", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "stream.connection",
+      `TYPE kafka
+KAFKA_BOOTSTRAP_SERVERS localhost:9092
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events.datasource",
+      `SCHEMA >
+    id UUID
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+KAFKA_CONNECTION_NAME stream
+KAFKA_TOPIC events_topic
+KAFKA_GROUP_ID {{ tb_secret("KAFKA_GROUP_ID_LOCAL_ds_accounts", "accounts_1737295200") }}
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain("const secret = (name: string, defaultValue?: string) =>");
+    expect(output).toContain(
+      'groupId: secret("KAFKA_GROUP_ID_LOCAL_ds_accounts", "accounts_1737295200"),'
+    );
+    expect(output).not.toContain(
+      'groupId: "{{ tb_secret(\\"KAFKA_GROUP_ID_LOCAL_ds_accounts\\", \\"accounts_1737295200\\") }}",'
+    );
+  });
 });
