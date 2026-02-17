@@ -380,6 +380,29 @@ describe('Datasource Generator', () => {
       expect(result.content).toContain('KAFKA_AUTO_OFFSET_RESET earliest');
     });
 
+    it('includes store raw value when provided', () => {
+      const kafkaConn = defineKafkaConnection('my_kafka', {
+        bootstrapServers: 'kafka.example.com:9092',
+      });
+
+      const ds = defineDatasource('kafka_events', {
+        schema: {
+          timestamp: t.dateTime(),
+          event: t.string(),
+        },
+        engine: engine.mergeTree({ sortingKey: ['timestamp'] }),
+        kafka: {
+          connection: kafkaConn,
+          topic: 'events',
+          storeRawValue: true,
+        },
+      });
+
+      const result = generateDatasource(ds);
+
+      expect(result.content).toContain('KAFKA_STORE_RAW_VALUE True');
+    });
+
     it('generates complete Kafka datasource with all options', () => {
       const kafkaConn = defineKafkaConnection('my_kafka', {
         bootstrapServers: 'kafka.example.com:9092',

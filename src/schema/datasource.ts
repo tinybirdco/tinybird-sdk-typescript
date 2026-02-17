@@ -66,6 +66,8 @@ export interface KafkaConfig {
   groupId?: string;
   /** Where to start reading: 'earliest' or 'latest' (default: 'latest') */
   autoOffsetReset?: "earliest" | "latest";
+  /** Whether to store the raw Kafka value payload */
+  storeRawValue?: boolean;
 }
 
 /**

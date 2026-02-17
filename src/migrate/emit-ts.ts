@@ -141,6 +141,9 @@ function emitEngineOptions(ds: DatasourceModel): string {
   if (engine.ver) {
     options.push(`ver: ${escapeString(engine.ver)}`);
   }
+  if (engine.isDeleted) {
+    options.push(`isDeleted: ${escapeString(engine.isDeleted)}`);
+  }
   if (engine.sign) {
     options.push(`sign: ${escapeString(engine.sign)}`);
   }
@@ -170,13 +173,6 @@ function emitDatasource(ds: DatasourceModel): string {
   const variableName = toCamelCase(ds.name);
   const lines: string[] = [];
   const hasJsonPath = ds.columns.some((column) => column.jsonPath !== undefined);
-  const hasMissingJsonPath = ds.columns.some((column) => column.jsonPath === undefined);
-
-  if (hasJsonPath && hasMissingJsonPath) {
-    throw new Error(
-      `Datasource "${ds.name}" has mixed json path usage. This is not representable in strict mode.`
-    );
-  }
 
   if (ds.description) {
     lines.push("/**");
@@ -240,6 +236,9 @@ function emitDatasource(ds: DatasourceModel): string {
     }
     if (ds.kafka.autoOffsetReset) {
       lines.push(`    autoOffsetReset: ${escapeString(ds.kafka.autoOffsetReset)},`);
+    }
+    if (ds.kafka.storeRawValue !== undefined) {
+      lines.push(`    storeRawValue: ${ds.kafka.storeRawValue},`);
     }
     lines.push("  },");
   }
@@ -305,6 +304,9 @@ function emitConnection(connection: KafkaConnectionModel | S3ConnectionModel): s
     }
     if (connection.secret) {
       lines.push(`  secret: ${escapeString(connection.secret)},`);
+    }
+    if (connection.schemaRegistryUrl) {
+      lines.push(`  schemaRegistryUrl: ${escapeString(connection.schemaRegistryUrl)},`);
     }
     if (connection.sslCaPem) {
       lines.push(`  sslCaPem: ${escapeString(connection.sslCaPem)},`);

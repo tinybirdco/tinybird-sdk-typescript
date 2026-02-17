@@ -31,6 +31,8 @@ export interface KafkaConnectionOptions {
   key?: string;
   /** Kafka secret/password - can use {{ tb_secret(...) }} */
   secret?: string;
+  /** Schema Registry URL (optionally with embedded auth credentials) */
+  schemaRegistryUrl?: string;
   /** SSL CA certificate PEM - for private CA certs */
   sslCaPem?: string;
 }

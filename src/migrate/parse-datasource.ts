@@ -223,6 +223,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
   let primaryKey: string[] | undefined;
   let ttl: string | undefined;
   let ver: string | undefined;
+  let isDeleted: string | undefined;
   let sign: string | undefined;
   let version: string | undefined;
   let summingColumns: string[] | undefined;
@@ -232,6 +233,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
   let kafkaTopic: string | undefined;
   let kafkaGroupId: string | undefined;
   let kafkaAutoOffsetReset: "earliest" | "latest" | undefined;
+  let kafkaStoreRawValue: boolean | undefined;
 
   let importConnectionName: string | undefined;
   let importBucketUri: string | undefined;
@@ -242,7 +244,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
   while (i < lines.length) {
     const rawLine = lines[i] ?? "";
     const line = rawLine.trim();
-    if (!line) {
+    if (!line || line.startsWith("#")) {
       i += 1;
       continue;
     }
@@ -273,7 +275,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
         );
       }
       for (const schemaLine of block.lines) {
-        if (isBlank(schemaLine)) {
+        if (isBlank(schemaLine) || schemaLine.trim().startsWith("#")) {
           continue;
         }
         columns.push(parseColumnLine(resource.filePath, resource.name, schemaLine));
@@ -329,6 +331,9 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
       case "ENGINE_VER":
         ver = parseQuotedValue(value);
         break;
+      case "ENGINE_IS_DELETED":
+        isDeleted = parseQuotedValue(value);
+        break;
       case "ENGINE_SIGN":
         sign = parseQuotedValue(value);
         break;
@@ -370,6 +375,23 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
         }
         kafkaAutoOffsetReset = value;
         break;
+      case "KAFKA_STORE_RAW_VALUE": {
+        const normalized = value.toLowerCase();
+        if (normalized === "true" || normalized === "1") {
+          kafkaStoreRawValue = true;
+          break;
+        }
+        if (normalized === "false" || normalized === "0") {
+          kafkaStoreRawValue = false;
+          break;
+        }
+        throw new MigrationParseError(
+          resource.filePath,
+          "datasource",
+          resource.name,
+          `Invalid KAFKA_STORE_RAW_VALUE value: "${value}"`
+        );
+      }
       case "IMPORT_CONNECTION_NAME":
         importConnectionName = parseQuotedValue(value);
         break;
@@ -425,12 +447,17 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
   }
 
   const kafka =
-    kafkaConnectionName || kafkaTopic || kafkaGroupId || kafkaAutoOffsetReset
+    kafkaConnectionName ||
+    kafkaTopic ||
+    kafkaGroupId ||
+    kafkaAutoOffsetReset ||
+    kafkaStoreRawValue !== undefined
       ? {
           connectionName: kafkaConnectionName ?? "",
           topic: kafkaTopic ?? "",
           groupId: kafkaGroupId,
           autoOffsetReset: kafkaAutoOffsetReset,
+          storeRawValue: kafkaStoreRawValue,
         }
       : undefined;
 
@@ -484,6 +511,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
       primaryKey,
       ttl,
       ver,
+      isDeleted,
       sign,
       version,
       summingColumns,

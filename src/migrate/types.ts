@@ -30,6 +30,7 @@ export interface DatasourceEngineModel {
   primaryKey?: string[];
   ttl?: string;
   ver?: string;
+  isDeleted?: string;
   sign?: string;
   version?: string;
   summingColumns?: string[];
@@ -41,6 +42,7 @@ export interface DatasourceKafkaModel {
   topic: string;
   groupId?: string;
   autoOffsetReset?: "earliest" | "latest";
+  storeRawValue?: boolean;
 }
 
 export interface DatasourceS3Model {
@@ -117,6 +119,7 @@ export interface KafkaConnectionModel {
   saslMechanism?: "PLAIN" | "SCRAM-SHA-256" | "SCRAM-SHA-512" | "OAUTHBEARER";
   key?: string;
   secret?: string;
+  schemaRegistryUrl?: string;
   sslCaPem?: string;
 }
 
