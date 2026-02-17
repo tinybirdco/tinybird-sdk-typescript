@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { generatePipe, generateAllPipes } from './pipe.js';
 import { definePipe, defineMaterializedView, node } from '../schema/pipe.js';
 import { defineDatasource } from '../schema/datasource.js';
+import { defineKafkaConnection, defineS3Connection } from '../schema/connection.js';
 import { defineToken } from '../schema/token.js';
 import { t } from '../schema/types.js';
 import { p } from '../schema/params.js';
@@ -469,6 +470,59 @@ GROUP BY day, country
 
       expect(result.content).toContain('TYPE MATERIALIZED');
       expect(result.content).toContain('DATASOURCE sales_by_hour');
+    });
+  });
+
+  describe('Sink configuration', () => {
+    it('generates Kafka sink directives', () => {
+      const kafka = defineKafkaConnection('events_kafka', {
+        bootstrapServers: 'localhost:9092',
+      });
+
+      const pipe = definePipe('events_sink', {
+        nodes: [node({ name: 'publish', sql: 'SELECT * FROM events' })],
+        sink: {
+          connection: kafka,
+          topic: 'events_out',
+          schedule: '@on-demand',
+          strategy: 'append',
+        },
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain('TYPE sink');
+      expect(result.content).toContain('EXPORT_CONNECTION_NAME events_kafka');
+      expect(result.content).toContain('EXPORT_TOPIC events_out');
+      expect(result.content).toContain('EXPORT_SCHEDULE @on-demand');
+      expect(result.content).toContain('EXPORT_STRATEGY append');
+    });
+
+    it('generates S3 sink directives', () => {
+      const s3 = defineS3Connection('exports_s3', {
+        region: 'us-east-1',
+        arn: 'arn:aws:iam::123456789012:role/tinybird-s3-access',
+      });
+
+      const pipe = definePipe('events_s3_sink', {
+        nodes: [node({ name: 'export', sql: 'SELECT * FROM events' })],
+        sink: {
+          connection: s3,
+          bucketUri: 's3://bucket/events/',
+          fileTemplate: 'events_{date}',
+          format: 'csv',
+          schedule: '@once',
+          strategy: 'replace',
+        },
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain('TYPE sink');
+      expect(result.content).toContain('EXPORT_CONNECTION_NAME exports_s3');
+      expect(result.content).toContain('EXPORT_BUCKET_URI s3://bucket/events/');
+      expect(result.content).toContain('EXPORT_FILE_TEMPLATE events_{date}');
+      expect(result.content).toContain('EXPORT_FORMAT csv');
+      expect(result.content).toContain('EXPORT_SCHEDULE @once');
+      expect(result.content).toContain('EXPORT_STRATEGY replace');
     });
   });
 

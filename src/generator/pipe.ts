@@ -9,9 +9,15 @@ import type {
   EndpointConfig,
   MaterializedConfig,
   CopyConfig,
+  SinkConfig,
   PipeTokenConfig,
 } from "../schema/pipe.js";
-import { getEndpointConfig, getMaterializedConfig, getCopyConfig } from "../schema/pipe.js";
+import {
+  getEndpointConfig,
+  getMaterializedConfig,
+  getCopyConfig,
+  getSinkConfig,
+} from "../schema/pipe.js";
 
 /**
  * Generated pipe content
@@ -109,6 +115,34 @@ function generateCopy(config: CopyConfig): string {
 
   if (config.copy_mode) {
     parts.push(`COPY_MODE ${config.copy_mode}`);
+  }
+
+  return parts.join("\n");
+}
+
+/**
+ * Generate the TYPE sink section
+ */
+function generateSink(config: SinkConfig): string {
+  const parts: string[] = ["TYPE sink"];
+
+  parts.push(`EXPORT_CONNECTION_NAME ${config.connection._name}`);
+
+  if ("topic" in config) {
+    parts.push(`EXPORT_TOPIC ${config.topic}`);
+  } else {
+    parts.push(`EXPORT_BUCKET_URI ${config.bucketUri}`);
+    parts.push(`EXPORT_FILE_TEMPLATE ${config.fileTemplate}`);
+    if (config.format) {
+      parts.push(`EXPORT_FORMAT ${config.format}`);
+    }
+  }
+
+  if (config.schedule) {
+    parts.push(`EXPORT_SCHEDULE ${config.schedule}`);
+  }
+  if (config.strategy) {
+    parts.push(`EXPORT_STRATEGY ${config.strategy}`);
   }
 
   return parts.join("\n");
@@ -218,6 +252,13 @@ export function generatePipe(pipe: PipeDefinition): GeneratedPipe {
   if (copyConfig) {
     parts.push("");
     parts.push(generateCopy(copyConfig));
+  }
+
+  // Add sink configuration if this is a sink pipe
+  const sinkConfig = getSinkConfig(pipe);
+  if (sinkConfig) {
+    parts.push("");
+    parts.push(generateSink(sinkConfig));
   }
 
   // Add tokens if present

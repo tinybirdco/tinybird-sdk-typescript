@@ -80,7 +80,27 @@ export interface PipeTokenModel {
   scope: "READ";
 }
 
-export type PipeTypeModel = "pipe" | "endpoint" | "materialized" | "copy";
+export type PipeTypeModel = "pipe" | "endpoint" | "materialized" | "copy" | "sink";
+
+export interface PipeKafkaSinkModel {
+  service: "kafka";
+  connectionName: string;
+  topic: string;
+  schedule?: string;
+  strategy?: "append" | "replace";
+}
+
+export interface PipeS3SinkModel {
+  service: "s3";
+  connectionName: string;
+  bucketUri: string;
+  fileTemplate: string;
+  format?: string;
+  schedule?: string;
+  strategy?: "append" | "replace";
+}
+
+export type PipeSinkModel = PipeKafkaSinkModel | PipeS3SinkModel;
 
 export interface PipeParamModel {
   name: string;
@@ -102,6 +122,7 @@ export interface PipeModel {
   copyTargetDatasource?: string;
   copySchedule?: string;
   copyMode?: "append" | "replace";
+  sink?: PipeSinkModel;
   tokens: PipeTokenModel[];
   params: PipeParamModel[];
   inferredOutputColumns: string[];

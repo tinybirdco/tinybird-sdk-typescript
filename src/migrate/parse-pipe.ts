@@ -3,6 +3,7 @@ import {
   MigrationParseError,
   isBlank,
   parseDirectiveLine,
+  parseQuotedValue,
   splitLines,
   splitTopLevelComma,
   stripIndent,
@@ -263,6 +264,14 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
   let copyTargetDatasource: string | undefined;
   let copySchedule: string | undefined;
   let copyMode: "append" | "replace" | undefined;
+  let exportService: "kafka" | "s3" | undefined;
+  let exportConnectionName: string | undefined;
+  let exportTopic: string | undefined;
+  let exportBucketUri: string | undefined;
+  let exportFileTemplate: string | undefined;
+  let exportFormat: string | undefined;
+  let exportSchedule: string | undefined;
+  let exportStrategy: "append" | "replace" | undefined;
 
   let i = 0;
   while (i < lines.length) {
@@ -374,22 +383,26 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
 
     const { key, value } = parseDirectiveLine(line);
     switch (key) {
-      case "TYPE":
-        if (value === "endpoint") {
+      case "TYPE": {
+        const normalizedType = parseQuotedValue(value).toLowerCase();
+        if (normalizedType === "endpoint") {
           pipeType = "endpoint";
-        } else if (value === "MATERIALIZED") {
+        } else if (normalizedType === "materialized") {
           pipeType = "materialized";
-        } else if (value === "COPY") {
+        } else if (normalizedType === "copy") {
           pipeType = "copy";
+        } else if (normalizedType === "sink") {
+          pipeType = "sink";
         } else {
           throw new MigrationParseError(
             resource.filePath,
             "pipe",
             resource.name,
-            `Unsupported TYPE value in strict mode: "${value}"`
+            `Unsupported TYPE value in strict mode: "${parseQuotedValue(value)}"`
           );
         }
         break;
+      }
       case "CACHE": {
         const ttl = Number(value);
         if (!Number.isFinite(ttl) || ttl < 0) {
@@ -434,6 +447,50 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
         }
         copyMode = value;
         break;
+      case "EXPORT_SERVICE": {
+        const normalized = parseQuotedValue(value).toLowerCase();
+        if (normalized !== "kafka" && normalized !== "s3") {
+          throw new MigrationParseError(
+            resource.filePath,
+            "pipe",
+            resource.name,
+            `Unsupported EXPORT_SERVICE in strict mode: "${value}"`
+          );
+        }
+        exportService = normalized;
+        break;
+      }
+      case "EXPORT_CONNECTION_NAME":
+        exportConnectionName = parseQuotedValue(value);
+        break;
+      case "EXPORT_TOPIC":
+        exportTopic = parseQuotedValue(value);
+        break;
+      case "EXPORT_BUCKET_URI":
+        exportBucketUri = parseQuotedValue(value);
+        break;
+      case "EXPORT_FILE_TEMPLATE":
+        exportFileTemplate = parseQuotedValue(value);
+        break;
+      case "EXPORT_FORMAT":
+        exportFormat = parseQuotedValue(value);
+        break;
+      case "EXPORT_SCHEDULE":
+        exportSchedule = parseQuotedValue(value);
+        break;
+      case "EXPORT_STRATEGY": {
+        const normalized = parseQuotedValue(value).toLowerCase();
+        if (normalized !== "append" && normalized !== "replace") {
+          throw new MigrationParseError(
+            resource.filePath,
+            "pipe",
+            resource.name,
+            `Unsupported EXPORT_STRATEGY in strict mode: "${value}"`
+          );
+        }
+        exportStrategy = normalized;
+        break;
+      }
       case "TOKEN":
         tokens.push(parseToken(resource.filePath, resource.name, value));
         break;
@@ -485,6 +542,118 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
     );
   }
 
+  const hasSinkDirectives =
+    exportService !== undefined ||
+    exportConnectionName !== undefined ||
+    exportTopic !== undefined ||
+    exportBucketUri !== undefined ||
+    exportFileTemplate !== undefined ||
+    exportFormat !== undefined ||
+    exportSchedule !== undefined ||
+    exportStrategy !== undefined;
+
+  if (pipeType !== "sink" && hasSinkDirectives) {
+    throw new MigrationParseError(
+      resource.filePath,
+      "pipe",
+      resource.name,
+      "EXPORT_* directives are only supported for TYPE sink."
+    );
+  }
+
+  let sink: PipeModel["sink"];
+  if (pipeType === "sink") {
+    if (!exportConnectionName) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "pipe",
+        resource.name,
+        "EXPORT_CONNECTION_NAME is required for TYPE sink."
+      );
+    }
+
+    const hasKafkaDirectives = exportTopic !== undefined;
+    const hasS3Directives =
+      exportBucketUri !== undefined ||
+      exportFileTemplate !== undefined ||
+      exportFormat !== undefined;
+
+    if (hasKafkaDirectives && hasS3Directives) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "pipe",
+        resource.name,
+        "Sink pipe cannot mix Kafka and S3 export directives."
+      );
+    }
+
+    const inferredService =
+      exportService ?? (hasKafkaDirectives ? "kafka" : hasS3Directives ? "s3" : undefined);
+
+    if (!inferredService) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "pipe",
+        resource.name,
+        "Sink pipe must define EXPORT_SERVICE or include service-specific export directives."
+      );
+    }
+
+    if (inferredService === "kafka") {
+      if (hasS3Directives) {
+        throw new MigrationParseError(
+          resource.filePath,
+          "pipe",
+          resource.name,
+          "S3 export directives are not valid for Kafka sinks."
+        );
+      }
+      if (!exportTopic) {
+        throw new MigrationParseError(
+          resource.filePath,
+          "pipe",
+          resource.name,
+          "EXPORT_TOPIC is required for Kafka sinks."
+        );
+      }
+
+      sink = {
+        service: "kafka",
+        connectionName: exportConnectionName,
+        topic: exportTopic,
+        schedule: exportSchedule,
+        strategy: exportStrategy,
+      };
+    } else {
+      if (hasKafkaDirectives) {
+        throw new MigrationParseError(
+          resource.filePath,
+          "pipe",
+          resource.name,
+          "Kafka export directives are not valid for S3 sinks."
+        );
+      }
+      if (!exportBucketUri || !exportFileTemplate) {
+        throw new MigrationParseError(
+          resource.filePath,
+          "pipe",
+          resource.name,
+          "S3 sinks require EXPORT_BUCKET_URI and EXPORT_FILE_TEMPLATE."
+        );
+      }
+
+      sink = {
+        service: "s3",
+        connectionName: exportConnectionName,
+        bucketUri: exportBucketUri,
+        fileTemplate: exportFileTemplate,
+        format: exportFormat,
+        schedule: exportSchedule,
+        strategy: exportStrategy,
+      };
+    }
+  }
+
   const params =
     pipeType === "materialized" || pipeType === "copy"
       ? []
@@ -510,9 +679,9 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
     copyTargetDatasource,
     copySchedule,
     copyMode,
+    sink,
     tokens,
     params,
     inferredOutputColumns,
   };
 }
-

@@ -615,4 +615,84 @@ IMPORT_FROM_TIMESTAMP 2024-01-01T00:00:00Z
     expect(output).toContain('schedule: "@auto"');
     expect(output).toContain('fromTimestamp: "2024-01-01T00:00:00Z"');
   });
+
+  it("migrates Kafka sink pipes and emits sink config in TypeScript", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "events_kafka.connection",
+      `TYPE kafka
+KAFKA_BOOTSTRAP_SERVERS localhost:9092
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events_sink.pipe",
+      `NODE publish
+SQL >
+    SELECT *
+    FROM events
+    WHERE env = {{String(env, 'prod')}}
+TYPE sink
+EXPORT_CONNECTION_NAME events_kafka
+EXPORT_TOPIC events_out
+EXPORT_SCHEDULE @on-demand
+EXPORT_STRATEGY append
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.migrated.filter((resource) => resource.kind === "connection")).toHaveLength(1);
+    expect(result.migrated.filter((resource) => resource.kind === "pipe")).toHaveLength(1);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('export const eventsSink = definePipe("events_sink", {');
+    expect(output).toContain("params: {");
+    expect(output).toContain('env: p.string().optional("prod"),');
+    expect(output).toContain("sink: {");
+    expect(output).toContain("connection: eventsKafka");
+    expect(output).toContain('topic: "events_out"');
+    expect(output).toContain('schedule: "@on-demand"');
+    expect(output).toContain('strategy: "append"');
+  });
+
+  it("reports an error when sink pipe references a missing connection", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "events_sink.pipe",
+      `NODE publish
+SQL >
+    SELECT * FROM events
+TYPE sink
+EXPORT_CONNECTION_NAME missing_connection
+EXPORT_TOPIC events_out
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors.map((error) => error.message)).toEqual(
+      expect.arrayContaining([
+        'Sink pipe references missing/unmigrated connection "missing_connection".',
+      ])
+    );
+  });
 });

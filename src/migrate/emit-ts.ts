@@ -358,7 +358,7 @@ function emitPipe(pipe: PipeModel): string {
     lines.push(`  description: ${escapeString(pipe.description)},`);
   }
 
-  if (pipe.type === "pipe" || pipe.type === "endpoint") {
+  if (pipe.type === "pipe" || pipe.type === "endpoint" || pipe.type === "sink") {
     if (pipe.params.length > 0) {
       lines.push("  params: {");
       for (const param of pipe.params) {
@@ -389,6 +389,30 @@ function emitPipe(pipe: PipeModel): string {
     if (pipe.copySchedule) {
       lines.push(`  copy_schedule: ${escapeString(pipe.copySchedule)},`);
     }
+  }
+
+  if (pipe.type === "sink") {
+    if (!pipe.sink) {
+      throw new Error(`Sink pipe "${pipe.name}" is missing sink configuration.`);
+    }
+    lines.push("  sink: {");
+    lines.push(`    connection: ${toCamelCase(pipe.sink.connectionName)},`);
+    if (pipe.sink.service === "kafka") {
+      lines.push(`    topic: ${escapeString(pipe.sink.topic)},`);
+    } else {
+      lines.push(`    bucketUri: ${escapeString(pipe.sink.bucketUri)},`);
+      lines.push(`    fileTemplate: ${escapeString(pipe.sink.fileTemplate)},`);
+      if (pipe.sink.format) {
+        lines.push(`    format: ${escapeString(pipe.sink.format)},`);
+      }
+    }
+    if (pipe.sink.schedule) {
+      lines.push(`    schedule: ${escapeString(pipe.sink.schedule)},`);
+    }
+    if (pipe.sink.strategy) {
+      lines.push(`    strategy: ${escapeString(pipe.sink.strategy)},`);
+    }
+    lines.push("  },");
   }
 
   lines.push("  nodes: [");

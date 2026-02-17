@@ -160,6 +160,19 @@ export async function runMigrate(
   }
 
   for (const pipe of parsedPipes) {
+    if (pipe.type === "sink") {
+      const sinkConnectionName = pipe.sink?.connectionName;
+      if (!sinkConnectionName || !migratedConnectionNames.has(sinkConnectionName)) {
+        errors.push({
+          filePath: pipe.filePath,
+          resourceName: pipe.name,
+          resourceKind: pipe.kind,
+          message: `Sink pipe references missing/unmigrated connection "${sinkConnectionName ?? "(none)"}".`,
+        });
+        continue;
+      }
+    }
+
     if (
       pipe.type === "materialized" &&
       (!pipe.materializedDatasource ||

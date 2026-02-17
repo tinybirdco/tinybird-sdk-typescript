@@ -9,6 +9,8 @@ import type { DatasourceDefinition, SchemaDefinition, ColumnDefinition } from ".
 import { getColumnType } from "./datasource.js";
 import { getTinybirdType } from "./types.js";
 import type { TokenDefinition, PipeTokenScope } from "./token.js";
+import type { KafkaConnectionDefinition, S3ConnectionDefinition } from "./connection.js";
+import { isKafkaConnectionDefinition, isS3ConnectionDefinition } from "./connection.js";
 
 /** Symbol for brand typing pipes - use Symbol.for() for global registry */
 export const PIPE_BRAND = Symbol.for("tinybird.pipe");
@@ -156,6 +158,50 @@ export interface CopyConfig<
 }
 
 /**
+ * Sink export strategy.
+ * - 'append': append exported rows/files
+ * - 'replace': replace destination data on each run
+ */
+export type SinkStrategy = "append" | "replace";
+
+/**
+ * Kafka sink configuration
+ */
+export interface KafkaSinkConfig {
+  /** Kafka connection used to publish records */
+  connection: KafkaConnectionDefinition;
+  /** Destination Kafka topic */
+  topic: string;
+  /** Sink schedule (for example: @on-demand, @once, cron expression) */
+  schedule?: string;
+  /** Export strategy */
+  strategy?: SinkStrategy;
+}
+
+/**
+ * S3 sink configuration
+ */
+export interface S3SinkConfig {
+  /** S3 connection used to write exported files */
+  connection: S3ConnectionDefinition;
+  /** Destination bucket URI (for example: s3://bucket/prefix/) */
+  bucketUri: string;
+  /** Output filename template (supports Tinybird placeholders) */
+  fileTemplate: string;
+  /** Output format (for example: csv, ndjson) */
+  format?: string;
+  /** Sink schedule (for example: @on-demand, @once, cron expression) */
+  schedule?: string;
+  /** Export strategy */
+  strategy?: SinkStrategy;
+}
+
+/**
+ * Sink pipe configuration (Kafka or S3 only)
+ */
+export type SinkConfig = KafkaSinkConfig | S3SinkConfig;
+
+/**
  * Inline token configuration for pipe access
  */
 export interface InlinePipeTokenConfig {
@@ -194,12 +240,14 @@ export interface PipeOptions<
   nodes: readonly NodeDefinition[];
   /** Output schema (optional for reusable pipes, required for endpoints) */
   output?: TOutput;
-  /** Whether this pipe is an API endpoint (shorthand for { enabled: true }). Mutually exclusive with materialized and copy. */
+  /** Whether this pipe is an API endpoint (shorthand for { enabled: true }). Mutually exclusive with materialized, copy, and sink. */
   endpoint?: boolean | EndpointConfig;
-  /** Materialized view configuration. Mutually exclusive with endpoint and copy. */
+  /** Materialized view configuration. Mutually exclusive with endpoint, copy, and sink. */
   materialized?: MaterializedConfig;
-  /** Copy pipe configuration. Mutually exclusive with endpoint and materialized. */
+  /** Copy pipe configuration. Mutually exclusive with endpoint, materialized, and sink. */
   copy?: CopyConfig;
+  /** Sink configuration (Kafka/S3 export). Mutually exclusive with endpoint, materialized, and copy. */
+  sink?: SinkConfig;
   /** Access tokens for this pipe */
   tokens?: readonly PipeTokenConfig[];
 }
@@ -428,6 +476,32 @@ function validateMaterializedSchema(
   }
 }
 
+function validateSinkConfig(pipeName: string, sink: SinkConfig): void {
+  if ("topic" in sink) {
+    if (!isKafkaConnectionDefinition(sink.connection)) {
+      throw new Error(
+        `Pipe "${pipeName}" sink with topic requires a Kafka connection.`
+      );
+    }
+    if (!sink.topic.trim()) {
+      throw new Error(`Pipe "${pipeName}" sink topic cannot be empty.`);
+    }
+    return;
+  }
+
+  if (!isS3ConnectionDefinition(sink.connection)) {
+    throw new Error(
+      `Pipe "${pipeName}" S3 sink requires an S3 connection.`
+    );
+  }
+  if (!sink.bucketUri.trim()) {
+    throw new Error(`Pipe "${pipeName}" sink bucketUri cannot be empty.`);
+  }
+  if (!sink.fileTemplate.trim()) {
+    throw new Error(`Pipe "${pipeName}" sink fileTemplate cannot be empty.`);
+  }
+}
+
 export function definePipe<
   TParams extends ParamsDefinition,
   TOutput extends OutputDefinition
@@ -455,10 +529,11 @@ export function definePipe<
   }
 
   // Count how many types are configured
-  const typeCount = [options.endpoint, options.materialized, options.copy].filter(Boolean).length;
+  const typeCount = [options.endpoint, options.materialized, options.copy, options.sink]
+    .filter(Boolean).length;
   if (typeCount > 1) {
     throw new Error(
-      `Pipe "${name}" can only have one of: endpoint, materialized, or copy configuration. ` +
+      `Pipe "${name}" can only have one of: endpoint, materialized, copy, or sink configuration. ` +
         `A pipe must be at most one type.`
     );
   }
@@ -467,6 +542,10 @@ export function definePipe<
   if (options.materialized) {
     // output is guaranteed to be defined here because of the earlier validation
     validateMaterializedSchema(name, options.output!, options.materialized.datasource);
+  }
+
+  if (options.sink) {
+    validateSinkConfig(name, options.sink);
   }
 
   const params = (options.params ?? {}) as TParams;
@@ -788,6 +867,20 @@ export function getCopyConfig(pipe: PipeDefinition): CopyConfig | null {
  */
 export function isCopyPipe(pipe: PipeDefinition): boolean {
   return pipe.options.copy !== undefined;
+}
+
+/**
+ * Get the sink configuration from a pipe
+ */
+export function getSinkConfig(pipe: PipeDefinition): SinkConfig | null {
+  return pipe.options.sink ?? null;
+}
+
+/**
+ * Check if a pipe is a sink pipe
+ */
+export function isSinkPipe(pipe: PipeDefinition): boolean {
+  return pipe.options.sink !== undefined;
 }
 
 /**
