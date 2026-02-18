@@ -4,6 +4,7 @@ import { parseLiteralFromDatafile, toTsLiteral } from "./parser-utils.js";
 import type {
   DatasourceModel,
   DatasourceEngineModel,
+  GCSConnectionModel,
   KafkaConnectionModel,
   ParsedResource,
   PipeModel,
@@ -59,11 +60,13 @@ function hasSecretTemplate(resources: ParsedResource[]): boolean {
         if (resource.secret) values.push(resource.secret);
         if (resource.sslCaPem) values.push(resource.sslCaPem);
         if (resource.schemaRegistryUrl) values.push(resource.schemaRegistryUrl);
-      } else {
+      } else if (resource.connectionType === "s3") {
         values.push(resource.region);
         if (resource.arn) values.push(resource.arn);
         if (resource.accessKey) values.push(resource.accessKey);
         if (resource.secret) values.push(resource.secret);
+      } else {
+        values.push(resource.serviceAccountCredentialsJson);
       }
       continue;
     }
@@ -79,6 +82,11 @@ function hasSecretTemplate(resources: ParsedResource[]): boolean {
         values.push(resource.s3.bucketUri);
         if (resource.s3.schedule) values.push(resource.s3.schedule);
         if (resource.s3.fromTimestamp) values.push(resource.s3.fromTimestamp);
+      }
+      if (resource.gcs) {
+        values.push(resource.gcs.bucketUri);
+        if (resource.gcs.schedule) values.push(resource.gcs.schedule);
+        if (resource.gcs.fromTimestamp) values.push(resource.gcs.fromTimestamp);
       }
       continue;
     }
@@ -337,6 +345,20 @@ function emitDatasource(ds: DatasourceModel): string {
     lines.push("  },");
   }
 
+  if (ds.gcs) {
+    const connectionVar = toCamelCase(ds.gcs.connectionName);
+    lines.push("  gcs: {");
+    lines.push(`    connection: ${connectionVar},`);
+    lines.push(`    bucketUri: ${emitStringOrSecret(ds.gcs.bucketUri)},`);
+    if (ds.gcs.schedule) {
+      lines.push(`    schedule: ${emitStringOrSecret(ds.gcs.schedule)},`);
+    }
+    if (ds.gcs.fromTimestamp) {
+      lines.push(`    fromTimestamp: ${emitStringOrSecret(ds.gcs.fromTimestamp)},`);
+    }
+    lines.push("  },");
+  }
+
   if (ds.forwardQuery) {
     lines.push("  forwardQuery: `");
     lines.push(ds.forwardQuery.replace(/`/g, "\\`").replace(/\${/g, "\\${"));
@@ -364,7 +386,9 @@ function emitDatasource(ds: DatasourceModel): string {
   return lines.join("\n");
 }
 
-function emitConnection(connection: KafkaConnectionModel | S3ConnectionModel): string {
+function emitConnection(
+  connection: KafkaConnectionModel | S3ConnectionModel | GCSConnectionModel
+): string {
   const variableName = toCamelCase(connection.name);
   const lines: string[] = [];
 
@@ -396,19 +420,31 @@ function emitConnection(connection: KafkaConnectionModel | S3ConnectionModel): s
     return lines.join("\n");
   }
 
+  if (connection.connectionType === "s3") {
+    lines.push(
+      `export const ${variableName} = defineS3Connection(${escapeString(connection.name)}, {`
+    );
+    lines.push(`  region: ${emitStringOrSecret(connection.region)},`);
+    if (connection.arn) {
+      lines.push(`  arn: ${emitStringOrSecret(connection.arn)},`);
+    }
+    if (connection.accessKey) {
+      lines.push(`  accessKey: ${emitStringOrSecret(connection.accessKey)},`);
+    }
+    if (connection.secret) {
+      lines.push(`  secret: ${emitStringOrSecret(connection.secret)},`);
+    }
+    lines.push("});");
+    lines.push("");
+    return lines.join("\n");
+  }
+
   lines.push(
-    `export const ${variableName} = defineS3Connection(${escapeString(connection.name)}, {`
+    `export const ${variableName} = defineGCSConnection(${escapeString(connection.name)}, {`
   );
-  lines.push(`  region: ${emitStringOrSecret(connection.region)},`);
-  if (connection.arn) {
-    lines.push(`  arn: ${emitStringOrSecret(connection.arn)},`);
-  }
-  if (connection.accessKey) {
-    lines.push(`  accessKey: ${emitStringOrSecret(connection.accessKey)},`);
-  }
-  if (connection.secret) {
-    lines.push(`  secret: ${emitStringOrSecret(connection.secret)},`);
-  }
+  lines.push(
+    `  serviceAccountCredentialsJson: ${emitStringOrSecret(connection.serviceAccountCredentialsJson)},`
+  );
   lines.push("});");
   lines.push("");
   return lines.join("\n");
@@ -542,7 +578,7 @@ function emitPipe(pipe: PipeModel): string {
 
 export function emitMigrationFileContent(resources: ParsedResource[]): string {
   const connections = resources.filter(
-    (resource): resource is KafkaConnectionModel | S3ConnectionModel =>
+    (resource): resource is KafkaConnectionModel | S3ConnectionModel | GCSConnectionModel =>
       resource.kind === "connection"
   );
   const datasources = resources.filter(
@@ -569,6 +605,9 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
   if (connections.some((connection) => connection.connectionType === "s3")) {
     imports.add("defineS3Connection");
   }
+  if (connections.some((connection) => connection.connectionType === "gcs")) {
+    imports.add("defineGCSConnection");
+  }
   if (needsParams) {
     imports.add("p");
   }
@@ -585,6 +624,7 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
   const orderedImports = [
     "defineKafkaConnection",
     "defineS3Connection",
+    "defineGCSConnection",
     "defineDatasource",
     "definePipe",
     "defineMaterializedView",

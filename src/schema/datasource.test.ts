@@ -9,7 +9,7 @@ import {
 } from "./datasource.js";
 import { t } from "./types.js";
 import { engine } from "./engines.js";
-import { defineKafkaConnection, defineS3Connection } from "./connection.js";
+import { defineKafkaConnection, defineS3Connection, defineGCSConnection } from "./connection.js";
 
 describe("Datasource Schema", () => {
   describe("defineDatasource", () => {
@@ -88,13 +88,16 @@ describe("Datasource Schema", () => {
       expect(ds2._name).toBe("events_v2");
     });
 
-    it("throws when both kafka and s3 ingestion are configured", () => {
+    it("throws when multiple ingestion configs are configured", () => {
       const kafkaConn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",
       });
       const s3Conn = defineS3Connection("my_s3", {
         region: "us-east-1",
         arn: "arn:aws:iam::123456789012:role/tinybird-s3-access",
+      });
+      const gcsConn = defineGCSConnection("my_gcs", {
+        serviceAccountCredentialsJson: '{{ tb_secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON") }}',
       });
 
       expect(() =>
@@ -109,7 +112,39 @@ describe("Datasource Schema", () => {
             bucketUri: "s3://my-bucket/events/*.csv",
           },
         })
-      ).toThrow("Datasource cannot define both `kafka` and `s3` ingestion options.");
+      ).toThrow("Datasource can only define one ingestion option: `kafka`, `s3`, or `gcs`.");
+
+      expect(() =>
+        defineDatasource("events_gcs", {
+          schema: { id: t.string() },
+          kafka: {
+            connection: kafkaConn,
+            topic: "events",
+          },
+          gcs: {
+            connection: gcsConn,
+            bucketUri: "gs://my-bucket/events/*.csv",
+          },
+        })
+      ).toThrow("Datasource can only define one ingestion option: `kafka`, `s3`, or `gcs`.");
+    });
+
+    it("accepts gcs ingestion configuration", () => {
+      const gcsConn = defineGCSConnection("my_gcs", {
+        serviceAccountCredentialsJson: '{{ tb_secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON") }}',
+      });
+
+      const ds = defineDatasource("events_gcs", {
+        schema: { id: t.string() },
+        gcs: {
+          connection: gcsConn,
+          bucketUri: "gs://my-bucket/events/*.csv",
+          schedule: "@auto",
+        },
+      });
+
+      expect(ds.options.gcs?.connection._name).toBe("my_gcs");
+      expect(ds.options.gcs?.bucketUri).toBe("gs://my-bucket/events/*.csv");
     });
   });
 

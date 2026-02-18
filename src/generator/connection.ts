@@ -3,8 +3,16 @@
  * Converts ConnectionDefinition to native .connection file format
  */
 
-import type { ConnectionDefinition, KafkaConnectionDefinition } from "../schema/connection.js";
-import { isS3ConnectionDefinition, type S3ConnectionDefinition } from "../schema/connection.js";
+import type {
+  ConnectionDefinition,
+  KafkaConnectionDefinition,
+  GCSConnectionDefinition,
+} from "../schema/connection.js";
+import {
+  isS3ConnectionDefinition,
+  isGCSConnectionDefinition,
+  type S3ConnectionDefinition,
+} from "../schema/connection.js";
 
 /**
  * Generated connection content
@@ -79,6 +87,19 @@ function generateS3Connection(connection: S3ConnectionDefinition): string {
 }
 
 /**
+ * Generate a GCS connection content
+ */
+function generateGCSConnection(connection: GCSConnectionDefinition): string {
+  const parts: string[] = [];
+  const options = connection.options;
+
+  parts.push("TYPE gcs");
+  parts.push(`GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON ${options.serviceAccountCredentialsJson}`);
+
+  return parts.join("\n");
+}
+
+/**
  * Generate a .connection file content from a ConnectionDefinition
  *
  * @param connection - The connection definition
@@ -113,6 +134,8 @@ export function generateConnection(
     content = generateKafkaConnection(connection as KafkaConnectionDefinition);
   } else if (isS3ConnectionDefinition(connection)) {
     content = generateS3Connection(connection);
+  } else if (isGCSConnectionDefinition(connection)) {
+    content = generateGCSConnection(connection);
   } else {
     throw new Error("Unsupported connection type.");
   }

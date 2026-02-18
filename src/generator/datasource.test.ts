@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateDatasource, generateAllDatasources } from './datasource.js';
 import { defineDatasource } from '../schema/datasource.js';
-import { defineKafkaConnection, defineS3Connection } from '../schema/connection.js';
+import { defineKafkaConnection, defineS3Connection, defineGCSConnection } from '../schema/connection.js';
 import { defineToken } from '../schema/token.js';
 import { t } from '../schema/types.js';
 import { engine } from '../schema/engines.js';
@@ -524,6 +524,35 @@ describe('Datasource Generator', () => {
 
       const result = generateDatasource(ds);
 
+      expect(result.content).toContain('IMPORT_SCHEDULE @auto');
+      expect(result.content).toContain('IMPORT_FROM_TIMESTAMP 2024-01-01T00:00:00Z');
+    });
+  });
+
+  describe('GCS configuration', () => {
+    it('includes GCS import directives', () => {
+      const gcsConn = defineGCSConnection('my_gcs', {
+        serviceAccountCredentialsJson: '{{ tb_secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON") }}',
+      });
+
+      const ds = defineDatasource('gcs_events', {
+        schema: {
+          timestamp: t.dateTime(),
+          event: t.string(),
+        },
+        engine: engine.mergeTree({ sortingKey: ['timestamp'] }),
+        gcs: {
+          connection: gcsConn,
+          bucketUri: 'gs://my-bucket/events/*.csv',
+          schedule: '@auto',
+          fromTimestamp: '2024-01-01T00:00:00Z',
+        },
+      });
+
+      const result = generateDatasource(ds);
+
+      expect(result.content).toContain('IMPORT_CONNECTION_NAME my_gcs');
+      expect(result.content).toContain('IMPORT_BUCKET_URI gs://my-bucket/events/*.csv');
       expect(result.content).toContain('IMPORT_SCHEDULE @auto');
       expect(result.content).toContain('IMPORT_FROM_TIMESTAMP 2024-01-01T00:00:00Z');
     });

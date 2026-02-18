@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { generateConnection, generateAllConnections } from "./connection.js";
-import { defineKafkaConnection, defineS3Connection } from "../schema/connection.js";
+import {
+  defineKafkaConnection,
+  defineS3Connection,
+  defineGCSConnection,
+} from "../schema/connection.js";
 
 describe("Connection Generator", () => {
   describe("generateConnection", () => {
@@ -152,6 +156,20 @@ describe("Connection Generator", () => {
       expect(result.content).toContain('S3_ACCESS_KEY {{ tb_secret("S3_ACCESS_KEY") }}');
       expect(result.content).toContain('S3_SECRET {{ tb_secret("S3_SECRET") }}');
     });
+
+    it("generates GCS connection with service account credentials", () => {
+      const conn = defineGCSConnection("my_gcs", {
+        serviceAccountCredentialsJson: '{{ tb_secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON") }}',
+      });
+
+      const result = generateConnection(conn);
+
+      expect(result.name).toBe("my_gcs");
+      expect(result.content).toContain("TYPE gcs");
+      expect(result.content).toContain(
+        'GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON {{ tb_secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON") }}'
+      );
+    });
   });
 
   describe("generateAllConnections", () => {
@@ -163,11 +181,18 @@ describe("Connection Generator", () => {
         region: "us-east-1",
         arn: "arn:aws:iam::123456789012:role/tinybird-s3-access",
       });
+      const conn3 = defineGCSConnection("gcs_landing", {
+        serviceAccountCredentialsJson: '{{ tb_secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON") }}',
+      });
 
-      const results = generateAllConnections({ kafka1: conn1, s3_logs: conn2 });
+      const results = generateAllConnections({
+        kafka1: conn1,
+        s3_logs: conn2,
+        gcs_landing: conn3,
+      });
 
-      expect(results).toHaveLength(2);
-      expect(results.map((r) => r.name).sort()).toEqual(["kafka1", "s3_logs"]);
+      expect(results).toHaveLength(3);
+      expect(results.map((r) => r.name).sort()).toEqual(["gcs_landing", "kafka1", "s3_logs"]);
     });
 
     it("returns empty array for empty connections", () => {

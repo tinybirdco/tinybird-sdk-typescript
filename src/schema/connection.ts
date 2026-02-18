@@ -82,9 +82,35 @@ export interface S3ConnectionDefinition {
 }
 
 /**
+ * Options for defining a GCS connection
+ */
+export interface GCSConnectionOptions {
+  /** Service account credentials JSON */
+  serviceAccountCredentialsJson: string;
+}
+
+/**
+ * GCS-specific connection definition
+ */
+export interface GCSConnectionDefinition {
+  readonly [CONNECTION_BRAND]: true;
+  /** Connection name */
+  readonly _name: string;
+  /** Type marker for inference */
+  readonly _type: "connection";
+  /** Connection type */
+  readonly _connectionType: "gcs";
+  /** GCS options */
+  readonly options: GCSConnectionOptions;
+}
+
+/**
  * A connection definition - union of all connection types
  */
-export type ConnectionDefinition = KafkaConnectionDefinition | S3ConnectionDefinition;
+export type ConnectionDefinition =
+  | KafkaConnectionDefinition
+  | S3ConnectionDefinition
+  | GCSConnectionDefinition;
 
 function validateConnectionName(name: string): void {
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
@@ -167,6 +193,32 @@ export function defineS3Connection(
 }
 
 /**
+ * Define a GCS connection
+ *
+ * @param name - The connection name (must be valid identifier)
+ * @param options - GCS connection configuration
+ * @returns A connection definition that can be used in a project
+ */
+export function defineGCSConnection(
+  name: string,
+  options: GCSConnectionOptions
+): GCSConnectionDefinition {
+  validateConnectionName(name);
+
+  if (!options.serviceAccountCredentialsJson.trim()) {
+    throw new Error("GCS connection `serviceAccountCredentialsJson` is required.");
+  }
+
+  return {
+    [CONNECTION_BRAND]: true,
+    _name: name,
+    _type: "connection",
+    _connectionType: "gcs",
+    options,
+  };
+}
+
+/**
  * Check if a value is a connection definition
  */
 export function isConnectionDefinition(value: unknown): value is ConnectionDefinition {
@@ -190,6 +242,13 @@ export function isKafkaConnectionDefinition(value: unknown): value is KafkaConne
  */
 export function isS3ConnectionDefinition(value: unknown): value is S3ConnectionDefinition {
   return isConnectionDefinition(value) && value._connectionType === "s3";
+}
+
+/**
+ * Check if a value is a GCS connection definition
+ */
+export function isGCSConnectionDefinition(value: unknown): value is GCSConnectionDefinition {
+  return isConnectionDefinition(value) && value._connectionType === "gcs";
 }
 
 /**

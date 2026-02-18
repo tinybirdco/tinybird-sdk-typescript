@@ -616,6 +616,97 @@ IMPORT_FROM_TIMESTAMP 2024-01-01T00:00:00Z
     expect(output).toContain('fromTimestamp: "2024-01-01T00:00:00Z"');
   });
 
+  it("migrates gcs connection and import datasource directives", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "gcsample.connection",
+      `TYPE gcs
+GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON {{ tb_secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON") }}
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events_gcs_landing.datasource",
+      `SCHEMA >
+    timestamp DateTime,
+    session_id String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "timestamp"
+IMPORT_CONNECTION_NAME gcsample
+IMPORT_BUCKET_URI gs://my-gcs-bucket/events/*.csv
+IMPORT_SCHEDULE @auto
+IMPORT_FROM_TIMESTAMP 2024-01-01T00:00:00Z
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.migrated.filter((resource) => resource.kind === "connection")).toHaveLength(1);
+    expect(result.migrated.filter((resource) => resource.kind === "datasource")).toHaveLength(1);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain("defineGCSConnection");
+    expect(output).toContain('export const gcsample = defineGCSConnection("gcsample", {');
+    expect(output).toContain(
+      'serviceAccountCredentialsJson: secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON"),'
+    );
+    expect(output).toContain("gcs: {");
+    expect(output).toContain("connection: gcsample");
+    expect(output).toContain('bucketUri: "gs://my-gcs-bucket/events/*.csv"');
+    expect(output).toContain('schedule: "@auto"');
+    expect(output).toContain('fromTimestamp: "2024-01-01T00:00:00Z"');
+  });
+
+  it("reports an error when import directives use a non-bucket connection type", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "stream.connection",
+      `TYPE kafka
+KAFKA_BOOTSTRAP_SERVERS localhost:9092
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events_landing.datasource",
+      `SCHEMA >
+    id String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+IMPORT_CONNECTION_NAME stream
+IMPORT_BUCKET_URI gs://my-gcs-bucket/events/*.csv
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors.map((error) => error.message)).toEqual(
+      expect.arrayContaining([
+        'Datasource import directives require an s3 or gcs connection, found "kafka".',
+      ])
+    );
+  });
+
 
   it("migrates KAFKA_STORE_RAW_VALUE datasource directive", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));

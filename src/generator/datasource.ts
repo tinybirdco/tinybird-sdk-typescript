@@ -9,6 +9,7 @@ import type {
   ColumnDefinition,
   KafkaConfig,
   S3Config,
+  GCSConfig,
   TokenConfig,
 } from "../schema/datasource.js";
 import type { AnyTypeValidator, TypeModifiers } from "../schema/types.js";
@@ -176,18 +177,18 @@ function generateKafkaConfig(kafka: KafkaConfig): string {
 /**
  * Generate S3 import configuration lines
  */
-function generateS3Config(s3: S3Config): string {
+function generateImportConfig(importConfig: S3Config | GCSConfig): string {
   const parts: string[] = [];
 
-  parts.push(`IMPORT_CONNECTION_NAME ${s3.connection._name}`);
-  parts.push(`IMPORT_BUCKET_URI ${s3.bucketUri}`);
+  parts.push(`IMPORT_CONNECTION_NAME ${importConfig.connection._name}`);
+  parts.push(`IMPORT_BUCKET_URI ${importConfig.bucketUri}`);
 
-  if (s3.schedule) {
-    parts.push(`IMPORT_SCHEDULE ${s3.schedule}`);
+  if (importConfig.schedule) {
+    parts.push(`IMPORT_SCHEDULE ${importConfig.schedule}`);
   }
 
-  if (s3.fromTimestamp) {
-    parts.push(`IMPORT_FROM_TIMESTAMP ${s3.fromTimestamp}`);
+  if (importConfig.fromTimestamp) {
+    parts.push(`IMPORT_FROM_TIMESTAMP ${importConfig.fromTimestamp}`);
   }
 
   return parts.join("\n");
@@ -291,8 +292,13 @@ export function generateDatasource(
 ): GeneratedDatasource {
   const parts: string[] = [];
 
-  if (datasource.options.kafka && datasource.options.s3) {
-    throw new Error("Datasource cannot define both `kafka` and `s3` ingestion options.");
+  const ingestionConfigCount = [
+    datasource.options.kafka,
+    datasource.options.s3,
+    datasource.options.gcs,
+  ].filter(Boolean).length;
+  if (ingestionConfigCount > 1) {
+    throw new Error("Datasource can only define one ingestion option: `kafka`, `s3`, or `gcs`.");
   }
 
   // Add description if present
@@ -320,7 +326,13 @@ export function generateDatasource(
   // Add S3 configuration if present
   if (datasource.options.s3) {
     parts.push("");
-    parts.push(generateS3Config(datasource.options.s3));
+    parts.push(generateImportConfig(datasource.options.s3));
+  }
+
+  // Add GCS configuration if present
+  if (datasource.options.gcs) {
+    parts.push("");
+    parts.push(generateImportConfig(datasource.options.gcs));
   }
 
   // Add forward query if present
