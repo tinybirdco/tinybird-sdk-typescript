@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   defineKafkaConnection,
   defineS3Connection,
+  defineGCSConnection,
   isConnectionDefinition,
   isKafkaConnectionDefinition,
   isS3ConnectionDefinition,
+  isGCSConnectionDefinition,
   getConnectionType,
 } from "./connection.js";
 
@@ -153,6 +155,29 @@ describe("Connection Schema", () => {
     });
   });
 
+  describe("defineGCSConnection", () => {
+    it("creates a GCS connection with required fields", () => {
+      const conn = defineGCSConnection("my_gcs", {
+        serviceAccountCredentialsJson: '{{ tb_secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON") }}',
+      });
+
+      expect(conn._name).toBe("my_gcs");
+      expect(conn._type).toBe("connection");
+      expect(conn._connectionType).toBe("gcs");
+      expect(conn.options.serviceAccountCredentialsJson).toBe(
+        '{{ tb_secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON") }}'
+      );
+    });
+
+    it("throws when credentials json is empty", () => {
+      expect(() =>
+        defineGCSConnection("my_gcs", {
+          serviceAccountCredentialsJson: "   ",
+        })
+      ).toThrow("GCS connection `serviceAccountCredentialsJson` is required.");
+    });
+  });
+
   describe("isConnectionDefinition", () => {
     it("returns true for valid connection", () => {
       const conn = defineKafkaConnection("my_kafka", {
@@ -203,6 +228,21 @@ describe("Connection Schema", () => {
     });
   });
 
+  describe("isGCSConnectionDefinition", () => {
+    it("returns true for GCS connection", () => {
+      const conn = defineGCSConnection("my_gcs", {
+        serviceAccountCredentialsJson: '{{ tb_secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON") }}',
+      });
+
+      expect(isGCSConnectionDefinition(conn)).toBe(true);
+    });
+
+    it("returns false for non-GCS objects", () => {
+      expect(isGCSConnectionDefinition({})).toBe(false);
+      expect(isGCSConnectionDefinition(null)).toBe(false);
+    });
+  });
+
   describe("getConnectionType", () => {
     it("returns the connection type", () => {
       const conn = defineKafkaConnection("my_kafka", {
@@ -219,6 +259,14 @@ describe("Connection Schema", () => {
       });
 
       expect(getConnectionType(conn)).toBe("s3");
+    });
+
+    it("returns the gcs connection type", () => {
+      const conn = defineGCSConnection("my_gcs", {
+        serviceAccountCredentialsJson: '{{ tb_secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON") }}',
+      });
+
+      expect(getConnectionType(conn)).toBe("gcs");
     });
   });
 });

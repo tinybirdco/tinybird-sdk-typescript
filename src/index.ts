@@ -113,6 +113,7 @@ export type {
   ExtractSchema,
   KafkaConfig,
   S3Config,
+  GCSConfig,
 } from "./schema/datasource.js";
 
 // ============ Connection ============
@@ -120,9 +121,11 @@ export {
   defineKafkaConnection,
   createKafkaConnection,
   defineS3Connection,
+  defineGCSConnection,
   isConnectionDefinition,
   isKafkaConnectionDefinition,
   isS3ConnectionDefinition,
+  isGCSConnectionDefinition,
   getConnectionType,
 } from "./schema/connection.js";
 export type {
@@ -133,6 +136,8 @@ export type {
   KafkaSaslMechanism,
   S3ConnectionDefinition,
   S3ConnectionOptions,
+  GCSConnectionDefinition,
+  GCSConnectionOptions,
 } from "./schema/connection.js";
 
 // ============ Token ============

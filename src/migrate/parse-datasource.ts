@@ -518,7 +518,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
       resource.filePath,
       "datasource",
       resource.name,
-      "IMPORT_CONNECTION_NAME and IMPORT_BUCKET_URI are required when S3 import directives are used."
+      "IMPORT_CONNECTION_NAME and IMPORT_BUCKET_URI are required when import directives are used."
     );
   }
 
@@ -527,7 +527,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
       resource.filePath,
       "datasource",
       resource.name,
-      "Datasource cannot mix Kafka directives with S3 import directives."
+      "Datasource cannot mix Kafka directives with import directives."
     );
   }
 

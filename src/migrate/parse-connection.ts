@@ -1,4 +1,9 @@
-import type { KafkaConnectionModel, ResourceFile, S3ConnectionModel } from "./types.js";
+import type {
+  GCSConnectionModel,
+  KafkaConnectionModel,
+  ResourceFile,
+  S3ConnectionModel,
+} from "./types.js";
 import {
   MigrationParseError,
   isBlank,
@@ -9,7 +14,7 @@ import {
 
 export function parseConnectionFile(
   resource: ResourceFile
-): KafkaConnectionModel | S3ConnectionModel {
+): KafkaConnectionModel | S3ConnectionModel | GCSConnectionModel {
   const lines = splitLines(resource.content);
   let connectionType: string | undefined;
 
@@ -34,6 +39,7 @@ export function parseConnectionFile(
   let arn: string | undefined;
   let accessKey: string | undefined;
   let accessSecret: string | undefined;
+  let serviceAccountCredentialsJson: string | undefined;
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -100,6 +106,9 @@ export function parseConnectionFile(
       case "S3_SECRET":
         accessSecret = parseQuotedValue(value);
         break;
+      case "GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON":
+        serviceAccountCredentialsJson = parseQuotedValue(value);
+        break;
       default:
         throw new MigrationParseError(
           resource.filePath,
@@ -120,12 +129,12 @@ export function parseConnectionFile(
   }
 
   if (connectionType === "kafka") {
-    if (region || arn || accessKey || accessSecret) {
+    if (region || arn || accessKey || accessSecret || serviceAccountCredentialsJson) {
       throw new MigrationParseError(
         resource.filePath,
         "connection",
         resource.name,
-        "S3 directives are not valid for kafka connections."
+        "S3/GCS directives are not valid for kafka connections."
       );
     }
 
@@ -161,13 +170,14 @@ export function parseConnectionFile(
       key ||
       secret ||
       schemaRegistryUrl ||
-      sslCaPem
+      sslCaPem ||
+      serviceAccountCredentialsJson
     ) {
       throw new MigrationParseError(
         resource.filePath,
         "connection",
         resource.name,
-        "Kafka directives are not valid for s3 connections."
+        "Kafka/GCS directives are not valid for s3 connections."
       );
     }
 
@@ -207,6 +217,46 @@ export function parseConnectionFile(
       arn,
       accessKey,
       secret: accessSecret,
+    };
+  }
+
+  if (connectionType === "gcs") {
+    if (
+      bootstrapServers ||
+      securityProtocol ||
+      saslMechanism ||
+      key ||
+      secret ||
+      schemaRegistryUrl ||
+      sslCaPem ||
+      region ||
+      arn ||
+      accessKey ||
+      accessSecret
+    ) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "connection",
+        resource.name,
+        "Kafka/S3 directives are not valid for gcs connections."
+      );
+    }
+
+    if (!serviceAccountCredentialsJson) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "connection",
+        resource.name,
+        "GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON is required for gcs connections."
+      );
+    }
+
+    return {
+      kind: "connection",
+      name: resource.name,
+      filePath: resource.filePath,
+      connectionType: "gcs",
+      serviceAccountCredentialsJson,
     };
   }
 

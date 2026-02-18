@@ -133,7 +133,9 @@ export async function runMigrate(
 
   for (const datasource of parsedDatasources) {
     const referencedConnectionName =
-      datasource.kafka?.connectionName ?? datasource.s3?.connectionName;
+      datasource.kafka?.connectionName ??
+      datasource.s3?.connectionName ??
+      datasource.gcs?.connectionName;
 
     if (
       referencedConnectionName &&
@@ -146,6 +148,42 @@ export async function runMigrate(
         message: `Datasource references missing/unmigrated connection "${referencedConnectionName}".`,
       });
       continue;
+    }
+
+    if (datasource.kafka) {
+      const kafkaConnectionType = parsedConnectionTypeByName.get(datasource.kafka.connectionName);
+      if (kafkaConnectionType !== "kafka") {
+        errors.push({
+          filePath: datasource.filePath,
+          resourceName: datasource.name,
+          resourceKind: datasource.kind,
+          message: `Datasource kafka ingestion requires a kafka connection, found "${kafkaConnectionType ?? "(none)"}".`,
+        });
+        continue;
+      }
+    }
+
+    const importConfig = datasource.s3 ?? datasource.gcs;
+    if (importConfig) {
+      const importConnectionType = parsedConnectionTypeByName.get(importConfig.connectionName);
+      if (importConnectionType !== "s3" && importConnectionType !== "gcs") {
+        errors.push({
+          filePath: datasource.filePath,
+          resourceName: datasource.name,
+          resourceKind: datasource.kind,
+          message:
+            `Datasource import directives require an s3 or gcs connection, found "${importConnectionType ?? "(none)"}".`,
+        });
+        continue;
+      }
+
+      if (importConnectionType === "gcs") {
+        datasource.gcs = { ...importConfig };
+        datasource.s3 = undefined;
+      } else {
+        datasource.s3 = { ...importConfig };
+        datasource.gcs = undefined;
+      }
     }
 
     try {

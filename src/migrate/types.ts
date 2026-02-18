@@ -52,6 +52,13 @@ export interface DatasourceS3Model {
   fromTimestamp?: string;
 }
 
+export interface DatasourceGCSModel {
+  connectionName: string;
+  bucketUri: string;
+  schedule?: string;
+  fromTimestamp?: string;
+}
+
 export interface DatasourceTokenModel {
   name: string;
   scope: "READ" | "APPEND";
@@ -66,6 +73,7 @@ export interface DatasourceModel {
   engine?: DatasourceEngineModel;
   kafka?: DatasourceKafkaModel;
   s3?: DatasourceS3Model;
+  gcs?: DatasourceGCSModel;
   forwardQuery?: string;
   tokens: DatasourceTokenModel[];
   sharedWith: string[];
@@ -156,11 +164,20 @@ export interface S3ConnectionModel {
   secret?: string;
 }
 
+export interface GCSConnectionModel {
+  kind: "connection";
+  name: string;
+  filePath: string;
+  connectionType: "gcs";
+  serviceAccountCredentialsJson: string;
+}
+
 export type ParsedResource =
   | DatasourceModel
   | PipeModel
   | KafkaConnectionModel
-  | S3ConnectionModel;
+  | S3ConnectionModel
+  | GCSConnectionModel;
 
 export interface MigrationResult {
   success: boolean;

@@ -530,7 +530,7 @@ In local mode:
 ### Connections
 
 ```typescript
-import { defineKafkaConnection, defineS3Connection, secret } from "@tinybirdco/sdk";
+import { defineKafkaConnection, defineS3Connection, defineGCSConnection, secret } from "@tinybirdco/sdk";
 
 export const eventsKafka = defineKafkaConnection("events_kafka", {
   bootstrapServers: "kafka.example.com:9092",
@@ -544,13 +544,17 @@ export const landingS3 = defineS3Connection("landing_s3", {
   region: "us-east-1",
   arn: "arn:aws:iam::123456789012:role/tinybird-s3-access",
 });
+
+export const landingGCS = defineGCSConnection("landing_gcs", {
+  serviceAccountCredentialsJson: secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON"),
+});
 ```
 
 Use connections from datasources:
 
 ```typescript
 import { defineDatasource, t, engine } from "@tinybirdco/sdk";
-import { eventsKafka, landingS3 } from "./connections";
+import { eventsKafka, landingS3, landingGCS } from "./connections";
 
 export const kafkaEvents = defineDatasource("kafka_events", {
   schema: {
@@ -575,6 +579,19 @@ export const s3Landing = defineDatasource("s3_landing", {
   s3: {
     connection: landingS3,
     bucketUri: "s3://my-bucket/events/*.csv",
+    schedule: "@auto",
+  },
+});
+
+export const gcsLanding = defineDatasource("gcs_landing", {
+  schema: {
+    timestamp: t.dateTime(),
+    session_id: t.string(),
+  },
+  engine: engine.mergeTree({ sortingKey: ["timestamp"] }),
+  gcs: {
+    connection: landingGCS,
+    bucketUri: "gs://my-gcs-bucket/events/*.csv",
     schedule: "@auto",
   },
 });

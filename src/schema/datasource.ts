@@ -5,7 +5,11 @@
 
 import { getModifiers, isTypeValidator, type AnyTypeValidator } from "./types.js";
 import type { EngineConfig } from "./engines.js";
-import type { KafkaConnectionDefinition, S3ConnectionDefinition } from "./connection.js";
+import type {
+  KafkaConnectionDefinition,
+  S3ConnectionDefinition,
+  GCSConnectionDefinition,
+} from "./connection.js";
 import type { TokenDefinition, DatasourceTokenScope } from "./token.js";
 
 // Symbol for brand typing - use Symbol.for() for global registry
@@ -85,6 +89,20 @@ export interface S3Config {
 }
 
 /**
+ * GCS import configuration for a datasource
+ */
+export interface GCSConfig {
+  /** GCS connection to use */
+  connection: GCSConnectionDefinition;
+  /** GCS bucket URI, for example: gs://my-bucket/path/*.csv */
+  bucketUri: string;
+  /** Import schedule, for example: @auto or @once */
+  schedule?: string;
+  /** Incremental import lower bound timestamp expression */
+  fromTimestamp?: string;
+}
+
+/**
  * Options for defining a datasource
  */
 export interface DatasourceOptions<TSchema extends SchemaDefinition> {
@@ -113,6 +131,8 @@ export interface DatasourceOptions<TSchema extends SchemaDefinition> {
   kafka?: KafkaConfig;
   /** S3 ingestion configuration */
   s3?: S3Config;
+  /** GCS ingestion configuration */
+  gcs?: GCSConfig;
 }
 
 /**
@@ -170,8 +190,9 @@ export function defineDatasource<TSchema extends SchemaDefinition>(
     );
   }
 
-  if (options.kafka && options.s3) {
-    throw new Error("Datasource cannot define both `kafka` and `s3` ingestion options.");
+  const ingestionConfigCount = [options.kafka, options.s3, options.gcs].filter(Boolean).length;
+  if (ingestionConfigCount > 1) {
+    throw new Error("Datasource can only define one ingestion option: `kafka`, `s3`, or `gcs`.");
   }
 
   return {
