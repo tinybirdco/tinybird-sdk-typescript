@@ -24,6 +24,7 @@ describe("Datasource Schema", () => {
       expect(ds._name).toBe("events");
       expect(ds._type).toBe("datasource");
       expect(ds.options.schema).toBeDefined();
+      expect(ds.options.engine).toBeUndefined();
     });
 
     it("creates a datasource with description", () => {
@@ -168,6 +169,22 @@ describe("Datasource Schema", () => {
       const result = getColumnJsonPath(col);
 
       expect(result).toBeUndefined();
+    });
+
+    it("returns jsonPath from validator modifier", () => {
+      const validator = t.string().jsonPath("$.user.id");
+      const result = getColumnJsonPath(validator);
+
+      expect(result).toBe("$.user.id");
+    });
+
+    it("prefers column definition jsonPath over validator modifier", () => {
+      const col = column(t.string().jsonPath("$.from_validator"), {
+        jsonPath: "$.from_column",
+      });
+      const result = getColumnJsonPath(col);
+
+      expect(result).toBe("$.from_column");
     });
   });
 

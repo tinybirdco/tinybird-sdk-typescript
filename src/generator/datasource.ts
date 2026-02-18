@@ -166,6 +166,9 @@ function generateKafkaConfig(kafka: KafkaConfig): string {
   if (kafka.autoOffsetReset) {
     parts.push(`KAFKA_AUTO_OFFSET_RESET ${kafka.autoOffsetReset}`);
   }
+  if (kafka.storeRawValue !== undefined) {
+    parts.push(`KAFKA_STORE_RAW_VALUE ${kafka.storeRawValue ? "True" : "False"}`);
+  }
 
   return parts.join("\n");
 }

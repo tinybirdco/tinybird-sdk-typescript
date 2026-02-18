@@ -4,45 +4,44 @@ import {
   isBlank,
   parseDirectiveLine,
   parseQuotedValue,
+  readDirectiveBlock,
   splitCommaSeparated,
   splitLines,
   splitTopLevelComma,
-  stripIndent,
 } from "./parser-utils.js";
 
-interface BlockReadResult {
-  lines: string[];
-  nextIndex: number;
-}
+const DATASOURCE_DIRECTIVES = new Set([
+  "DESCRIPTION",
+  "SCHEMA",
+  "FORWARD_QUERY",
+  "SHARED_WITH",
+  "ENGINE",
+  "ENGINE_SORTING_KEY",
+  "ENGINE_PARTITION_KEY",
+  "ENGINE_PRIMARY_KEY",
+  "ENGINE_TTL",
+  "ENGINE_VER",
+  "ENGINE_SIGN",
+  "ENGINE_VERSION",
+  "ENGINE_SUMMING_COLUMNS",
+  "ENGINE_SETTINGS",
+  "KAFKA_CONNECTION_NAME",
+  "KAFKA_TOPIC",
+  "KAFKA_GROUP_ID",
+  "KAFKA_AUTO_OFFSET_RESET",
+  "IMPORT_CONNECTION_NAME",
+  "IMPORT_BUCKET_URI",
+  "IMPORT_SCHEDULE",
+  "IMPORT_FROM_TIMESTAMP",
+  "TOKEN",
+]);
 
-function readIndentedBlock(lines: string[], startIndex: number): BlockReadResult {
-  const collected: string[] = [];
-  let i = startIndex;
-
-  while (i < lines.length) {
-    const line = lines[i] ?? "";
-    if (line.startsWith("    ")) {
-      collected.push(stripIndent(line));
-      i += 1;
-      continue;
-    }
-
-    if (isBlank(line)) {
-      let j = i + 1;
-      while (j < lines.length && isBlank(lines[j] ?? "")) {
-        j += 1;
-      }
-      if (j < lines.length && (lines[j] ?? "").startsWith("    ")) {
-        collected.push("");
-        i += 1;
-        continue;
-      }
-    }
-
-    break;
+function isDatasourceDirectiveLine(line: string): boolean {
+  if (!line) {
+    return false;
   }
-
-  return { lines: collected, nextIndex: i };
+  const { key } = parseDirectiveLine(line);
+  return DATASOURCE_DIRECTIVES.has(key);
 }
 
 function findTokenOutsideContexts(input: string, token: string): number {
@@ -95,8 +94,18 @@ function parseColumnLine(filePath: string, resourceName: string, rawLine: string
     );
   }
 
-  const columnName = line.slice(0, firstSpace).trim();
+  const rawColumnName = line.slice(0, firstSpace).trim();
+  const columnName = normalizeColumnName(rawColumnName);
   let rest = line.slice(firstSpace + 1).trim();
+
+  if (!columnName) {
+    throw new MigrationParseError(
+      filePath,
+      "datasource",
+      resourceName,
+      `Invalid schema column name: "${rawLine}"`
+    );
+  }
 
   const codecMatch = rest.match(/\s+CODEC\((.+)\)\s*$/);
   const codec = codecMatch ? codecMatch[1].trim() : undefined;
@@ -134,6 +143,17 @@ function parseColumnLine(filePath: string, resourceName: string, rawLine: string
     defaultExpression,
     codec,
   };
+}
+
+function normalizeColumnName(value: string): string {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith("`") && trimmed.endsWith("`")) ||
+    (trimmed.startsWith('"') && trimmed.endsWith('"'))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
 }
 
 function parseEngineSettings(value: string): Record<string, string | number | boolean> {
@@ -176,7 +196,15 @@ function parseEngineSettings(value: string): Record<string, string | number | bo
 }
 
 function parseToken(filePath: string, resourceName: string, value: string): DatasourceTokenModel {
-  const parts = value.split(/\s+/).filter(Boolean);
+  const trimmed = value.trim();
+  const quotedMatch = trimmed.match(/^"([^"]+)"\s+(READ|APPEND)$/);
+  if (quotedMatch) {
+    const name = quotedMatch[1];
+    const scope = quotedMatch[2] as "READ" | "APPEND";
+    return { name, scope };
+  }
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length < 2) {
     throw new MigrationParseError(
       filePath,
@@ -195,7 +223,11 @@ function parseToken(filePath: string, resourceName: string, value: string): Data
     );
   }
 
-  const name = parts[0];
+  const rawName = parts[0] ?? "";
+  const name =
+    rawName.startsWith('"') && rawName.endsWith('"') && rawName.length >= 2
+      ? rawName.slice(1, -1)
+      : rawName;
   const scope = parts[1];
   if (scope !== "READ" && scope !== "APPEND") {
     throw new MigrationParseError(
@@ -223,6 +255,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
   let primaryKey: string[] | undefined;
   let ttl: string | undefined;
   let ver: string | undefined;
+  let isDeleted: string | undefined;
   let sign: string | undefined;
   let version: string | undefined;
   let summingColumns: string[] | undefined;
@@ -232,6 +265,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
   let kafkaTopic: string | undefined;
   let kafkaGroupId: string | undefined;
   let kafkaAutoOffsetReset: "earliest" | "latest" | undefined;
+  let kafkaStoreRawValue: boolean | undefined;
 
   let importConnectionName: string | undefined;
   let importBucketUri: string | undefined;
@@ -242,28 +276,20 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
   while (i < lines.length) {
     const rawLine = lines[i] ?? "";
     const line = rawLine.trim();
-    if (!line) {
+    if (!line || line.startsWith("#")) {
       i += 1;
       continue;
     }
 
     if (line === "DESCRIPTION >") {
-      const block = readIndentedBlock(lines, i + 1);
-      if (block.lines.length === 0) {
-        throw new MigrationParseError(
-          resource.filePath,
-          "datasource",
-          resource.name,
-          "DESCRIPTION block is empty."
-        );
-      }
+      const block = readDirectiveBlock(lines, i + 1, isDatasourceDirectiveLine);
       description = block.lines.join("\n");
       i = block.nextIndex;
       continue;
     }
 
     if (line === "SCHEMA >") {
-      const block = readIndentedBlock(lines, i + 1);
+      const block = readDirectiveBlock(lines, i + 1, isDatasourceDirectiveLine);
       if (block.lines.length === 0) {
         throw new MigrationParseError(
           resource.filePath,
@@ -273,7 +299,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
         );
       }
       for (const schemaLine of block.lines) {
-        if (isBlank(schemaLine)) {
+        if (isBlank(schemaLine) || schemaLine.trim().startsWith("#")) {
           continue;
         }
         columns.push(parseColumnLine(resource.filePath, resource.name, schemaLine));
@@ -283,7 +309,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
     }
 
     if (line === "FORWARD_QUERY >") {
-      const block = readIndentedBlock(lines, i + 1);
+      const block = readDirectiveBlock(lines, i + 1, isDatasourceDirectiveLine);
       if (block.lines.length === 0) {
         throw new MigrationParseError(
           resource.filePath,
@@ -298,7 +324,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
     }
 
     if (line === "SHARED_WITH >") {
-      const block = readIndentedBlock(lines, i + 1);
+      const block = readDirectiveBlock(lines, i + 1, isDatasourceDirectiveLine);
       for (const sharedLine of block.lines) {
         const normalized = sharedLine.trim().replace(/,$/, "");
         if (normalized) {
@@ -328,6 +354,9 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
         break;
       case "ENGINE_VER":
         ver = parseQuotedValue(value);
+        break;
+      case "ENGINE_IS_DELETED":
+        isDeleted = parseQuotedValue(value);
         break;
       case "ENGINE_SIGN":
         sign = parseQuotedValue(value);
@@ -370,6 +399,23 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
         }
         kafkaAutoOffsetReset = value;
         break;
+      case "KAFKA_STORE_RAW_VALUE": {
+        const normalized = value.toLowerCase();
+        if (normalized === "true" || normalized === "1") {
+          kafkaStoreRawValue = true;
+          break;
+        }
+        if (normalized === "false" || normalized === "0") {
+          kafkaStoreRawValue = false;
+          break;
+        }
+        throw new MigrationParseError(
+          resource.filePath,
+          "datasource",
+          resource.name,
+          `Invalid KAFKA_STORE_RAW_VALUE value: "${value}"`
+        );
+      }
       case "IMPORT_CONNECTION_NAME":
         importConnectionName = parseQuotedValue(value);
         break;
@@ -406,16 +452,25 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
     );
   }
 
-  if (!engineType) {
-    throw new MigrationParseError(
-      resource.filePath,
-      "datasource",
-      resource.name,
-      "ENGINE directive is required."
-    );
+  const hasEngineDirectives =
+    sortingKey.length > 0 ||
+    partitionKey !== undefined ||
+    (primaryKey !== undefined && primaryKey.length > 0) ||
+    ttl !== undefined ||
+    ver !== undefined ||
+    isDeleted !== undefined ||
+    sign !== undefined ||
+    version !== undefined ||
+    (summingColumns !== undefined && summingColumns.length > 0) ||
+    settings !== undefined;
+
+  if (!engineType && hasEngineDirectives) {
+    // Tinybird defaults to MergeTree when ENGINE is omitted.
+    // If engine-specific options are present, preserve them by inferring MergeTree.
+    engineType = "MergeTree";
   }
 
-  if (sortingKey.length === 0) {
+  if (engineType && sortingKey.length === 0) {
     throw new MigrationParseError(
       resource.filePath,
       "datasource",
@@ -425,12 +480,17 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
   }
 
   const kafka =
-    kafkaConnectionName || kafkaTopic || kafkaGroupId || kafkaAutoOffsetReset
+    kafkaConnectionName ||
+    kafkaTopic ||
+    kafkaGroupId ||
+    kafkaAutoOffsetReset ||
+    kafkaStoreRawValue !== undefined
       ? {
           connectionName: kafkaConnectionName ?? "",
           topic: kafkaTopic ?? "",
           groupId: kafkaGroupId,
           autoOffsetReset: kafkaAutoOffsetReset,
+          storeRawValue: kafkaStoreRawValue,
         }
       : undefined;
 
@@ -477,18 +537,21 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
     filePath: resource.filePath,
     description,
     columns,
-    engine: {
-      type: engineType,
-      sortingKey,
-      partitionKey,
-      primaryKey,
-      ttl,
-      ver,
-      sign,
-      version,
-      summingColumns,
-      settings,
-    },
+    engine: engineType
+      ? {
+          type: engineType,
+          sortingKey,
+          partitionKey,
+          primaryKey,
+          ttl,
+          ver,
+          isDeleted,
+          sign,
+          version,
+          summingColumns,
+          settings,
+        }
+      : undefined,
     kafka,
     s3,
     forwardQuery,

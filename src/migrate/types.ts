@@ -30,6 +30,7 @@ export interface DatasourceEngineModel {
   primaryKey?: string[];
   ttl?: string;
   ver?: string;
+  isDeleted?: string;
   sign?: string;
   version?: string;
   summingColumns?: string[];
@@ -41,6 +42,7 @@ export interface DatasourceKafkaModel {
   topic: string;
   groupId?: string;
   autoOffsetReset?: "earliest" | "latest";
+  storeRawValue?: boolean;
 }
 
 export interface DatasourceS3Model {
@@ -61,7 +63,7 @@ export interface DatasourceModel {
   filePath: string;
   description?: string;
   columns: DatasourceColumnModel[];
-  engine: DatasourceEngineModel;
+  engine?: DatasourceEngineModel;
   kafka?: DatasourceKafkaModel;
   s3?: DatasourceS3Model;
   forwardQuery?: string;
@@ -106,7 +108,8 @@ export interface PipeParamModel {
   name: string;
   type: string;
   required: boolean;
-  defaultValue?: string | number;
+  defaultValue?: string | number | boolean;
+  description?: string;
 }
 
 export interface PipeModel {
@@ -138,6 +141,7 @@ export interface KafkaConnectionModel {
   saslMechanism?: "PLAIN" | "SCRAM-SHA-256" | "SCRAM-SHA-512" | "OAUTHBEARER";
   key?: string;
   secret?: string;
+  schemaRegistryUrl?: string;
   sslCaPem?: string;
 }
 
