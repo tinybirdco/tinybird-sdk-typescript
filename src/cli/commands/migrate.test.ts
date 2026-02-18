@@ -107,7 +107,7 @@ export const eventsEndpoint = definePipe("events_endpoint", {
 SELECT event_id, user_id, payload
 FROM events
 WHERE user_id = {{UInt64(user_id)}}
-AND env = {{String(env, 'prod')}}
+AND env = {{ String(env) }}
       \`,
     }),
     node({
@@ -168,7 +168,7 @@ GROUP BY user_id
       sql: \`
 SELECT user_id, total
 FROM agg
-WHERE total > {{UInt32(min_total, 10)}}
+WHERE total > {{ UInt32(min_total) }}
       \`,
     }),
   ],
@@ -668,6 +668,53 @@ IMPORT_FROM_TIMESTAMP 2024-01-01T00:00:00Z
     expect(output).toContain('fromTimestamp: "2024-01-01T00:00:00Z"');
   });
 
+  it("migrates single-quoted gcs import directives", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "gcp_billing_reports.connection",
+      `TYPE gcs
+GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON {{tb_secret("GCP_SERVICE_ACCOUNT_CREDENTIALS_JSON")}}
+`
+    );
+
+    writeFile(
+      tempDir,
+      "gcp_production_billing_account_landing.datasource",
+      `SCHEMA >
+    usage_start_time DateTime64(3)
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "usage_start_time"
+IMPORT_CONNECTION_NAME 'gcp_billing_reports'
+IMPORT_BUCKET_URI 'gs://tinybird-oa-sot-fwd/gcp_production_billing_reports/billing_*.csv.gz'
+IMPORT_SCHEDULE '@on-demand'
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain(
+      'export const gcpBillingReports = defineGCSConnection("gcp_billing_reports", {'
+    );
+    expect(output).toContain("gcs: {");
+    expect(output).toContain("connection: gcpBillingReports");
+    expect(output).toContain(
+      'bucketUri: "gs://tinybird-oa-sot-fwd/gcp_production_billing_reports/billing_*.csv.gz"'
+    );
+    expect(output).toContain('schedule: "@on-demand"');
+  });
+
   it("reports an error when import directives use a non-bucket connection type", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
     tempDirs.push(tempDir);
@@ -748,6 +795,44 @@ KAFKA_STORE_RAW_VALUE True
     expect(output).toContain("connection: stream");
     expect(output).toContain('topic: "events_topic"');
     expect(output).toContain("storeRawValue: true");
+  });
+
+  it("migrates INDEXES datasource block", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "events.datasource",
+      `SCHEMA >
+    id String,
+    pipe_name String
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+INDEXES >
+    pipe_name_set pipe_name TYPE set(100) GRANULARITY 1
+    id_bf lower(id) TYPE bloom_filter(0.001) GRANULARITY 4
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain("indexes: [");
+    expect(output).toContain(
+      '{ name: "pipe_name_set", expr: "pipe_name", type: "set(100)", granularity: 1 }'
+    );
+    expect(output).toContain(
+      '{ name: "id_bf", expr: "lower(id)", type: "bloom_filter(0.001)", granularity: 4 }'
+    );
   });
 
   it("migrates kafka schema registry and engine is deleted directives", async () => {
@@ -898,6 +983,201 @@ TYPE ENDPOINT
     const output = fs.readFileSync(result.outputPath, "utf-8");
     expect(output).toContain('export const endpointUpper = definePipe("endpoint_upper", {');
     expect(output).toContain("endpoint: true,");
+  });
+
+  it("supports Int/Integer aliases and column placeholder params", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "placeholder_aliases.pipe",
+      `NODE endpoint
+SQL >
+    SELECT event_id AS event_id
+    FROM events
+    WHERE score >= {{int(min_score, 10)}}
+    ORDER BY {{column(sort_col)}} DESC
+    LIMIT {{ Integer(limit, 50) }}
+TYPE endpoint
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('export const placeholderAliases = definePipe("placeholder_aliases", {');
+    expect(output).toContain("params: {");
+    expect(output).toContain("limit: p.int32().optional(50),");
+    expect(output).toContain("min_score: p.int32().optional(10),");
+    expect(output).toContain("sort_col: p.column(),");
+  });
+
+  it("supports error() placeholder helper without treating it as a param", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "placeholder_error.pipe",
+      `NODE endpoint
+SQL >
+    %
+    {% if not defined(start_date) and not defined(end_date) %}
+        {{ error('start_date and end_date are required parameters') }}
+    {% end %}
+    SELECT 1 AS id
+    WHERE now() >= {{DateTime(start_date, '2025-01-01 00:00:00')}}
+TYPE endpoint
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('export const placeholderError = definePipe("placeholder_error", {');
+    expect(output).toContain("params: {");
+    expect(output).toContain('start_date: p.dateTime().optional("2025-01-01 00:00:00"),');
+    expect(output).not.toContain("error:");
+  });
+
+  it("uses the last explicit default and strips inline defaults from SQL", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "last_default.pipe",
+      `NODE endpoint
+SQL >
+    SELECT 1
+    WHERE d >= {{ String(start_date, '2025-03-01') }}
+      AND d <= {{ String(start_date, '2025-04-01') }}
+TYPE endpoint
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('start_date: p.string().optional("2025-04-01"),');
+    expect(output).toContain("{{ String(start_date) }}");
+    expect(output).not.toContain("{{ String(start_date, '2025-03-01') }}");
+    expect(output).not.toContain("{{ String(start_date, '2025-04-01') }}");
+  });
+
+  it("keeps the previous truthy default when a later duplicate uses a falsy default", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "truthy_default_precedence.pipe",
+      `NODE endpoint
+SQL >
+    SELECT 1
+    WHERE d >= {{ String(start_date, '2025-03-01') }}
+      AND d <= {{ String(start_date, '') }}
+TYPE endpoint
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('start_date: p.string().optional("2025-03-01"),');
+    expect(output).toContain("{{ String(start_date) }}");
+  });
+
+  it("extracts params from placeholder expressions with multiple function calls", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "expression_params.pipe",
+      `NODE endpoint
+SQL >
+    SELECT 1
+    LIMIT {{ Int32(limit, 20) }}
+    OFFSET {{ Int32(page, 0) * Int32(limit, 20) }}
+TYPE endpoint
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain("limit: p.int32().optional(20),");
+    expect(output).toContain("page: p.int32().optional(0),");
+    expect(output).toContain("{{ Int32(limit) }}");
+    expect(output).toContain("{{ Int32(page) * Int32(limit) }}");
+  });
+
+  it("uses the last explicit type when a param appears with mixed placeholder types", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "last_type.pipe",
+      `NODE endpoint
+SQL >
+    SELECT 1
+    WHERE d >= {{ Date(start_date) }}
+      AND d <= {{ String(start_date, '2025-04-01') }}
+TYPE endpoint
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('start_date: p.string().optional("2025-04-01"),');
+    expect(output).toContain("{{ Date(start_date) }}");
+    expect(output).toContain("{{ String(start_date) }}");
   });
 
   it("parses multiline datasource blocks with flexible indentation", async () => {
@@ -1198,6 +1478,38 @@ TYPE endpoint
     );
   });
 
+  it("ignores function-like text inside quoted descriptions when parsing placeholders", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "description_parentheses.pipe",
+      `NODE endpoint
+SQL >
+  %
+  SELECT 1 AS id
+  WHERE ts >= now() - interval {{Int32(days, 1, description="Number of days to analyze (defaults to 1 day)")}} day
+TYPE endpoint
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain(
+      'days: p.int32().optional(1).describe("Number of days to analyze (defaults to 1 day)"),'
+    );
+    expect(output).toContain("{{ Int32(days) }}");
+  });
+
   it("migrates datasource with mixed explicit and default json paths", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
     tempDirs.push(tempDir);
@@ -1447,6 +1759,49 @@ EXPORT_COMPRESSION gzip
     expect(output).toContain('format: "ndjson"');
     expect(output).toContain('strategy: "create_new"');
     expect(output).toContain('compression: "gzip"');
+  });
+
+  it("migrates legacy EXPORT_WRITE_STRATEGY sink directives", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "exports_s3.connection",
+      `TYPE s3
+S3_REGION "us-east-1"
+S3_ARN "arn:aws:iam::123456789012:role/tinybird-s3-access"
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events_s3_sink.pipe",
+      `NODE export
+SQL >
+    SELECT * FROM events
+TYPE sink
+EXPORT_CONNECTION_NAME exports_s3
+EXPORT_BUCKET_URI s3://exports/events/
+EXPORT_FILE_TEMPLATE events_{date}
+EXPORT_SCHEDULE @once
+EXPORT_FORMAT ndjson
+EXPORT_WRITE_STRATEGY truncate
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('export const eventsS3Sink = defineSinkPipe("events_s3_sink", {');
+    expect(output).toContain('strategy: "replace"');
   });
 
   it("reports an error when sink pipe references a missing connection", async () => {

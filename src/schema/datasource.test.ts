@@ -146,6 +146,59 @@ describe("Datasource Schema", () => {
       expect(ds.options.gcs?.connection._name).toBe("my_gcs");
       expect(ds.options.gcs?.bucketUri).toBe("gs://my-bucket/events/*.csv");
     });
+
+    it("accepts datasource indexes", () => {
+      const ds = defineDatasource("events", {
+        schema: { id: t.string() },
+        indexes: [
+          {
+            name: "id_set",
+            expr: "id",
+            type: "set(100)",
+            granularity: 1,
+          },
+        ],
+      });
+
+      expect(ds.options.indexes).toEqual([
+        {
+          name: "id_set",
+          expr: "id",
+          type: "set(100)",
+          granularity: 1,
+        },
+      ]);
+    });
+
+    it("validates datasource index fields", () => {
+      expect(() =>
+        defineDatasource("events", {
+          schema: { id: t.string() },
+          indexes: [{ name: "invalid name", expr: "id", type: "set(100)", granularity: 1 }],
+        })
+      ).toThrow("Invalid datasource index name");
+
+      expect(() =>
+        defineDatasource("events", {
+          schema: { id: t.string() },
+          indexes: [{ name: "id_set", expr: "", type: "set(100)", granularity: 1 }],
+        })
+      ).toThrow('Invalid datasource index "id_set": expr is required.');
+
+      expect(() =>
+        defineDatasource("events", {
+          schema: { id: t.string() },
+          indexes: [{ name: "id_set", expr: "id", type: "", granularity: 1 }],
+        })
+      ).toThrow('Invalid datasource index "id_set": type is required.');
+
+      expect(() =>
+        defineDatasource("events", {
+          schema: { id: t.string() },
+          indexes: [{ name: "id_set", expr: "id", type: "set(100)", granularity: 0 }],
+        })
+      ).toThrow('Invalid datasource index "id_set": granularity must be a positive integer.');
+    });
   });
 
   describe("isDatasourceDefinition", () => {

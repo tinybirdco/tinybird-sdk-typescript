@@ -16,6 +16,61 @@ function parseEnumValues(enumContent: string): string[] {
   return values;
 }
 
+function splitTopLevelComma(input: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let depth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    const prev = i > 0 ? input[i - 1] : "";
+
+    if (char === "'" && !inDoubleQuote && prev !== "\\") {
+      inSingleQuote = !inSingleQuote;
+      current += char;
+      continue;
+    }
+
+    if (char === '"' && !inSingleQuote && prev !== "\\") {
+      inDoubleQuote = !inDoubleQuote;
+      current += char;
+      continue;
+    }
+
+    if (!inSingleQuote && !inDoubleQuote) {
+      if (char === "(") {
+        depth += 1;
+        current += char;
+        continue;
+      }
+      if (char === ")") {
+        depth -= 1;
+        current += char;
+        continue;
+      }
+      if (char === "," && depth === 0) {
+        const trimmed = current.trim();
+        if (trimmed.length > 0) {
+          parts.push(trimmed);
+        }
+        current = "";
+        continue;
+      }
+    }
+
+    current += char;
+  }
+
+  const trimmed = current.trim();
+  if (trimmed.length > 0) {
+    parts.push(trimmed);
+  }
+
+  return parts;
+}
+
 /**
  * Map a ClickHouse type to a t.* validator call
  *
@@ -138,19 +193,26 @@ export function clickhouseTypeToValidator(chType: string): string {
     return `t.array(${innerType})`;
   }
 
-  // Tuple(T1, T2, ...) - simplified handling
+  // Tuple(T1, T2, ...)
   const tupleMatch = chType.match(/^Tuple\((.+)\)$/);
   if (tupleMatch) {
-    // For complex tuples, we just use a JSON type
-    // TODO: Could parse and generate t.tuple() for simple cases
-    return `t.json() /* Tuple: ${chType} */`;
+    const tupleArgs = splitTopLevelComma(tupleMatch[1]);
+    if (tupleArgs.length === 0) {
+      return `t.string() /* TODO: Unknown type: ${chType} */`;
+    }
+    const tupleTypes = tupleArgs.map((arg) => clickhouseTypeToValidator(arg));
+    return `t.tuple(${tupleTypes.join(", ")})`;
   }
 
   // Map(K, V)
-  const mapMatch = chType.match(/^Map\(([^,]+),\s*(.+)\)$/);
+  const mapMatch = chType.match(/^Map\((.+)\)$/);
   if (mapMatch) {
-    const keyType = clickhouseTypeToValidator(mapMatch[1]);
-    const valueType = clickhouseTypeToValidator(mapMatch[2]);
+    const mapArgs = splitTopLevelComma(mapMatch[1]);
+    if (mapArgs.length !== 2) {
+      return `t.string() /* TODO: Unknown type: ${chType} */`;
+    }
+    const keyType = clickhouseTypeToValidator(mapArgs[0]);
+    const valueType = clickhouseTypeToValidator(mapArgs[1]);
     return `t.map(${keyType}, ${valueType})`;
   }
 
@@ -188,6 +250,16 @@ export function clickhouseTypeToValidator(chType: string): string {
     const func = aggMatch[1];
     const innerType = clickhouseTypeToValidator(aggMatch[2]);
     return `t.aggregateFunction("${func}", ${innerType})`;
+  }
+
+  // AggregateFunction(count)
+  const aggNoArgMatch = chType.match(/^AggregateFunction\((\w+)\)$/);
+  if (aggNoArgMatch) {
+    const func = aggNoArgMatch[1];
+    if (func === "count") {
+      return 't.aggregateFunction("count", t.uint64())';
+    }
+    return `t.string() /* TODO: Unknown type: ${chType} */`;
   }
 
   // Nested - treat as JSON

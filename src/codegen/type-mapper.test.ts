@@ -132,6 +132,18 @@ describe("clickhouseTypeToValidator", () => {
         "t.map(t.string(), t.int32())"
       );
     });
+
+    it("handles Tuple(T1, T2, ...)", () => {
+      expect(clickhouseTypeToValidator("Tuple(String, Float64, String)")).toBe(
+        "t.tuple(t.string(), t.float64(), t.string())"
+      );
+    });
+
+    it("handles Array(Tuple(...))", () => {
+      expect(clickhouseTypeToValidator("Array(Tuple(String, Float64, String))")).toBe(
+        "t.array(t.tuple(t.string(), t.float64(), t.string()))"
+      );
+    });
   });
 
   describe("enum types", () => {
@@ -158,6 +170,12 @@ describe("clickhouseTypeToValidator", () => {
     it("handles AggregateFunction", () => {
       expect(clickhouseTypeToValidator("AggregateFunction(uniq, String)")).toBe(
         't.aggregateFunction("uniq", t.string())'
+      );
+    });
+
+    it("handles AggregateFunction(count) without explicit state type", () => {
+      expect(clickhouseTypeToValidator("AggregateFunction(count)")).toBe(
+        't.aggregateFunction("count", t.uint64())'
       );
     });
   });

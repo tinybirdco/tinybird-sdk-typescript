@@ -103,6 +103,21 @@ export interface GCSConfig {
 }
 
 /**
+ * Datasource index configuration.
+ * Emits as: `<name> <expr> TYPE <type> GRANULARITY <n>`
+ */
+export interface DatasourceIndex {
+  /** Index name */
+  name: string;
+  /** Index expression */
+  expr: string;
+  /** Index type and parameters (for example: `set(100)`) */
+  type: string;
+  /** Index granularity */
+  granularity: number;
+}
+
+/**
  * Options for defining a datasource
  */
 export interface DatasourceOptions<TSchema extends SchemaDefinition> {
@@ -127,6 +142,8 @@ export interface DatasourceOptions<TSchema extends SchemaDefinition> {
    * This should be the SELECT clause only (no FROM/WHERE).
    */
   forwardQuery?: string;
+  /** Secondary indexes for MergeTree-family engines */
+  indexes?: readonly DatasourceIndex[];
   /** Kafka ingestion configuration */
   kafka?: KafkaConfig;
   /** S3 ingestion configuration */
@@ -193,6 +210,27 @@ export function defineDatasource<TSchema extends SchemaDefinition>(
   const ingestionConfigCount = [options.kafka, options.s3, options.gcs].filter(Boolean).length;
   if (ingestionConfigCount > 1) {
     throw new Error("Datasource can only define one ingestion option: `kafka`, `s3`, or `gcs`.");
+  }
+
+  if (options.indexes) {
+    for (const index of options.indexes) {
+      if (!index.name || /\s/.test(index.name)) {
+        throw new Error(
+          `Invalid datasource index name: "${index.name}". Index names must be non-empty and cannot contain whitespace.`
+        );
+      }
+      if (!index.expr?.trim()) {
+        throw new Error(`Invalid datasource index "${index.name}": expr is required.`);
+      }
+      if (!index.type?.trim()) {
+        throw new Error(`Invalid datasource index "${index.name}": type is required.`);
+      }
+      if (!Number.isInteger(index.granularity) || index.granularity <= 0) {
+        throw new Error(
+          `Invalid datasource index "${index.name}": granularity must be a positive integer.`
+        );
+      }
+    }
   }
 
   return {

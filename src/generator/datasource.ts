@@ -11,6 +11,7 @@ import type {
   S3Config,
   GCSConfig,
   TokenConfig,
+  DatasourceIndex,
 } from "../schema/datasource.js";
 import type { AnyTypeValidator, TypeModifiers } from "../schema/types.js";
 import { getColumnType, getColumnJsonPath } from "../schema/datasource.js";
@@ -212,6 +213,23 @@ function generateForwardQuery(forwardQuery?: string): string | null {
 }
 
 /**
+ * Generate INDEXES section
+ */
+function generateIndexes(indexes?: readonly DatasourceIndex[]): string | null {
+  if (!indexes || indexes.length === 0) {
+    return null;
+  }
+
+  const lines = ["INDEXES >"];
+  for (const index of indexes) {
+    lines.push(
+      `    ${index.name} ${index.expr} TYPE ${index.type} GRANULARITY ${index.granularity}`
+    );
+  }
+  return lines.join("\n");
+}
+
+/**
  * Generate SHARED_WITH section for sharing datasource with other workspaces
  */
 function generateSharedWith(sharedWith?: readonly string[]): string | null {
@@ -316,6 +334,13 @@ export function generateDatasource(
 
   // Add engine configuration
   parts.push(generateEngineConfig(datasource.options.engine));
+
+  // Add indexes if present
+  const indexes = generateIndexes(datasource.options.indexes);
+  if (indexes) {
+    parts.push("");
+    parts.push(indexes);
+  }
 
   // Add Kafka configuration if present
   if (datasource.options.kafka) {

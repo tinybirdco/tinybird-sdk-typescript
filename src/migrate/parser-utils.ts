@@ -72,7 +72,11 @@ export function splitCommaSeparated(input: string): string[] {
 
 export function parseQuotedValue(input: string): string {
   const trimmed = input.trim();
-  if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2) {
+  if (
+    trimmed.length >= 2 &&
+    ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'")))
+  ) {
     return trimmed.slice(1, -1);
   }
   return trimmed;

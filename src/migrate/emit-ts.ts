@@ -133,6 +133,8 @@ function strictParamBaseValidator(type: string): string {
   const map: Record<string, string> = {
     String: "p.string()",
     UUID: "p.uuid()",
+    Int: "p.int32()",
+    Integer: "p.int32()",
     Int8: "p.int8()",
     Int16: "p.int16()",
     Int32: "p.int32()",
@@ -149,6 +151,8 @@ function strictParamBaseValidator(type: string): string {
     DateTime: "p.dateTime()",
     DateTime64: "p.dateTime64()",
     Array: "p.array(p.string())",
+    column: "p.column()",
+    JSON: "p.json()",
   };
   const validator = map[type];
   if (!validator) {
@@ -312,6 +316,15 @@ function emitDatasource(ds: DatasourceModel): string {
   lines.push("  },");
   if (ds.engine) {
     lines.push(`  engine: ${emitEngineOptions(ds.engine)},`);
+  }
+  if (ds.indexes.length > 0) {
+    lines.push("  indexes: [");
+    for (const index of ds.indexes) {
+      lines.push(
+        `    { name: ${escapeString(index.name)}, expr: ${escapeString(index.expr)}, type: ${escapeString(index.type)}, granularity: ${index.granularity} },`
+      );
+    }
+    lines.push("  ],");
   }
 
   if (ds.kafka) {

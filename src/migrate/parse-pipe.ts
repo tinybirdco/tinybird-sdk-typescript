@@ -70,35 +70,41 @@ function inferOutputColumnsFromSql(sql: string): string[] {
 }
 
 function mapTemplateFunctionToParamType(func: string): string | null {
-  const known = new Set([
-    "String",
-    "UUID",
-    "Int8",
-    "Int16",
-    "Int32",
-    "Int64",
-    "UInt8",
-    "UInt16",
-    "UInt32",
-    "UInt64",
-    "Float32",
-    "Float64",
-    "Boolean",
-    "Bool",
-    "Date",
-    "DateTime",
-    "DateTime64",
-    "Array",
-  ]);
+  const lower = func.toLowerCase();
+  const aliases: Record<string, string> = {
+    string: "String",
+    uuid: "UUID",
+    int: "Int32",
+    integer: "Int32",
+    int8: "Int8",
+    int16: "Int16",
+    int32: "Int32",
+    int64: "Int64",
+    uint8: "UInt8",
+    uint16: "UInt16",
+    uint32: "UInt32",
+    uint64: "UInt64",
+    float32: "Float32",
+    float64: "Float64",
+    boolean: "Boolean",
+    bool: "Boolean",
+    date: "Date",
+    datetime: "DateTime",
+    datetime64: "DateTime64",
+    array: "Array",
+    column: "column",
+    json: "JSON",
+  };
 
-  if (known.has(func)) {
-    return func;
+  const mapped = aliases[lower];
+  if (mapped) {
+    return mapped;
   }
 
-  if (func.startsWith("DateTime64")) {
+  if (lower.startsWith("datetime64")) {
     return "DateTime64";
   }
-  if (func.startsWith("DateTime")) {
+  if (lower.startsWith("datetime")) {
     return "DateTime";
   }
 
@@ -157,8 +163,7 @@ function parseParamOptions(rawArgs: string[]): {
   required?: boolean;
   description?: string;
 } {
-  let positionalDefault: string | number | boolean | undefined;
-  let keywordDefault: string | number | boolean | undefined;
+  let defaultValue: string | number | boolean | undefined;
   let required: boolean | undefined;
   let description: string | undefined;
 
@@ -170,15 +175,13 @@ function parseParamOptions(rawArgs: string[]): {
 
     const keyword = parseKeywordArgument(trimmed);
     if (!keyword) {
-      if (positionalDefault === undefined) {
-        positionalDefault = parseParamDefault(trimmed);
-      }
+      defaultValue = parseParamDefault(trimmed);
       continue;
     }
 
     const keyLower = keyword.key.toLowerCase();
     if (keyLower === "default") {
-      keywordDefault = parseParamDefault(keyword.value);
+      defaultValue = parseParamDefault(keyword.value);
       continue;
     }
     if (keyLower === "required") {
@@ -195,17 +198,122 @@ function parseParamOptions(rawArgs: string[]): {
     }
   }
 
-  let defaultValue = keywordDefault ?? positionalDefault;
-  if (keywordDefault !== undefined && positionalDefault !== undefined) {
-    if (keywordDefault !== positionalDefault) {
-      throw new Error(
-        `Parameter has conflicting positional and keyword defaults: "${positionalDefault}" and "${keywordDefault}".`
-      );
-    }
-    defaultValue = positionalDefault;
-  }
-
   return { defaultValue, required, description };
+}
+
+function extractTemplateFunctionCalls(expression: string): Array<{
+  functionName: string;
+  argsRaw: string;
+  fullCall: string;
+  start: number;
+  end: number;
+}> {
+  const maskParenthesesInsideQuotes = (value: string): string => {
+    let output = "";
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+
+    for (let i = 0; i < value.length; i += 1) {
+      const char = value[i] ?? "";
+      const prev = i > 0 ? value[i - 1] ?? "" : "";
+
+      if (char === "'" && !inDoubleQuote && prev !== "\\") {
+        inSingleQuote = !inSingleQuote;
+        output += char;
+        continue;
+      }
+      if (char === '"' && !inSingleQuote && prev !== "\\") {
+        inDoubleQuote = !inDoubleQuote;
+        output += char;
+        continue;
+      }
+
+      if ((inSingleQuote || inDoubleQuote) && (char === "(" || char === ")")) {
+        output += " ";
+        continue;
+      }
+
+      output += char;
+    }
+
+    return output;
+  };
+
+  const maskedExpression = maskParenthesesInsideQuotes(expression);
+  const callRegex = /([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^()]*)\)/g;
+  const calls: Array<{
+    functionName: string;
+    argsRaw: string;
+    fullCall: string;
+    start: number;
+    end: number;
+  }> = [];
+  let match: RegExpExecArray | null = callRegex.exec(maskedExpression);
+  while (match) {
+    const start = match.index;
+    const fullCall = expression.slice(start, start + (match[0]?.length ?? 0));
+    const openParen = fullCall.indexOf("(");
+    const closeParen = fullCall.lastIndexOf(")");
+
+    calls.push({
+      functionName: match[1] ?? "",
+      argsRaw: openParen >= 0 && closeParen > openParen ? fullCall.slice(openParen + 1, closeParen) : "",
+      fullCall,
+      start,
+      end: start + fullCall.length,
+    });
+    match = callRegex.exec(maskedExpression);
+  }
+  return calls;
+}
+
+function shouldParseTemplateFunctionAsParam(mappedType: string): boolean {
+  return mappedType !== "Array";
+}
+
+function normalizeSqlPlaceholders(sql: string): string {
+  const placeholderRegex = /\{\{\s*([^{}]+?)\s*\}\}/g;
+  return sql.replace(placeholderRegex, (fullMatch, rawExpression) => {
+    const expression = String(rawExpression);
+    const calls = extractTemplateFunctionCalls(expression);
+    if (calls.length === 0) {
+      return fullMatch;
+    }
+
+    let rewritten = "";
+    let cursor = 0;
+    let changed = false;
+    for (const call of calls) {
+      rewritten += expression.slice(cursor, call.start);
+
+      let replacement = call.fullCall;
+      const normalizedFunction = String(call.functionName).toLowerCase();
+      if (normalizedFunction !== "error" && normalizedFunction !== "custom_error") {
+        const mappedType = mapTemplateFunctionToParamType(String(call.functionName));
+        if (mappedType && shouldParseTemplateFunctionAsParam(mappedType)) {
+          const args = splitTopLevelComma(String(call.argsRaw));
+          if (args.length > 0) {
+            const paramName = args[0]?.trim() ?? "";
+            if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(paramName)) {
+              replacement = `${String(call.functionName)}(${paramName})`;
+            }
+          }
+        }
+      }
+
+      if (replacement !== call.fullCall) {
+        changed = true;
+      }
+      rewritten += replacement;
+      cursor = call.end;
+    }
+    rewritten += expression.slice(cursor);
+
+    if (!changed) {
+      return fullMatch;
+    }
+    return `{{ ${rewritten.trim()} }}`;
+  });
 }
 
 function inferParamsFromSql(
@@ -213,100 +321,105 @@ function inferParamsFromSql(
   filePath: string,
   resourceName: string
 ): PipeParamModel[] {
-  const regex = /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\(([^{}]*)\)\s*\}\}/g;
+  const regex = /\{\{\s*([^{}]+?)\s*\}\}/g;
   const params = new Map<string, PipeParamModel>();
   let match: RegExpExecArray | null = regex.exec(sql);
 
   while (match) {
-    const templateFunction = match[1] ?? "";
-    const argsRaw = match[2] ?? "";
-    const args = splitTopLevelComma(argsRaw);
-    if (args.length === 0) {
-      throw new MigrationParseError(
-        filePath,
-        "pipe",
-        resourceName,
-        `Invalid template placeholder: "${match[0]}"`
-      );
-    }
+    const expression = match[1] ?? "";
+    const calls = extractTemplateFunctionCalls(expression);
 
-    const paramName = args[0]?.trim();
-    if (!paramName || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(paramName)) {
-      throw new MigrationParseError(
-        filePath,
-        "pipe",
-        resourceName,
-        `Unsupported parameter name in placeholder: "${match[0]}"`
-      );
-    }
+    for (const call of calls) {
+      const templateFunction = call.functionName;
+      const normalizedTemplateFunction = templateFunction.toLowerCase();
+      if (normalizedTemplateFunction === "error" || normalizedTemplateFunction === "custom_error") {
+        continue;
+      }
 
-    const mappedType = mapTemplateFunctionToParamType(templateFunction);
-    if (!mappedType) {
-      throw new MigrationParseError(
-        filePath,
-        "pipe",
-        resourceName,
-        `Unsupported placeholder function in strict mode: "${templateFunction}"`
-      );
-    }
-
-    let defaultValue: string | number | boolean | undefined;
-    let required: boolean | undefined;
-    let description: string | undefined;
-    if (args.length > 1) {
-      try {
-        const parsedOptions = parseParamOptions(args.slice(1));
-        defaultValue = parsedOptions.defaultValue;
-        required = parsedOptions.required;
-        description = parsedOptions.description;
-      } catch (error) {
+      const mappedType = mapTemplateFunctionToParamType(templateFunction);
+      if (!mappedType) {
         throw new MigrationParseError(
           filePath,
           "pipe",
           resourceName,
-          (error as Error).message
+          `Unsupported placeholder function in strict mode: "${templateFunction}"`
         );
       }
-    }
 
-    const existing = params.get(paramName);
-    if (existing) {
-      if (existing.type !== mappedType) {
+      const args = splitTopLevelComma(call.argsRaw);
+      if (args.length === 0) {
         throw new MigrationParseError(
           filePath,
           "pipe",
           resourceName,
-          `Parameter "${paramName}" is used with multiple types: "${existing.type}" and "${mappedType}".`
+          `Invalid template placeholder: "${call.fullCall}"`
         );
       }
-      if (existing.defaultValue !== undefined && defaultValue !== undefined) {
-        if (existing.defaultValue !== defaultValue) {
+
+      const paramName = args[0]?.trim() ?? "";
+      const isIdentifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(paramName);
+      if (!isIdentifier) {
+        if (mappedType === "column") {
+          continue;
+        }
+        throw new MigrationParseError(
+          filePath,
+          "pipe",
+          resourceName,
+          `Unsupported parameter name in placeholder: "{{ ${call.fullCall} }}"`
+        );
+      }
+
+      let defaultValue: string | number | boolean | undefined;
+      let required: boolean | undefined;
+      let description: string | undefined;
+      if (args.length > 1 && shouldParseTemplateFunctionAsParam(mappedType)) {
+        try {
+          const parsedOptions = parseParamOptions(args.slice(1));
+          defaultValue = parsedOptions.defaultValue;
+          required = parsedOptions.required;
+          description = parsedOptions.description;
+        } catch (error) {
           throw new MigrationParseError(
             filePath,
             "pipe",
             resourceName,
-            `Parameter "${paramName}" uses multiple defaults: "${existing.defaultValue}" and "${defaultValue}".`
+            (error as Error).message
           );
         }
       }
-      if (existing.defaultValue === undefined && defaultValue !== undefined) {
-        existing.defaultValue = defaultValue;
+
+      const existing = params.get(paramName);
+      if (existing) {
+        if (existing.type !== mappedType) {
+          // Keep the last explicit type seen in SQL.
+          existing.type = mappedType;
+        }
+
+        // Match backend merge semantics: prefer the latest truthy value.
+        if (defaultValue !== undefined || existing.defaultValue !== undefined) {
+          existing.defaultValue =
+            (defaultValue as string | number | boolean | undefined) || existing.defaultValue;
+        }
+        if (description !== undefined || existing.description !== undefined) {
+          existing.description = description || existing.description;
+        }
+        const optionalInAnyUsage =
+          existing.required === false ||
+          required === false ||
+          existing.defaultValue !== undefined ||
+          defaultValue !== undefined;
+        existing.required = !optionalInAnyUsage;
+      } else {
+        const isRequired = required ?? defaultValue === undefined;
+        params.set(paramName, {
+          name: paramName,
+          type: mappedType,
+          required: isRequired,
+          defaultValue,
+          description,
+        });
       }
-      if (existing.description === undefined && description !== undefined) {
-        existing.description = description;
-      }
-      const optionalInAnyUsage =
-        existing.required === false || required === false || defaultValue !== undefined;
-      existing.required = !optionalInAnyUsage;
-    } else {
-      const isRequired = required ?? defaultValue === undefined;
-      params.set(paramName, {
-        name: paramName,
-        type: mappedType,
-        required: isRequired,
-        defaultValue,
-        description,
-      });
     }
 
     match = regex.exec(sql);
@@ -355,9 +468,21 @@ function parseToken(filePath: string, resourceName: string, value: string): Pipe
   return { name: tokenName, scope: "READ" };
 }
 
+function normalizeExportStrategy(rawValue: string): "create_new" | "replace" {
+  const normalized = parseQuotedValue(rawValue).toLowerCase();
+  if (normalized === "create_new") {
+    return "create_new";
+  }
+  if (normalized === "replace" || normalized === "truncate") {
+    return "replace";
+  }
+  throw new Error(`Unsupported sink strategy in strict mode: "${rawValue}"`);
+}
+
 export function parsePipeFile(resource: ResourceFile): PipeModel {
   const lines = splitLines(resource.content);
   const nodes: PipeModel["nodes"] = [];
+  const rawNodeSqls: string[] = [];
   const tokens: PipeTokenModel[] = [];
   let description: string | undefined;
   let pipeType: PipeModel["type"] = "pipe";
@@ -458,10 +583,11 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
         );
       }
 
+      rawNodeSqls.push(sql);
       nodes.push({
         name: nodeName,
         description: nodeDescription,
-        sql,
+        sql: normalizeSqlPlaceholders(sql),
       });
 
       i = sqlBlock.nextIndex;
@@ -566,8 +692,9 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
         exportSchedule = parseQuotedValue(value);
         break;
       case "EXPORT_STRATEGY": {
-        const normalized = parseQuotedValue(value).toLowerCase();
-        if (normalized !== "create_new" && normalized !== "replace") {
+        try {
+          exportStrategy = normalizeExportStrategy(value);
+        } catch {
           throw new MigrationParseError(
             resource.filePath,
             "pipe",
@@ -575,7 +702,19 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
             `Unsupported EXPORT_STRATEGY in strict mode: "${value}"`
           );
         }
-        exportStrategy = normalized;
+        break;
+      }
+      case "EXPORT_WRITE_STRATEGY": {
+        try {
+          exportStrategy = normalizeExportStrategy(value);
+        } catch {
+          throw new MigrationParseError(
+            resource.filePath,
+            "pipe",
+            resource.name,
+            `Unsupported EXPORT_WRITE_STRATEGY in strict mode: "${value}"`
+          );
+        }
         break;
       }
       case "EXPORT_COMPRESSION": {
@@ -784,7 +923,7 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
     pipeType === "materialized" || pipeType === "copy"
       ? []
       : inferParamsFromSql(
-          nodes.map((node) => node.sql).join("\n"),
+          rawNodeSqls.join("\n"),
           resource.filePath,
           resource.name
         );

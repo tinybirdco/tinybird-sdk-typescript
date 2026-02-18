@@ -115,7 +115,7 @@ export const eventsEndpoint = definePipe("events_endpoint", {
 SELECT event_id, user_id, payload
 FROM events
 WHERE user_id = {{UInt64(user_id)}}
-AND env = {{String(env, 'prod')}}
+AND env = {{ String(env) }}
       \`,
     }),
     node({
@@ -176,7 +176,7 @@ GROUP BY user_id
       sql: \`
 SELECT user_id, total
 FROM agg
-WHERE total > {{UInt32(min_total, 10)}}
+WHERE total > {{ UInt32(min_total) }}
       \`,
     }),
   ],
