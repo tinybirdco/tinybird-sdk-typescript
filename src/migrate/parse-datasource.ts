@@ -1,4 +1,9 @@
-import type { DatasourceModel, DatasourceTokenModel, ResourceFile } from "./types.js";
+import type {
+  DatasourceIndexModel,
+  DatasourceModel,
+  DatasourceTokenModel,
+  ResourceFile,
+} from "./types.js";
 import {
   MigrationParseError,
   isBlank,
@@ -14,6 +19,7 @@ const DATASOURCE_DIRECTIVES = new Set([
   "DESCRIPTION",
   "SCHEMA",
   "FORWARD_QUERY",
+  "INDEXES",
   "SHARED_WITH",
   "ENGINE",
   "ENGINE_SORTING_KEY",
@@ -241,9 +247,53 @@ function parseToken(filePath: string, resourceName: string, value: string): Data
   return { name, scope };
 }
 
+function parseIndexLine(
+  filePath: string,
+  resourceName: string,
+  rawLine: string
+): DatasourceIndexModel {
+  const line = rawLine.trim().replace(/,$/, "");
+  if (!line) {
+    throw new MigrationParseError(
+      filePath,
+      "datasource",
+      resourceName,
+      "Empty INDEXES line."
+    );
+  }
+
+  const match = line.match(/^(\S+)\s+(.+?)\s+TYPE\s+(.+?)\s+GRANULARITY\s+(\d+)$/i);
+  if (!match) {
+    throw new MigrationParseError(
+      filePath,
+      "datasource",
+      resourceName,
+      `Invalid INDEXES definition: "${rawLine}"`
+    );
+  }
+
+  const granularity = Number(match[4]);
+  if (!Number.isInteger(granularity) || granularity <= 0) {
+    throw new MigrationParseError(
+      filePath,
+      "datasource",
+      resourceName,
+      `Invalid INDEXES GRANULARITY value: "${match[4]}"`
+    );
+  }
+
+  return {
+    name: match[1],
+    expr: match[2].trim(),
+    type: match[3].trim(),
+    granularity,
+  };
+}
+
 export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
   const lines = splitLines(resource.content);
   const columns = [];
+  const indexes: DatasourceIndexModel[] = [];
   const tokens: DatasourceTokenModel[] = [];
   const sharedWith: string[] = [];
   let description: string | undefined;
@@ -319,6 +369,26 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
         );
       }
       forwardQuery = block.lines.join("\n");
+      i = block.nextIndex;
+      continue;
+    }
+
+    if (line === "INDEXES >") {
+      const block = readDirectiveBlock(lines, i + 1, isDatasourceDirectiveLine);
+      if (block.lines.length === 0) {
+        throw new MigrationParseError(
+          resource.filePath,
+          "datasource",
+          resource.name,
+          "INDEXES block is empty."
+        );
+      }
+      for (const indexLine of block.lines) {
+        if (isBlank(indexLine) || indexLine.trim().startsWith("#")) {
+          continue;
+        }
+        indexes.push(parseIndexLine(resource.filePath, resource.name, indexLine));
+      }
       i = block.nextIndex;
       continue;
     }
@@ -552,6 +622,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
           settings,
         }
       : undefined,
+    indexes,
     kafka,
     s3,
     forwardQuery,

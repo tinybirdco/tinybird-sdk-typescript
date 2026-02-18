@@ -164,6 +164,27 @@ describe('Pipe Generator', () => {
       const result = generatePipe(pipe);
       expect(result.content).toContain('    %\n');
     });
+
+    it('injects param defaults into placeholders when SQL omits them', () => {
+      const pipe = definePipe('defaults_pipe', {
+        params: {
+          start_date: p.date().optional('2025-03-01'),
+          page: p.int32().optional(0),
+        },
+        nodes: [
+          node({
+            name: 'endpoint',
+            sql: 'SELECT * FROM events WHERE d >= {{Date(start_date)}} LIMIT 10 OFFSET {{Int32(page)}}',
+          }),
+        ],
+        output: simpleOutput,
+        endpoint: true,
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain("{{ Date(start_date, '2025-03-01') }}");
+      expect(result.content).toContain('{{ Int32(page, 0) }}');
+    });
   });
 
   describe('Multiple nodes', () => {

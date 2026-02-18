@@ -95,6 +95,28 @@ describe('Datasource Generator', () => {
       expect(result.content).toContain('FORWARD_QUERY >');
       expect(result.content).toContain('    SELECT id');
     });
+
+    it("includes indexes block when provided", () => {
+      const ds = defineDatasource("test_ds", {
+        schema: {
+          id: t.string(),
+          pipe_name: t.string(),
+        },
+        indexes: [
+          { name: "pipe_name_set", expr: "pipe_name", type: "set(100)", granularity: 1 },
+          { name: "id_bf", expr: "lower(id)", type: "bloom_filter(0.001)", granularity: 4 },
+        ],
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain("INDEXES >");
+      expect(result.content).toContain(
+        "pipe_name_set pipe_name TYPE set(100) GRANULARITY 1"
+      );
+      expect(result.content).toContain(
+        "id_bf lower(id) TYPE bloom_filter(0.001) GRANULARITY 4"
+      );
+    });
   });
 
   describe('Column formatting', () => {

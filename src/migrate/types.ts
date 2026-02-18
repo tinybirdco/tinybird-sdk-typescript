@@ -64,6 +64,13 @@ export interface DatasourceTokenModel {
   scope: "READ" | "APPEND";
 }
 
+export interface DatasourceIndexModel {
+  name: string;
+  expr: string;
+  type: string;
+  granularity: number;
+}
+
 export interface DatasourceModel {
   kind: "datasource";
   name: string;
@@ -71,6 +78,7 @@ export interface DatasourceModel {
   description?: string;
   columns: DatasourceColumnModel[];
   engine?: DatasourceEngineModel;
+  indexes: DatasourceIndexModel[];
   kafka?: DatasourceKafkaModel;
   s3?: DatasourceS3Model;
   gcs?: DatasourceGCSModel;

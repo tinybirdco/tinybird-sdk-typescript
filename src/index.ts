@@ -114,6 +114,7 @@ export type {
   KafkaConfig,
   S3Config,
   GCSConfig,
+  DatasourceIndex,
 } from "./schema/datasource.js";
 
 // ============ Connection ============

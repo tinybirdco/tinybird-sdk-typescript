@@ -18,6 +18,8 @@ import {
   getCopyConfig,
   getSinkConfig,
 } from "../schema/pipe.js";
+import type { AnyParamValidator } from "../schema/params.js";
+import { getParamDefault } from "../schema/params.js";
 
 /**
  * Generated pipe content
@@ -36,10 +38,123 @@ function hasDynamicParameters(sql: string): boolean {
   return /\{\{[^}]+\}\}/.test(sql) || /\{%[^%]+%\}/.test(sql);
 }
 
+function splitTopLevelComma(input: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let depth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    const prev = i > 0 ? input[i - 1] : "";
+
+    if (char === "'" && !inDoubleQuote && prev !== "\\") {
+      inSingleQuote = !inSingleQuote;
+      current += char;
+      continue;
+    }
+
+    if (char === '"' && !inSingleQuote && prev !== "\\") {
+      inDoubleQuote = !inDoubleQuote;
+      current += char;
+      continue;
+    }
+
+    if (!inSingleQuote && !inDoubleQuote) {
+      if (char === "(") {
+        depth += 1;
+        current += char;
+        continue;
+      }
+      if (char === ")" && depth > 0) {
+        depth -= 1;
+        current += char;
+        continue;
+      }
+      if (char === "," && depth === 0) {
+        parts.push(current.trim());
+        current = "";
+        continue;
+      }
+    }
+
+    current += char;
+  }
+
+  if (current.trim()) {
+    parts.push(current.trim());
+  }
+
+  return parts;
+}
+
+function toTemplateDefaultLiteral(value: string | number | boolean): string {
+  if (typeof value === "string") {
+    return `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+  }
+  return String(value);
+}
+
+function applyParamDefaultsToSql(
+  sql: string,
+  params?: Record<string, AnyParamValidator>
+): string {
+  if (!params) {
+    return sql;
+  }
+
+  const defaults = new Map<string, string>();
+  for (const [name, validator] of Object.entries(params)) {
+    const defaultValue = getParamDefault(validator);
+    if (defaultValue !== undefined) {
+      defaults.set(name, toTemplateDefaultLiteral(defaultValue as string | number | boolean));
+    }
+  }
+
+  if (defaults.size === 0) {
+    return sql;
+  }
+
+  const placeholderRegex = /\{\{\s*([^{}]+?)\s*\}\}/g;
+  return sql.replace(placeholderRegex, (fullMatch, rawExpression) => {
+    const expression = String(rawExpression);
+    const rewritten = expression.replace(
+      /([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^()]*)\)/g,
+      (call, _functionName, rawArgs) => {
+        const args = splitTopLevelComma(String(rawArgs));
+        if (args.length !== 1) {
+          return call;
+        }
+
+        const paramName = args[0]?.trim() ?? "";
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(paramName)) {
+          return call;
+        }
+
+        const defaultLiteral = defaults.get(paramName);
+        if (!defaultLiteral) {
+          return call;
+        }
+
+        return call.replace(/\)\s*$/, `, ${defaultLiteral})`);
+      }
+    );
+
+    if (rewritten === expression) {
+      return fullMatch;
+    }
+    return `{{ ${rewritten.trim()} }}`;
+  });
+}
+
 /**
  * Generate a NODE section for the pipe
  */
-function generateNode(node: NodeDefinition): string {
+function generateNode(
+  node: NodeDefinition,
+  params?: Record<string, AnyParamValidator>
+): string {
   const parts: string[] = [];
 
   parts.push(`NODE ${node._name}`);
@@ -57,7 +172,8 @@ function generateNode(node: NodeDefinition): string {
     parts.push(`    %`);
   }
 
-  const sqlLines = node.sql.trim().split("\n");
+  const sqlWithDefaults = applyParamDefaultsToSql(node.sql, params);
+  const sqlLines = sqlWithDefaults.trim().split("\n");
   sqlLines.forEach((line) => {
     parts.push(`    ${line}`);
   });
@@ -225,7 +341,7 @@ export function generatePipe(pipe: PipeDefinition): GeneratedPipe {
 
   // Add all nodes
   pipe.options.nodes.forEach((node, index) => {
-    parts.push(generateNode(node));
+    parts.push(generateNode(node, pipe.options.params as Record<string, AnyParamValidator> | undefined));
     // Add empty line between nodes
     if (index < pipe.options.nodes.length - 1) {
       parts.push("");
