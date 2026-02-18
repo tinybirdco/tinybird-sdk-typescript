@@ -63,7 +63,7 @@ export interface DatasourceModel {
   filePath: string;
   description?: string;
   columns: DatasourceColumnModel[];
-  engine: DatasourceEngineModel;
+  engine?: DatasourceEngineModel;
   kafka?: DatasourceKafkaModel;
   s3?: DatasourceS3Model;
   forwardQuery?: string;
@@ -88,7 +88,8 @@ export interface PipeParamModel {
   name: string;
   type: string;
   required: boolean;
-  defaultValue?: string | number;
+  defaultValue?: string | number | boolean;
+  description?: string;
 }
 
 export interface PipeModel {

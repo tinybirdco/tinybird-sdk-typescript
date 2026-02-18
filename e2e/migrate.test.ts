@@ -115,7 +115,7 @@ export const eventsEndpoint = definePipe("events_endpoint", {
 SELECT event_id, user_id, payload
 FROM events
 WHERE user_id = {{UInt64(user_id)}}
-  AND env = {{String(env, 'prod')}}
+AND env = {{String(env, 'prod')}}
       \`,
     }),
     node({
