@@ -1,17 +1,21 @@
 import { describe, it, expect } from "vitest";
 import {
   definePipe,
+  defineSinkPipe,
   defineMaterializedView,
   node,
   isPipeDefinition,
   getEndpointConfig,
   getMaterializedConfig,
+  getSinkConfig,
   isMaterializedView,
+  isSinkPipe,
   getNodeNames,
   getNode,
   sql,
 } from "./pipe.js";
 import { defineDatasource } from "./datasource.js";
+import { defineKafkaConnection, defineS3Connection } from "./connection.js";
 import { t } from "./types.js";
 import { p } from "./params.js";
 import { engine } from "./engines.js";
@@ -151,6 +155,91 @@ describe("Pipe Schema", () => {
       expect(isPipeDefinition("string")).toBe(false);
       expect(isPipeDefinition(123)).toBe(false);
       expect(isPipeDefinition({ _name: "test" })).toBe(false);
+    });
+  });
+
+  describe("Sink pipes", () => {
+    it("creates a Kafka sink pipe", () => {
+      const kafka = defineKafkaConnection("events_kafka", {
+        bootstrapServers: "localhost:9092",
+      });
+
+      const pipe = defineSinkPipe("events_sink", {
+        nodes: [node({ name: "publish", sql: "SELECT * FROM events" })],
+        sink: {
+          connection: kafka,
+          topic: "events_out",
+          schedule: "@on-demand",
+        },
+      });
+
+      const sink = getSinkConfig(pipe);
+      expect(sink).toBeTruthy();
+      expect(sink && "topic" in sink ? sink.topic : undefined).toBe("events_out");
+      expect(isSinkPipe(pipe)).toBe(true);
+    });
+
+    it("creates an S3 sink pipe", () => {
+      const s3 = defineS3Connection("exports_s3", {
+        region: "us-east-1",
+        arn: "arn:aws:iam::123456789012:role/tinybird-s3-access",
+      });
+
+      const pipe = defineSinkPipe("exports_sink", {
+        nodes: [node({ name: "export", sql: "SELECT * FROM events" })],
+        sink: {
+          connection: s3,
+          bucketUri: "s3://exports/events/",
+          fileTemplate: "events_{date}",
+          schedule: "@once",
+          format: "csv",
+          strategy: "create_new",
+          compression: "gzip",
+        },
+      });
+
+      const sink = getSinkConfig(pipe);
+      expect(sink).toBeTruthy();
+      expect(sink && "bucketUri" in sink ? sink.bucketUri : undefined).toBe("s3://exports/events/");
+      expect(isSinkPipe(pipe)).toBe(true);
+    });
+
+    it("throws when Kafka sink connection type is invalid", () => {
+      const s3 = defineS3Connection("exports_s3", {
+        region: "us-east-1",
+        arn: "arn:aws:iam::123456789012:role/tinybird-s3-access",
+      });
+
+      expect(() =>
+        defineSinkPipe("bad_sink", {
+          nodes: [node({ name: "export", sql: "SELECT * FROM events" })],
+          sink: {
+            // Runtime validation rejects mismatched connection/type
+            connection: s3 as unknown as ReturnType<typeof defineKafkaConnection>,
+            topic: "events_out",
+            schedule: "@on-demand",
+          },
+        })
+      ).toThrow("requires a Kafka connection");
+    });
+
+    it("throws when sink configuration is passed to definePipe", () => {
+      const kafka = defineKafkaConnection("events_kafka", {
+        bootstrapServers: "localhost:9092",
+      });
+
+      expect(() =>
+        definePipe(
+          "bad_via_define_pipe",
+          {
+            nodes: [node({ name: "export", sql: "SELECT * FROM events" })],
+            sink: {
+              connection: kafka,
+              topic: "events_out",
+            },
+          } as unknown as Parameters<typeof definePipe>[1]
+        )
+      ).toThrow("must be created with defineSinkPipe");
     });
   });
 

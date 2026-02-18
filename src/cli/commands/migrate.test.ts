@@ -1257,4 +1257,213 @@ KAFKA_GROUP_ID events-group
     expect(output).not.toContain("const secret = (name: string, defaultValue?: string) =>");
     expect(output).toContain('groupId: "events-group",');
   });
+
+  it("migrates Kafka sink pipes and emits sink config in TypeScript", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "events_kafka.connection",
+      `TYPE kafka
+KAFKA_BOOTSTRAP_SERVERS localhost:9092
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events_sink.pipe",
+      `NODE publish
+SQL >
+    SELECT *
+    FROM events
+    WHERE env = {{String(env, 'prod')}}
+TYPE sink
+EXPORT_CONNECTION_NAME events_kafka
+EXPORT_KAFKA_TOPIC events_out
+EXPORT_SCHEDULE @on-demand
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.migrated.filter((resource) => resource.kind === "connection")).toHaveLength(1);
+    expect(result.migrated.filter((resource) => resource.kind === "pipe")).toHaveLength(1);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('export const eventsSink = defineSinkPipe("events_sink", {');
+    expect(output).toContain("params: {");
+    expect(output).toContain('env: p.string().optional("prod"),');
+    expect(output).toContain("sink: {");
+    expect(output).toContain("connection: eventsKafka");
+    expect(output).toContain('topic: "events_out"');
+    expect(output).toContain('schedule: "@on-demand"');
+    expect(output).not.toContain('strategy:');
+  });
+
+  it("migrates S3 sink pipes and emits compression/strategy config in TypeScript", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "exports_s3.connection",
+      `TYPE s3
+S3_REGION "us-east-1"
+S3_ARN "arn:aws:iam::123456789012:role/tinybird-s3-access"
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events_s3_sink.pipe",
+      `NODE export
+SQL >
+    SELECT * FROM events
+TYPE sink
+EXPORT_CONNECTION_NAME exports_s3
+EXPORT_BUCKET_URI s3://exports/events/
+EXPORT_FILE_TEMPLATE events_{date}
+EXPORT_SCHEDULE @once
+EXPORT_FORMAT ndjson
+EXPORT_STRATEGY create_new
+EXPORT_COMPRESSION gzip
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('export const eventsS3Sink = defineSinkPipe("events_s3_sink", {');
+    expect(output).toContain("sink: {");
+    expect(output).toContain("connection: exportsS3");
+    expect(output).toContain('bucketUri: "s3://exports/events/"');
+    expect(output).toContain('fileTemplate: "events_{date}"');
+    expect(output).toContain('schedule: "@once"');
+    expect(output).toContain('format: "ndjson"');
+    expect(output).toContain('strategy: "create_new"');
+    expect(output).toContain('compression: "gzip"');
+  });
+
+  it("reports an error when sink pipe references a missing connection", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "events_sink.pipe",
+      `NODE publish
+SQL >
+    SELECT * FROM events
+TYPE sink
+EXPORT_CONNECTION_NAME missing_connection
+EXPORT_KAFKA_TOPIC events_out
+EXPORT_SCHEDULE @on-demand
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors.map((error) => error.message)).toEqual(
+      expect.arrayContaining([
+        'Sink pipe references missing/unmigrated connection "missing_connection".',
+      ])
+    );
+  });
+
+  it("reports an error when sink connection type does not match sink service", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "events_kafka.connection",
+      `TYPE kafka
+KAFKA_BOOTSTRAP_SERVERS localhost:9092
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events_s3_sink.pipe",
+      `NODE export
+SQL >
+    SELECT * FROM events
+TYPE sink
+EXPORT_CONNECTION_NAME events_kafka
+EXPORT_BUCKET_URI s3://exports/events/
+EXPORT_FILE_TEMPLATE events_{date}
+EXPORT_SCHEDULE @once
+EXPORT_FORMAT csv
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors.map((error) => error.message)).toEqual(
+      expect.arrayContaining([
+        'Sink pipe service "s3" is incompatible with connection "events_kafka" type "kafka".',
+      ])
+    );
+  });
+
+  it("supports comments in sink pipe files", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "events_kafka.connection",
+      `TYPE kafka
+KAFKA_BOOTSTRAP_SERVERS localhost:9092
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events_sink.pipe",
+      `# this pipe publishes records
+NODE publish
+SQL >
+    SELECT * FROM events
+TYPE sink
+# Kafka target
+EXPORT_CONNECTION_NAME events_kafka
+EXPORT_KAFKA_TOPIC events_out
+EXPORT_SCHEDULE @on-demand
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
 });

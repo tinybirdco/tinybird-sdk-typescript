@@ -432,6 +432,8 @@ function emitPipe(pipe: PipeModel): string {
     lines.push(`export const ${variableName} = defineMaterializedView(${escapeString(pipe.name)}, {`);
   } else if (pipe.type === "copy") {
     lines.push(`export const ${variableName} = defineCopyPipe(${escapeString(pipe.name)}, {`);
+  } else if (pipe.type === "sink") {
+    lines.push(`export const ${variableName} = defineSinkPipe(${escapeString(pipe.name)}, {`);
   } else {
     lines.push(`export const ${variableName} = definePipe(${escapeString(pipe.name)}, {`);
   }
@@ -440,7 +442,7 @@ function emitPipe(pipe: PipeModel): string {
     lines.push(`  description: ${escapeString(pipe.description)},`);
   }
 
-  if (pipe.type === "pipe" || pipe.type === "endpoint") {
+  if (pipe.type === "pipe" || pipe.type === "endpoint" || pipe.type === "sink") {
     if (pipe.params.length > 0) {
       lines.push("  params: {");
       for (const param of pipe.params) {
@@ -472,6 +474,30 @@ function emitPipe(pipe: PipeModel): string {
     if (pipe.copySchedule) {
       lines.push(`  copy_schedule: ${escapeString(pipe.copySchedule)},`);
     }
+  }
+
+  if (pipe.type === "sink") {
+    if (!pipe.sink) {
+      throw new Error(`Sink pipe "${pipe.name}" is missing sink configuration.`);
+    }
+    lines.push("  sink: {");
+    lines.push(`    connection: ${toCamelCase(pipe.sink.connectionName)},`);
+    if (pipe.sink.service === "kafka") {
+      lines.push(`    topic: ${escapeString(pipe.sink.topic)},`);
+      lines.push(`    schedule: ${escapeString(pipe.sink.schedule)},`);
+    } else {
+      lines.push(`    bucketUri: ${escapeString(pipe.sink.bucketUri)},`);
+      lines.push(`    fileTemplate: ${escapeString(pipe.sink.fileTemplate)},`);
+      lines.push(`    schedule: ${escapeString(pipe.sink.schedule)},`);
+      lines.push(`    format: ${escapeString(pipe.sink.format)},`);
+      if (pipe.sink.strategy) {
+        lines.push(`    strategy: ${escapeString(pipe.sink.strategy)},`);
+      }
+      if (pipe.sink.compression) {
+        lines.push(`    compression: ${escapeString(pipe.sink.compression)},`);
+      }
+    }
+    lines.push("  },");
   }
 
   lines.push("  nodes: [");
@@ -546,6 +572,9 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
   if (needsParams) {
     imports.add("p");
   }
+  if (pipes.some((pipe) => pipe.type === "sink")) {
+    imports.add("defineSinkPipe");
+  }
   if (datasources.some((datasource) => datasource.engine !== undefined)) {
     imports.add("engine");
   }
@@ -560,6 +589,7 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
     "definePipe",
     "defineMaterializedView",
     "defineCopyPipe",
+    "defineSinkPipe",
     "node",
     "t",
     "engine",

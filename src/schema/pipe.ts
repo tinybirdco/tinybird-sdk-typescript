@@ -9,6 +9,8 @@ import type { DatasourceDefinition, SchemaDefinition, ColumnDefinition } from ".
 import { getColumnType } from "./datasource.js";
 import { getTinybirdType } from "./types.js";
 import type { TokenDefinition, PipeTokenScope } from "./token.js";
+import type { KafkaConnectionDefinition, S3ConnectionDefinition } from "./connection.js";
+import { isKafkaConnectionDefinition, isS3ConnectionDefinition } from "./connection.js";
 
 /** Symbol for brand typing pipes - use Symbol.for() for global registry */
 export const PIPE_BRAND = Symbol.for("tinybird.pipe");
@@ -156,6 +158,55 @@ export interface CopyConfig<
 }
 
 /**
+ * Sink export strategy.
+ * - 'create_new': write new files on each run
+ * - 'replace': replace destination data on each run
+ */
+export type SinkStrategy = "create_new" | "replace";
+
+/**
+ * S3 sink compression codec.
+ */
+export type SinkCompression = "none" | "gzip" | "snappy";
+
+/**
+ * Kafka sink configuration
+ */
+export interface KafkaSinkConfig {
+  /** Kafka connection used to publish records */
+  connection: KafkaConnectionDefinition;
+  /** Destination Kafka topic */
+  topic: string;
+  /** Sink schedule (for example: @on-demand, @once, cron expression) */
+  schedule: string;
+}
+
+/**
+ * S3 sink configuration
+ */
+export interface S3SinkConfig {
+  /** S3 connection used to write exported files */
+  connection: S3ConnectionDefinition;
+  /** Destination bucket URI (for example: s3://bucket/prefix/) */
+  bucketUri: string;
+  /** Output filename template (supports Tinybird placeholders) */
+  fileTemplate: string;
+  /** Output format (for example: csv, ndjson) */
+  format: string;
+  /** Sink schedule (for example: @on-demand, @once, cron expression) */
+  schedule: string;
+  /** Export strategy */
+  strategy?: SinkStrategy;
+  /** Compression codec */
+  compression?: SinkCompression;
+}
+
+/**
+ * Sink pipe configuration (Kafka or S3 only)
+ */
+export type SinkConfig = KafkaSinkConfig | S3SinkConfig;
+
+/**
  * Inline token configuration for pipe access
  */
 export interface InlinePipeTokenConfig {
@@ -194,15 +245,42 @@ export interface PipeOptions<
   nodes: readonly NodeDefinition[];
   /** Output schema (optional for reusable pipes, required for endpoints) */
   output?: TOutput;
-  /** Whether this pipe is an API endpoint (shorthand for { enabled: true }). Mutually exclusive with materialized and copy. */
+  /** Whether this pipe is an API endpoint (shorthand for { enabled: true }). Mutually exclusive with materialized, copy, and sink. */
   endpoint?: boolean | EndpointConfig;
-  /** Materialized view configuration. Mutually exclusive with endpoint and copy. */
+  /** Materialized view configuration. Mutually exclusive with endpoint, copy, and sink. */
   materialized?: MaterializedConfig;
   /** Copy pipe configuration. Mutually exclusive with endpoint and materialized. */
   copy?: CopyConfig;
   /** Access tokens for this pipe */
   tokens?: readonly PipeTokenConfig[];
 }
+
+/**
+ * Options for defining a sink pipe
+ */
+export interface SinkPipeOptions<TParams extends ParamsDefinition> {
+  /** Human-readable description of the sink pipe */
+  description?: string;
+  /** Parameter definitions for query inputs */
+  params?: TParams;
+  /** Nodes in the transformation pipeline */
+  nodes: readonly NodeDefinition[];
+  /** Sink export configuration */
+  sink: SinkConfig;
+  /** Sink pipes are not endpoints */
+  endpoint?: never;
+  /** Sink pipes are not materialized views */
+  materialized?: never;
+  /** Sink pipes are not copy pipes */
+  copy?: never;
+  /** Access tokens for this sink pipe */
+  tokens?: readonly PipeTokenConfig[];
+}
+
+type PipeRuntimeOptions<
+  TParams extends ParamsDefinition,
+  TOutput extends OutputDefinition
+> = (PipeOptions<TParams, TOutput> & { sink?: never }) | SinkPipeOptions<TParams>;
 
 /**
  * Options for defining an endpoint (API-exposed pipe)
@@ -277,7 +355,7 @@ export interface PipeDefinition<
   /** Output schema (optional for reusable pipes) */
   readonly _output?: TOutput;
   /** Full options */
-  readonly options: PipeOptions<TParams, TOutput>;
+  readonly options: PipeRuntimeOptions<TParams, TOutput>;
 }
 
 /**
@@ -428,6 +506,52 @@ function validateMaterializedSchema(
   }
 }
 
+function validateSinkConfig(pipeName: string, sink: SinkConfig): void {
+  if ("topic" in sink) {
+    if (!isKafkaConnectionDefinition(sink.connection)) {
+      throw new Error(
+        `Pipe "${pipeName}" sink with topic requires a Kafka connection.`
+      );
+    }
+    if (typeof sink.topic !== "string" || !sink.topic.trim()) {
+      throw new Error(`Pipe "${pipeName}" sink topic cannot be empty.`);
+    }
+    if (typeof sink.schedule !== "string" || !sink.schedule.trim()) {
+      throw new Error(`Pipe "${pipeName}" sink schedule cannot be empty.`);
+    }
+    return;
+  }
+
+  if (!isS3ConnectionDefinition(sink.connection)) {
+    throw new Error(
+      `Pipe "${pipeName}" S3 sink requires an S3 connection.`
+    );
+  }
+  if (typeof sink.bucketUri !== "string" || !sink.bucketUri.trim()) {
+    throw new Error(`Pipe "${pipeName}" sink bucketUri cannot be empty.`);
+  }
+  if (typeof sink.fileTemplate !== "string" || !sink.fileTemplate.trim()) {
+    throw new Error(`Pipe "${pipeName}" sink fileTemplate cannot be empty.`);
+  }
+  if (typeof sink.format !== "string" || !sink.format.trim()) {
+    throw new Error(`Pipe "${pipeName}" sink format cannot be empty.`);
+  }
+  if (typeof sink.schedule !== "string" || !sink.schedule.trim()) {
+    throw new Error(`Pipe "${pipeName}" sink schedule cannot be empty.`);
+  }
+  if (sink.strategy && sink.strategy !== "create_new" && sink.strategy !== "replace") {
+    throw new Error(`Pipe "${pipeName}" sink strategy must be "create_new" or "replace".`);
+  }
+  if (
+    sink.compression &&
+    sink.compression !== "none" &&
+    sink.compression !== "gzip" &&
+    sink.compression !== "snappy"
+  ) {
+    throw new Error(`Pipe "${pipeName}" sink compression must be "none", "gzip", or "snappy".`);
+  }
+}
+
 export function definePipe<
   TParams extends ParamsDefinition,
   TOutput extends OutputDefinition
@@ -445,6 +569,12 @@ export function definePipe<
   // Validate at least one node
   if (!options.nodes || options.nodes.length === 0) {
     throw new Error(`Pipe "${name}" must have at least one node.`);
+  }
+
+  if ("sink" in (options as unknown as object)) {
+    throw new Error(
+      `Pipe "${name}" sink configuration must be created with defineSinkPipe().`
+    );
   }
 
   // Validate output is provided for endpoints and materialized views
@@ -480,7 +610,47 @@ export function definePipe<
     options: {
       ...options,
       params,
-    },
+    } as PipeRuntimeOptions<TParams, TOutput>,
+  };
+}
+
+/**
+ * Define a Tinybird sink pipe
+ *
+ * Sink pipes export query results to external systems via Kafka or S3.
+ *
+ * @param name - The sink pipe name (must be valid identifier)
+ * @param options - Sink pipe configuration
+ * @returns A pipe definition configured as a sink pipe
+ */
+export function defineSinkPipe<TParams extends ParamsDefinition>(
+  name: string,
+  options: SinkPipeOptions<TParams>
+): PipeDefinition<TParams, Record<string, never>> {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+    throw new Error(
+      `Invalid pipe name: "${name}". Must start with a letter or underscore and contain only alphanumeric characters and underscores.`
+    );
+  }
+
+  if (!options.nodes || options.nodes.length === 0) {
+    throw new Error(`Pipe "${name}" must have at least one node.`);
+  }
+
+  validateSinkConfig(name, options.sink);
+
+  const params = (options.params ?? {}) as TParams;
+
+  return {
+    [PIPE_BRAND]: true,
+    _name: name,
+    _type: "pipe",
+    _params: params,
+    _output: undefined,
+    options: {
+      ...options,
+      params,
+    } as PipeRuntimeOptions<TParams, Record<string, never>>,
   };
 }
 
@@ -788,6 +958,20 @@ export function getCopyConfig(pipe: PipeDefinition): CopyConfig | null {
  */
 export function isCopyPipe(pipe: PipeDefinition): boolean {
   return pipe.options.copy !== undefined;
+}
+
+/**
+ * Get the sink configuration from a pipe
+ */
+export function getSinkConfig(pipe: PipeDefinition): SinkConfig | null {
+  return "sink" in pipe.options ? (pipe.options.sink ?? null) : null;
+}
+
+/**
+ * Check if a pipe is a sink pipe
+ */
+export function isSinkPipe(pipe: PipeDefinition): boolean {
+  return pipe.options.sink !== undefined;
 }
 
 /**
