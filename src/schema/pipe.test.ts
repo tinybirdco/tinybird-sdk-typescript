@@ -170,7 +170,6 @@ describe("Pipe Schema", () => {
           connection: kafka,
           topic: "events_out",
           schedule: "@on-demand",
-          strategy: "append",
         },
       });
 
@@ -192,8 +191,10 @@ describe("Pipe Schema", () => {
           connection: s3,
           bucketUri: "s3://exports/events/",
           fileTemplate: "events_{date}",
+          schedule: "@once",
           format: "csv",
-          strategy: "replace",
+          strategy: "create_new",
+          compression: "gzip",
         },
       });
 
@@ -216,6 +217,7 @@ describe("Pipe Schema", () => {
             // Runtime validation rejects mismatched connection/type
             connection: s3 as unknown as ReturnType<typeof defineKafkaConnection>,
             topic: "events_out",
+            schedule: "@on-demand",
           },
         })
       ).toThrow("requires a Kafka connection");

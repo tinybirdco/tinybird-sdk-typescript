@@ -401,18 +401,18 @@ function emitPipe(pipe: PipeModel): string {
     lines.push(`    connection: ${toCamelCase(pipe.sink.connectionName)},`);
     if (pipe.sink.service === "kafka") {
       lines.push(`    topic: ${escapeString(pipe.sink.topic)},`);
+      lines.push(`    schedule: ${escapeString(pipe.sink.schedule)},`);
     } else {
       lines.push(`    bucketUri: ${escapeString(pipe.sink.bucketUri)},`);
       lines.push(`    fileTemplate: ${escapeString(pipe.sink.fileTemplate)},`);
-      if (pipe.sink.format) {
-        lines.push(`    format: ${escapeString(pipe.sink.format)},`);
-      }
-    }
-    if (pipe.sink.schedule) {
       lines.push(`    schedule: ${escapeString(pipe.sink.schedule)},`);
-    }
-    if (pipe.sink.strategy) {
-      lines.push(`    strategy: ${escapeString(pipe.sink.strategy)},`);
+      lines.push(`    format: ${escapeString(pipe.sink.format)},`);
+      if (pipe.sink.strategy) {
+        lines.push(`    strategy: ${escapeString(pipe.sink.strategy)},`);
+      }
+      if (pipe.sink.compression) {
+        lines.push(`    compression: ${escapeString(pipe.sink.compression)},`);
+      }
     }
     lines.push("  },");
   }

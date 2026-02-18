@@ -271,12 +271,13 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
   let exportFileTemplate: string | undefined;
   let exportFormat: string | undefined;
   let exportSchedule: string | undefined;
-  let exportStrategy: "append" | "replace" | undefined;
+  let exportStrategy: "create_new" | "replace" | undefined;
+  let exportCompression: "none" | "gzip" | "snappy" | undefined;
 
   let i = 0;
   while (i < lines.length) {
     const line = (lines[i] ?? "").trim();
-    if (!line) {
+    if (!line || line.startsWith("#")) {
       i += 1;
       continue;
     }
@@ -463,7 +464,7 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
       case "EXPORT_CONNECTION_NAME":
         exportConnectionName = parseQuotedValue(value);
         break;
-      case "EXPORT_TOPIC":
+      case "EXPORT_KAFKA_TOPIC":
         exportTopic = parseQuotedValue(value);
         break;
       case "EXPORT_BUCKET_URI":
@@ -480,7 +481,7 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
         break;
       case "EXPORT_STRATEGY": {
         const normalized = parseQuotedValue(value).toLowerCase();
-        if (normalized !== "append" && normalized !== "replace") {
+        if (normalized !== "create_new" && normalized !== "replace") {
           throw new MigrationParseError(
             resource.filePath,
             "pipe",
@@ -489,6 +490,19 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
           );
         }
         exportStrategy = normalized;
+        break;
+      }
+      case "EXPORT_COMPRESSION": {
+        const normalized = parseQuotedValue(value).toLowerCase();
+        if (normalized !== "none" && normalized !== "gzip" && normalized !== "snappy") {
+          throw new MigrationParseError(
+            resource.filePath,
+            "pipe",
+            resource.name,
+            `Unsupported EXPORT_COMPRESSION in strict mode: "${value}"`
+          );
+        }
+        exportCompression = normalized;
         break;
       }
       case "TOKEN":
@@ -550,7 +564,8 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
     exportFileTemplate !== undefined ||
     exportFormat !== undefined ||
     exportSchedule !== undefined ||
-    exportStrategy !== undefined;
+    exportStrategy !== undefined ||
+    exportCompression !== undefined;
 
   if (pipeType !== "sink" && hasSinkDirectives) {
     throw new MigrationParseError(
@@ -576,7 +591,8 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
     const hasS3Directives =
       exportBucketUri !== undefined ||
       exportFileTemplate !== undefined ||
-      exportFormat !== undefined;
+      exportFormat !== undefined ||
+      exportCompression !== undefined;
 
     if (hasKafkaDirectives && hasS3Directives) {
       throw new MigrationParseError(
@@ -613,7 +629,31 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
           resource.filePath,
           "pipe",
           resource.name,
-          "EXPORT_TOPIC is required for Kafka sinks."
+          "EXPORT_KAFKA_TOPIC is required for Kafka sinks."
+        );
+      }
+      if (!exportSchedule) {
+        throw new MigrationParseError(
+          resource.filePath,
+          "pipe",
+          resource.name,
+          "EXPORT_SCHEDULE is required for Kafka sinks."
+        );
+      }
+      if (exportStrategy !== undefined) {
+        throw new MigrationParseError(
+          resource.filePath,
+          "pipe",
+          resource.name,
+          "EXPORT_STRATEGY is only valid for S3 sinks."
+        );
+      }
+      if (exportCompression !== undefined) {
+        throw new MigrationParseError(
+          resource.filePath,
+          "pipe",
+          resource.name,
+          "EXPORT_COMPRESSION is only valid for S3 sinks."
         );
       }
 
@@ -622,7 +662,6 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
         connectionName: exportConnectionName,
         topic: exportTopic,
         schedule: exportSchedule,
-        strategy: exportStrategy,
       };
     } else {
       if (hasKafkaDirectives) {
@@ -633,12 +672,12 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
           "Kafka export directives are not valid for S3 sinks."
         );
       }
-      if (!exportBucketUri || !exportFileTemplate) {
+      if (!exportBucketUri || !exportFileTemplate || !exportFormat || !exportSchedule) {
         throw new MigrationParseError(
           resource.filePath,
           "pipe",
           resource.name,
-          "S3 sinks require EXPORT_BUCKET_URI and EXPORT_FILE_TEMPLATE."
+          "S3 sinks require EXPORT_BUCKET_URI, EXPORT_FILE_TEMPLATE, EXPORT_FORMAT, and EXPORT_SCHEDULE."
         );
       }
 
@@ -650,6 +689,7 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
         format: exportFormat,
         schedule: exportSchedule,
         strategy: exportStrategy,
+        compression: exportCompression,
       };
     }
   }

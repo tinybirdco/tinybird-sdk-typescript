@@ -159,10 +159,15 @@ export interface CopyConfig<
 
 /**
  * Sink export strategy.
- * - 'append': append exported rows/files
+ * - 'create_new': write new files on each run
  * - 'replace': replace destination data on each run
  */
-export type SinkStrategy = "append" | "replace";
+export type SinkStrategy = "create_new" | "replace";
+
+/**
+ * S3 sink compression codec.
+ */
+export type SinkCompression = "none" | "gzip" | "snappy";
 
 /**
  * Kafka sink configuration
@@ -173,9 +178,7 @@ export interface KafkaSinkConfig {
   /** Destination Kafka topic */
   topic: string;
   /** Sink schedule (for example: @on-demand, @once, cron expression) */
-  schedule?: string;
-  /** Export strategy */
-  strategy?: SinkStrategy;
+  schedule: string;
 }
 
 /**
@@ -189,11 +192,13 @@ export interface S3SinkConfig {
   /** Output filename template (supports Tinybird placeholders) */
   fileTemplate: string;
   /** Output format (for example: csv, ndjson) */
-  format?: string;
+  format: string;
   /** Sink schedule (for example: @on-demand, @once, cron expression) */
-  schedule?: string;
+  schedule: string;
   /** Export strategy */
   strategy?: SinkStrategy;
+  /** Compression codec */
+  compression?: SinkCompression;
 }
 
 /**
@@ -508,8 +513,11 @@ function validateSinkConfig(pipeName: string, sink: SinkConfig): void {
         `Pipe "${pipeName}" sink with topic requires a Kafka connection.`
       );
     }
-    if (!sink.topic.trim()) {
+    if (typeof sink.topic !== "string" || !sink.topic.trim()) {
       throw new Error(`Pipe "${pipeName}" sink topic cannot be empty.`);
+    }
+    if (typeof sink.schedule !== "string" || !sink.schedule.trim()) {
+      throw new Error(`Pipe "${pipeName}" sink schedule cannot be empty.`);
     }
     return;
   }
@@ -519,11 +527,28 @@ function validateSinkConfig(pipeName: string, sink: SinkConfig): void {
       `Pipe "${pipeName}" S3 sink requires an S3 connection.`
     );
   }
-  if (!sink.bucketUri.trim()) {
+  if (typeof sink.bucketUri !== "string" || !sink.bucketUri.trim()) {
     throw new Error(`Pipe "${pipeName}" sink bucketUri cannot be empty.`);
   }
-  if (!sink.fileTemplate.trim()) {
+  if (typeof sink.fileTemplate !== "string" || !sink.fileTemplate.trim()) {
     throw new Error(`Pipe "${pipeName}" sink fileTemplate cannot be empty.`);
+  }
+  if (typeof sink.format !== "string" || !sink.format.trim()) {
+    throw new Error(`Pipe "${pipeName}" sink format cannot be empty.`);
+  }
+  if (typeof sink.schedule !== "string" || !sink.schedule.trim()) {
+    throw new Error(`Pipe "${pipeName}" sink schedule cannot be empty.`);
+  }
+  if (sink.strategy && sink.strategy !== "create_new" && sink.strategy !== "replace") {
+    throw new Error(`Pipe "${pipeName}" sink strategy must be "create_new" or "replace".`);
+  }
+  if (
+    sink.compression &&
+    sink.compression !== "none" &&
+    sink.compression !== "gzip" &&
+    sink.compression !== "snappy"
+  ) {
+    throw new Error(`Pipe "${pipeName}" sink compression must be "none", "gzip", or "snappy".`);
   }
 }
 
@@ -546,7 +571,7 @@ export function definePipe<
     throw new Error(`Pipe "${name}" must have at least one node.`);
   }
 
-  if ("sink" in (options as Record<string, unknown>)) {
+  if ("sink" in (options as unknown as object)) {
     throw new Error(
       `Pipe "${name}" sink configuration must be created with defineSinkPipe().`
     );

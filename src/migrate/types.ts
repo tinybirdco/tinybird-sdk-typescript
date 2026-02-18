@@ -86,8 +86,7 @@ export interface PipeKafkaSinkModel {
   service: "kafka";
   connectionName: string;
   topic: string;
-  schedule?: string;
-  strategy?: "append" | "replace";
+  schedule: string;
 }
 
 export interface PipeS3SinkModel {
@@ -95,9 +94,10 @@ export interface PipeS3SinkModel {
   connectionName: string;
   bucketUri: string;
   fileTemplate: string;
-  format?: string;
-  schedule?: string;
-  strategy?: "append" | "replace";
+  format: string;
+  schedule: string;
+  strategy?: "create_new" | "replace";
+  compression?: "none" | "gzip" | "snappy";
 }
 
 export type PipeSinkModel = PipeKafkaSinkModel | PipeS3SinkModel;

@@ -129,20 +129,19 @@ function generateSink(config: SinkConfig): string {
   parts.push(`EXPORT_CONNECTION_NAME ${config.connection._name}`);
 
   if ("topic" in config) {
-    parts.push(`EXPORT_TOPIC ${config.topic}`);
+    parts.push(`EXPORT_KAFKA_TOPIC ${config.topic}`);
+    parts.push(`EXPORT_SCHEDULE ${config.schedule}`);
   } else {
     parts.push(`EXPORT_BUCKET_URI ${config.bucketUri}`);
     parts.push(`EXPORT_FILE_TEMPLATE ${config.fileTemplate}`);
-    if (config.format) {
-      parts.push(`EXPORT_FORMAT ${config.format}`);
-    }
-  }
-
-  if (config.schedule) {
     parts.push(`EXPORT_SCHEDULE ${config.schedule}`);
-  }
-  if (config.strategy) {
-    parts.push(`EXPORT_STRATEGY ${config.strategy}`);
+    parts.push(`EXPORT_FORMAT ${config.format}`);
+    if (config.strategy) {
+      parts.push(`EXPORT_STRATEGY ${config.strategy}`);
+    }
+    if (config.compression) {
+      parts.push(`EXPORT_COMPRESSION ${config.compression}`);
+    }
   }
 
   return parts.join("\n");

@@ -485,16 +485,15 @@ GROUP BY day, country
           connection: kafka,
           topic: 'events_out',
           schedule: '@on-demand',
-          strategy: 'append',
         },
       });
 
       const result = generatePipe(pipe);
       expect(result.content).toContain('TYPE sink');
       expect(result.content).toContain('EXPORT_CONNECTION_NAME events_kafka');
-      expect(result.content).toContain('EXPORT_TOPIC events_out');
+      expect(result.content).toContain('EXPORT_KAFKA_TOPIC events_out');
       expect(result.content).toContain('EXPORT_SCHEDULE @on-demand');
-      expect(result.content).toContain('EXPORT_STRATEGY append');
+      expect(result.content).not.toContain('EXPORT_STRATEGY');
     });
 
     it('generates S3 sink directives', () => {
@@ -511,6 +510,7 @@ GROUP BY day, country
           fileTemplate: 'events_{date}',
           format: 'csv',
           schedule: '@once',
+          compression: 'gzip',
           strategy: 'replace',
         },
       });
@@ -523,6 +523,7 @@ GROUP BY day, country
       expect(result.content).toContain('EXPORT_FORMAT csv');
       expect(result.content).toContain('EXPORT_SCHEDULE @once');
       expect(result.content).toContain('EXPORT_STRATEGY replace');
+      expect(result.content).toContain('EXPORT_COMPRESSION gzip');
     });
   });
 

@@ -112,6 +112,9 @@ export async function runMigrate(
   const migrated: ParsedResource[] = [];
   const migratedConnectionNames = new Set<string>();
   const migratedDatasourceNames = new Set<string>();
+  const parsedConnectionTypeByName = new Map(
+    parsedConnections.map((connection) => [connection.name, connection.connectionType] as const)
+  );
 
   for (const connection of parsedConnections) {
     try {
@@ -168,6 +171,25 @@ export async function runMigrate(
           resourceName: pipe.name,
           resourceKind: pipe.kind,
           message: `Sink pipe references missing/unmigrated connection "${sinkConnectionName ?? "(none)"}".`,
+        });
+        continue;
+      }
+      const sinkConnectionType = parsedConnectionTypeByName.get(sinkConnectionName);
+      if (!sinkConnectionType) {
+        errors.push({
+          filePath: pipe.filePath,
+          resourceName: pipe.name,
+          resourceKind: pipe.kind,
+          message: `Sink pipe connection "${sinkConnectionName}" could not be resolved.`,
+        });
+        continue;
+      }
+      if (sinkConnectionType !== pipe.sink?.service) {
+        errors.push({
+          filePath: pipe.filePath,
+          resourceName: pipe.name,
+          resourceKind: pipe.kind,
+          message: `Sink pipe service "${pipe.sink?.service}" is incompatible with connection "${sinkConnectionName}" type "${sinkConnectionType}".`,
         });
         continue;
       }

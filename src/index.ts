@@ -170,6 +170,7 @@ export type {
   CopyConfig,
   SinkConfig,
   SinkStrategy,
+  SinkCompression,
   KafkaSinkConfig,
   S3SinkConfig,
   NodeDefinition,

@@ -755,7 +755,6 @@ export const kafkaEventsSink = defineSinkPipe("kafka_events_sink", {
     connection: eventsKafka,
     topic: "events_export",
     schedule: "@on-demand",
-    strategy: "append",
   },
   nodes: [
     node({
@@ -776,7 +775,8 @@ export const s3EventsSink = defineSinkPipe("s3_events_sink", {
     fileTemplate: "events_{date}",
     format: "csv",
     schedule: "@once",
-    strategy: "replace",
+    strategy: "create_new",
+    compression: "gzip",
   },
   nodes: [
     node({
