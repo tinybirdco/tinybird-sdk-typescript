@@ -432,6 +432,10 @@ function createCli(): Command {
     .description("Deploy resources to main Tinybird workspace (production)")
     .option("--dry-run", "Generate without pushing to API")
     .option("--check", "Validate deploy with Tinybird API without applying")
+    .option(
+      "--allow-destructive-operations",
+      "Allow deploys that delete existing datasources, pipes, or connections"
+    )
     .option("--debug", "Show debug output including API requests/responses")
     .action(async (options) => {
       if (options.debug) {
@@ -443,6 +447,7 @@ function createCli(): Command {
       const result = await runDeploy({
         dryRun: options.dryRun,
         check: options.check,
+        allowDestructiveOperations: options.allowDestructiveOperations,
         callbacks: {
           onChanges: (deployChanges) => {
             // Show changes table immediately after deployment is created

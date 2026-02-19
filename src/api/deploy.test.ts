@@ -199,6 +199,61 @@ describe("Deploy API", () => {
       expect(parsed.searchParams.get("from")).toBe("ts-sdk");
     });
 
+    it("passes allow_destructive_operations when explicitly enabled", async () => {
+      let capturedUrl: string | null = null;
+
+      server.use(
+        http.post(`${BASE_URL}/v1/deploy`, ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json(
+            createDeploySuccessResponse({ deploymentId: "deploy-destructive" })
+          );
+        }),
+        http.get(`${BASE_URL}/v1/deployments/deploy-destructive`, () => {
+          return HttpResponse.json(
+            createDeploymentStatusResponse({
+              deploymentId: "deploy-destructive",
+              status: "data_ready",
+            })
+          );
+        }),
+        http.post(`${BASE_URL}/v1/deployments/deploy-destructive/set-live`, () => {
+          return HttpResponse.json(createSetLiveSuccessResponse());
+        })
+      );
+
+      await deployToMain(config, resources, {
+        pollIntervalMs: 1,
+        allowDestructiveOperations: true,
+      });
+
+      const parsed = new URL(capturedUrl ?? "");
+      expect(parsed.searchParams.get("allow_destructive_operations")).toBe("true");
+    });
+
+    it("adds actionable guidance to Forward/Classic workspace errors", async () => {
+      server.use(
+        http.post(`${BASE_URL}/v1/deploy`, () => {
+          return HttpResponse.json(
+            {
+              result: "failed",
+              error:
+                "This is a Tinybird Forward workspace, and this operation is only available for Tinybird Classic workspaces.",
+            },
+            { status: 400 }
+          );
+        })
+      );
+
+      const result = await deployToMain(config, resources);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Tinybird Forward workspace");
+      expect(result.error).toContain(
+        "Use the Tinybird Classic CLI (`tb`) from a Tinybird Classic workspace for this operation."
+      );
+    });
+
     it("handles failed deployment status", async () => {
       server.use(
         http.post(`${BASE_URL}/v1/deploy`, () => {
