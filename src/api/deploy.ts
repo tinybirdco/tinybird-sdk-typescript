@@ -1,6 +1,6 @@
 /**
  * Deploy resources to Tinybird main workspace
- * Uses the /v1/deploy endpoint to create a deployment, then sets it live
+ * Uses the /v1/deploy endpoint with auto-promotion enabled
  */
 
 import type { GeneratedResources } from "../generator/index.js";
@@ -32,13 +32,6 @@ export interface Deployment {
 }
 
 /**
- * Response from /v1/deployments list endpoint
- */
-export interface DeploymentsListResponse {
-  deployments: Deployment[];
-}
-
-/**
  * Response from /v1/deploy endpoint
  */
 export interface DeployResponse {
@@ -46,6 +39,14 @@ export interface DeployResponse {
   deployment?: DeploymentDetails;
   error?: string;
   errors?: Array<{ filename?: string; error: string }>;
+}
+
+/**
+ * Response from /v1/deployments/{id} endpoint
+ */
+export interface DeploymentStatusResponse {
+  result: string;
+  deployment: Deployment;
 }
 
 /**
@@ -75,20 +76,10 @@ export interface DeploymentDetails extends Deployment {
 }
 
 /**
- * Response from /v1/deployments/{id} endpoint
- */
-export interface DeploymentStatusResponse {
-  result: string;
-  deployment: Deployment;
-}
-
-/**
  * Deploy generated resources to Tinybird main workspace
  *
  * Uses the /v1/deploy endpoint which accepts all resources in a single
- * multipart form request. After creating the deployment, this function:
- * 1. Polls until the deployment is ready (status === 'data_ready')
- * 2. Sets the deployment as live via /v1/deployments/{id}/set-live
+ * multipart form request.
  *
  * @param config - Build configuration with API URL and token
  * @param resources - Generated resources to deploy
@@ -161,13 +152,14 @@ export async function deployToMain(
     pollIntervalMs?: number;
     maxPollAttempts?: number;
     check?: boolean;
+    autoPromote?: boolean;
     allowDestructiveOperations?: boolean;
     callbacks?: DeployCallbacks;
   }
 ): Promise<BuildApiResult> {
   const debug = options?.debug ?? !!process.env.TINYBIRD_DEBUG;
   const pollIntervalMs = options?.pollIntervalMs ?? 1000;
-  const maxPollAttempts = options?.maxPollAttempts ?? 120; // 2 minutes max
+  const maxPollAttempts = options?.maxPollAttempts ?? 120;
   const baseUrl = config.baseUrl.replace(/\/$/, "");
 
   const formData = new FormData();
@@ -202,45 +194,16 @@ export async function deployToMain(
     );
   }
 
-  // Step 0: Clean up any stale non-live deployments that might block the new deployment
-  try {
-    const deploymentsUrl = `${baseUrl}/v1/deployments`;
-    const deploymentsResponse = await tinybirdFetch(deploymentsUrl, {
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-      },
-    });
-
-    if (deploymentsResponse.ok) {
-      const deploymentsBody = (await deploymentsResponse.json()) as DeploymentsListResponse;
-      const staleDeployments = deploymentsBody.deployments.filter(
-        (d) => !d.live && d.status !== "live"
-      );
-
-      for (const stale of staleDeployments) {
-        if (debug) {
-          console.log(`[debug] Cleaning up stale deployment: ${stale.id} (status: ${stale.status})`);
-        }
-        await tinybirdFetch(`${baseUrl}/v1/deployments/${stale.id}`, {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${config.token}`,
-          },
-        });
-      }
-    }
-  } catch (e) {
-    // Ignore errors during cleanup - we'll try to deploy anyway
-    if (debug) {
-      console.log(`[debug] Failed to clean up stale deployments: ${e}`);
-    }
-  }
-
-  // Step 1: Create deployment via /v1/deploy
+  // Create deployment via /v1/deploy.
+  // `auto_promote=true` makes the API promote the deployment automatically.
   const deployUrlBase = `${baseUrl}/v1/deploy`;
   const urlParams = new URLSearchParams();
   if (options?.check) {
     urlParams.set("check", "true");
+  }
+  const autoPromote = options?.autoPromote ?? !options?.check;
+  if (autoPromote) {
+    urlParams.set("auto_promote", "true");
   }
   if (options?.allowDestructiveOperations) {
     urlParams.set("allow_destructive_operations", "true");
@@ -408,18 +371,22 @@ export async function deployToMain(
     });
   }
 
-  // Step 2: Poll until deployment is ready
-  let deployment = body.deployment;
-  let attempts = 0;
+  let deployment = deploymentDetails;
+  let statusAttempts = 0;
 
   options?.callbacks?.onWaitingForReady?.();
 
-  while (deployment.status !== "data_ready" && attempts < maxPollAttempts) {
+  while (
+    deployment.status !== "data_ready" &&
+    deployment.status !== "failed" &&
+    deployment.status !== "error" &&
+    statusAttempts < maxPollAttempts
+  ) {
     await sleep(pollIntervalMs);
-    attempts++;
+    statusAttempts++;
 
     if (debug) {
-      console.log(`[debug] Polling deployment status (attempt ${attempts})...`);
+      console.log(`[debug] Polling deployment status (attempt ${statusAttempts})...`);
     }
 
     const statusUrl = `${baseUrl}/v1/deployments/${deploymentId}`;
@@ -443,23 +410,18 @@ export async function deployToMain(
 
     const statusBody = (await statusResponse.json()) as DeploymentStatusResponse;
     deployment = statusBody.deployment;
+  }
 
-    if (debug) {
-      console.log(`[debug] Deployment status: ${deployment.status}`);
-    }
-
-    // Check for failed status
-    if (deployment.status === "failed" || deployment.status === "error") {
-      return {
-        success: false,
-        result: "failed",
-        error: `Deployment failed with status: ${deployment.status}`,
-        datasourceCount: resources.datasources.length,
-        pipeCount: resources.pipes.length,
-        connectionCount: resources.connections?.length ?? 0,
-        buildId: deploymentId,
-      };
-    }
+  if (deployment.status === "failed" || deployment.status === "error") {
+    return {
+      success: false,
+      result: "failed",
+      error: `Deployment failed with status: ${deployment.status}`,
+      datasourceCount: resources.datasources.length,
+      pipeCount: resources.pipes.length,
+      connectionCount: resources.connections?.length ?? 0,
+      buildId: deploymentId,
+    };
   }
 
   if (deployment.status !== "data_ready") {
@@ -476,38 +438,64 @@ export async function deployToMain(
 
   options?.callbacks?.onDeploymentReady?.();
 
-  // Step 3: Set the deployment as live
-  const setLiveUrl = `${baseUrl}/v1/deployments/${deploymentId}/set-live`;
+  if (autoPromote && !deployment.live) {
+    let promotionAttempts = 0;
+    options?.callbacks?.onWaitingForPromote?.();
+
+    while (!deployment.live && promotionAttempts < maxPollAttempts) {
+      await sleep(pollIntervalMs);
+      promotionAttempts++;
+
+      if (debug) {
+        console.log(`[debug] Polling auto-promote status (attempt ${promotionAttempts})...`);
+      }
+
+      const statusUrl = `${baseUrl}/v1/deployments/${deploymentId}`;
+      const statusResponse = await tinybirdFetch(statusUrl, {
+        headers: {
+          Authorization: `Bearer ${config.token}`,
+        },
+      });
+
+      if (!statusResponse.ok) {
+        return {
+          success: false,
+          result: "failed",
+          error: `Failed to check deployment status: ${statusResponse.status} ${statusResponse.statusText}`,
+          datasourceCount: resources.datasources.length,
+          pipeCount: resources.pipes.length,
+          connectionCount: resources.connections?.length ?? 0,
+          buildId: deploymentId,
+        };
+      }
+
+      const statusBody = (await statusResponse.json()) as DeploymentStatusResponse;
+      deployment = statusBody.deployment;
+    }
+
+    if (!deployment.live) {
+      return {
+        success: false,
+        result: "failed",
+        error: `Deployment reached data_ready but auto-promote did not complete after ${maxPollAttempts} attempts`,
+        datasourceCount: resources.datasources.length,
+        pipeCount: resources.pipes.length,
+        connectionCount: resources.connections?.length ?? 0,
+        buildId: deploymentId,
+      };
+    }
+
+    options?.callbacks?.onDeploymentPromoted?.();
+  }
 
   if (debug) {
-    console.log(`[debug] POST ${setLiveUrl}`);
+    const stateLabel = deployment.live ? "live" : "ready";
+    console.log(`[debug] Deployment ${deploymentId} is now ${stateLabel}`);
   }
 
-  const setLiveResponse = await tinybirdFetch(setLiveUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.token}`,
-    },
-  });
-
-  if (!setLiveResponse.ok) {
-    const setLiveBody = await setLiveResponse.text();
-    return {
-      success: false,
-      result: "failed",
-      error: `Failed to set deployment as live: ${setLiveResponse.status} ${setLiveResponse.statusText}\n${setLiveBody}`,
-      datasourceCount: resources.datasources.length,
-      pipeCount: resources.pipes.length,
-      connectionCount: resources.connections?.length ?? 0,
-      buildId: deploymentId,
-    };
+  if (deployment.live) {
+    options?.callbacks?.onDeploymentLive?.(deploymentId);
   }
-
-  if (debug) {
-    console.log(`[debug] Deployment ${deploymentId} is now live`);
-  }
-
-  options?.callbacks?.onDeploymentLive?.(deploymentId);
 
   return {
     success: true,
@@ -529,9 +517,6 @@ export async function deployToMain(
   };
 }
 
-/**
- * Helper function to sleep for a given number of milliseconds
- */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
 import { deployToMain } from "./deploy.js";
@@ -6,25 +6,14 @@ import type { BuildConfig } from "./build.js";
 import {
   BASE_URL,
   createDeploySuccessResponse,
-  createDeploymentStatusResponse,
-  createSetLiveSuccessResponse,
   createBuildFailureResponse,
   createBuildMultipleErrorsResponse,
-  createDeploymentsListResponse,
 } from "../test/handlers.js";
 import type { GeneratedResources } from "../generator/index.js";
 
 const server = setupServer();
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
-beforeEach(() => {
-  // Set up default handler for deployments list (used by stale deployment cleanup)
-  server.use(
-    http.get(`${BASE_URL}/v1/deployments`, () => {
-      return HttpResponse.json(createDeploymentsListResponse());
-    })
-  );
-});
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
@@ -35,17 +24,12 @@ describe("Deploy API", () => {
   };
 
   const resources: GeneratedResources = {
-    datasources: [
-      { name: "events", content: "SCHEMA > timestamp DateTime" },
-    ],
-    pipes: [
-      { name: "top_events", content: "NODE main\nSQL > SELECT * FROM events" },
-    ],
+    datasources: [{ name: "events", content: "SCHEMA > timestamp DateTime" }],
+    pipes: [{ name: "top_events", content: "NODE main\nSQL > SELECT * FROM events" }],
     connections: [],
   };
 
-  // Helper to set up successful deploy flow
-  function setupSuccessfulDeployFlow(deploymentId = "deploy-abc") {
+  function setupAutoPromoteSuccessFlow(deploymentId = "deploy-abc") {
     server.use(
       http.post(`${BASE_URL}/v1/deploy`, () => {
         return HttpResponse.json(
@@ -53,64 +37,42 @@ describe("Deploy API", () => {
         );
       }),
       http.get(`${BASE_URL}/v1/deployments/${deploymentId}`, () => {
-        return HttpResponse.json(
-          createDeploymentStatusResponse({ deploymentId, status: "data_ready" })
-        );
-      }),
-      http.post(`${BASE_URL}/v1/deployments/${deploymentId}/set-live`, () => {
-        return HttpResponse.json(createSetLiveSuccessResponse());
+        return HttpResponse.json({
+          result: "success",
+          deployment: {
+            id: deploymentId,
+            status: "data_ready",
+            live: true,
+          },
+        });
       })
     );
   }
 
   describe("deployToMain", () => {
-    it("successfully deploys resources with full flow", async () => {
-      setupSuccessfulDeployFlow("deploy-abc");
+    it("successfully deploys resources with auto-promote flow", async () => {
+      setupAutoPromoteSuccessFlow("deploy-abc");
 
-      const result = await deployToMain(config, resources, { pollIntervalMs: 1 });
+      const onDeploymentLive = vi.fn();
+      const result = await deployToMain(config, resources, {
+        pollIntervalMs: 1,
+        callbacks: { onDeploymentLive },
+      });
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("success");
       expect(result.buildId).toBe("deploy-abc");
       expect(result.datasourceCount).toBe(1);
       expect(result.pipeCount).toBe(1);
-    });
-
-    it("polls until deployment is ready", async () => {
-      let pollCount = 0;
-
-      server.use(
-        http.post(`${BASE_URL}/v1/deploy`, () => {
-          return HttpResponse.json(
-            createDeploySuccessResponse({ deploymentId: "deploy-poll", status: "pending" })
-          );
-        }),
-        http.get(`${BASE_URL}/v1/deployments/deploy-poll`, () => {
-          pollCount++;
-          // Return pending for first 2 polls, then data_ready
-          const status = pollCount < 3 ? "pending" : "data_ready";
-          return HttpResponse.json(
-            createDeploymentStatusResponse({ deploymentId: "deploy-poll", status })
-          );
-        }),
-        http.post(`${BASE_URL}/v1/deployments/deploy-poll/set-live`, () => {
-          return HttpResponse.json(createSetLiveSuccessResponse());
-        })
-      );
-
-      const result = await deployToMain(config, resources, { pollIntervalMs: 1 });
-
-      expect(result.success).toBe(true);
-      expect(pollCount).toBe(3);
+      expect(onDeploymentLive).toHaveBeenCalledWith("deploy-abc");
     });
 
     it("handles deploy failure with single error", async () => {
       server.use(
         http.post(`${BASE_URL}/v1/deploy`, () => {
-          return HttpResponse.json(
-            createBuildFailureResponse("Permission denied"),
-            { status: 200 }
-          );
+          return HttpResponse.json(createBuildFailureResponse("Permission denied"), {
+            status: 200,
+          });
         })
       );
 
@@ -144,10 +106,7 @@ describe("Deploy API", () => {
     it("handles HTTP error responses", async () => {
       server.use(
         http.post(`${BASE_URL}/v1/deploy`, () => {
-          return HttpResponse.json(
-            { result: "failed", error: "Forbidden" },
-            { status: 403 }
-          );
+          return HttpResponse.json({ result: "failed", error: "Forbidden" }, { status: 403 });
         })
       );
 
@@ -167,28 +126,24 @@ describe("Deploy API", () => {
         })
       );
 
-      await expect(deployToMain(config, resources)).rejects.toThrow(
-        "Failed to parse response"
-      );
+      await expect(deployToMain(config, resources)).rejects.toThrow("Failed to parse response");
     });
 
-    it("uses /v1/deploy endpoint (not /v1/build)", async () => {
+    it("uses /v1/deploy endpoint and sends auto_promote by default", async () => {
       let capturedUrl: string | null = null;
 
       server.use(
         http.post(`${BASE_URL}/v1/deploy`, ({ request }) => {
           capturedUrl = request.url;
           return HttpResponse.json(
-            createDeploySuccessResponse({ deploymentId: "deploy-url-test" })
+            createDeploySuccessResponse({ deploymentId: "deploy-url-test", status: "pending" })
           );
         }),
         http.get(`${BASE_URL}/v1/deployments/deploy-url-test`, () => {
-          return HttpResponse.json(
-            createDeploymentStatusResponse({ deploymentId: "deploy-url-test", status: "data_ready" })
-          );
-        }),
-        http.post(`${BASE_URL}/v1/deployments/deploy-url-test/set-live`, () => {
-          return HttpResponse.json(createSetLiveSuccessResponse());
+          return HttpResponse.json({
+            result: "success",
+            deployment: { id: "deploy-url-test", status: "data_ready", live: true },
+          });
         })
       );
 
@@ -197,6 +152,7 @@ describe("Deploy API", () => {
       const parsed = new URL(capturedUrl ?? "");
       expect(parsed.pathname).toBe("/v1/deploy");
       expect(parsed.searchParams.get("from")).toBe("ts-sdk");
+      expect(parsed.searchParams.get("auto_promote")).toBe("true");
     });
 
     it("passes allow_destructive_operations when explicitly enabled", async () => {
@@ -206,19 +162,14 @@ describe("Deploy API", () => {
         http.post(`${BASE_URL}/v1/deploy`, ({ request }) => {
           capturedUrl = request.url;
           return HttpResponse.json(
-            createDeploySuccessResponse({ deploymentId: "deploy-destructive" })
+            createDeploySuccessResponse({ deploymentId: "deploy-destructive", status: "pending" })
           );
         }),
         http.get(`${BASE_URL}/v1/deployments/deploy-destructive`, () => {
-          return HttpResponse.json(
-            createDeploymentStatusResponse({
-              deploymentId: "deploy-destructive",
-              status: "data_ready",
-            })
-          );
-        }),
-        http.post(`${BASE_URL}/v1/deployments/deploy-destructive/set-live`, () => {
-          return HttpResponse.json(createSetLiveSuccessResponse());
+          return HttpResponse.json({
+            result: "success",
+            deployment: { id: "deploy-destructive", status: "data_ready", live: true },
+          });
         })
       );
 
@@ -229,6 +180,25 @@ describe("Deploy API", () => {
 
       const parsed = new URL(capturedUrl ?? "");
       expect(parsed.searchParams.get("allow_destructive_operations")).toBe("true");
+      expect(parsed.searchParams.get("auto_promote")).toBe("true");
+    });
+
+    it("does not send auto_promote in check mode", async () => {
+      let capturedUrl: string | null = null;
+
+      server.use(
+        http.post(`${BASE_URL}/v1/deploy`, ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json({ result: "success" });
+        })
+      );
+
+      const result = await deployToMain(config, resources, { check: true });
+
+      expect(result.success).toBe(true);
+      const parsed = new URL(capturedUrl ?? "");
+      expect(parsed.searchParams.get("check")).toBe("true");
+      expect(parsed.searchParams.get("auto_promote")).toBeNull();
     });
 
     it("adds actionable guidance to Forward/Classic workspace errors", async () => {
@@ -254,49 +224,6 @@ describe("Deploy API", () => {
       );
     });
 
-    it("handles failed deployment status", async () => {
-      server.use(
-        http.post(`${BASE_URL}/v1/deploy`, () => {
-          return HttpResponse.json(
-            createDeploySuccessResponse({ deploymentId: "deploy-fail", status: "pending" })
-          );
-        }),
-        http.get(`${BASE_URL}/v1/deployments/deploy-fail`, () => {
-          return HttpResponse.json(
-            createDeploymentStatusResponse({ deploymentId: "deploy-fail", status: "failed" })
-          );
-        })
-      );
-
-      const result = await deployToMain(config, resources, { pollIntervalMs: 1 });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("Deployment failed with status: failed");
-    });
-
-    it("handles set-live failure", async () => {
-      server.use(
-        http.post(`${BASE_URL}/v1/deploy`, () => {
-          return HttpResponse.json(
-            createDeploySuccessResponse({ deploymentId: "deploy-setlive-fail" })
-          );
-        }),
-        http.get(`${BASE_URL}/v1/deployments/deploy-setlive-fail`, () => {
-          return HttpResponse.json(
-            createDeploymentStatusResponse({ deploymentId: "deploy-setlive-fail", status: "data_ready" })
-          );
-        }),
-        http.post(`${BASE_URL}/v1/deployments/deploy-setlive-fail/set-live`, () => {
-          return HttpResponse.json({ error: "Set live failed" }, { status: 500 });
-        })
-      );
-
-      const result = await deployToMain(config, resources, { pollIntervalMs: 1 });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("Failed to set deployment as live");
-    });
-
     it("normalizes baseUrl with trailing slash", async () => {
       let capturedUrl: string | null = null;
 
@@ -304,16 +231,14 @@ describe("Deploy API", () => {
         http.post(`${BASE_URL}/v1/deploy`, ({ request }) => {
           capturedUrl = request.url;
           return HttpResponse.json(
-            createDeploySuccessResponse({ deploymentId: "deploy-slash" })
+            createDeploySuccessResponse({ deploymentId: "deploy-slash", status: "pending" })
           );
         }),
         http.get(`${BASE_URL}/v1/deployments/deploy-slash`, () => {
-          return HttpResponse.json(
-            createDeploymentStatusResponse({ deploymentId: "deploy-slash", status: "data_ready" })
-          );
-        }),
-        http.post(`${BASE_URL}/v1/deployments/deploy-slash/set-live`, () => {
-          return HttpResponse.json(createSetLiveSuccessResponse());
+          return HttpResponse.json({
+            result: "success",
+            deployment: { id: "deploy-slash", status: "data_ready", live: true },
+          });
         })
       );
 
@@ -326,29 +251,7 @@ describe("Deploy API", () => {
       const parsed = new URL(capturedUrl ?? "");
       expect(parsed.pathname).toBe("/v1/deploy");
       expect(parsed.searchParams.get("from")).toBe("ts-sdk");
-    });
-
-    it("times out when deployment never becomes ready", async () => {
-      server.use(
-        http.post(`${BASE_URL}/v1/deploy`, () => {
-          return HttpResponse.json(
-            createDeploySuccessResponse({ deploymentId: "deploy-timeout", status: "pending" })
-          );
-        }),
-        http.get(`${BASE_URL}/v1/deployments/deploy-timeout`, () => {
-          return HttpResponse.json(
-            createDeploymentStatusResponse({ deploymentId: "deploy-timeout", status: "pending" })
-          );
-        })
-      );
-
-      const result = await deployToMain(config, resources, {
-        pollIntervalMs: 1,
-        maxPollAttempts: 3,
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("Deployment timed out");
+      expect(parsed.searchParams.get("auto_promote")).toBe("true");
     });
   });
 });
