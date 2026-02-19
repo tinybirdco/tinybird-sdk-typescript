@@ -393,7 +393,12 @@ Deploy resources to the main Tinybird workspace (production). This is the only w
 ```bash
 tinybird deploy
 tinybird deploy --dry-run  # Preview without pushing
+tinybird deploy --check    # Validate with the API without applying changes
+tinybird deploy --allow-destructive-operations  # Allow deletes in main deploy
 ```
+
+Use `--allow-destructive-operations` only when your deploy intentionally removes
+existing datasources, pipes, or connections from the main workspace.
 
 ### `tinybird pull`
 
