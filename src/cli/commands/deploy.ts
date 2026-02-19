@@ -17,6 +17,8 @@ export interface DeployCommandOptions {
   dryRun?: boolean;
   /** Validate deploy with Tinybird API without applying */
   check?: boolean;
+  /** Allow deleting existing resources in main workspace deploys */
+  allowDestructiveOperations?: boolean;
   /** Callbacks for deploy progress */
   callbacks?: DeployCallbacks;
 }
@@ -103,6 +105,7 @@ export async function runDeploy(options: DeployCommandOptions = {}): Promise<Dep
       buildResult.resources,
       {
         check: options.check,
+        allowDestructiveOperations: options.allowDestructiveOperations,
         callbacks: options.callbacks,
       }
     );

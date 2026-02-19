@@ -7,6 +7,9 @@ import type { GeneratedResources } from "../generator/index.js";
 import type { BuildConfig, BuildApiResult } from "./build.js";
 import { tinybirdFetch } from "./fetcher.js";
 
+const FORWARD_CLASSIC_GUIDANCE =
+  "Use the Tinybird Classic CLI (`tb`) from a Tinybird Classic workspace for this operation.";
+
 /**
  * Feedback item from deployment response
  */
@@ -280,7 +283,7 @@ export async function deployToMain(
       .map((f) => {
         // Extract just the filename from "Datasource events.datasource" format
         const resourceName = f.resource.split(" ").pop() ?? f.resource;
-        return `${resourceName}: ${f.message}`;
+        return `${resourceName}: ${normalizeDeployErrorMessage(f.message)}`;
       })
       .join("\n");
   };
@@ -298,12 +301,12 @@ export async function deployToMain(
       return body.errors
         .map((e) => {
           const prefix = e.filename ? `[${e.filename}] ` : "";
-          return `${prefix}${e.error}`;
+          return `${prefix}${normalizeDeployErrorMessage(e.error)}`;
         })
         .join("\n");
     }
     if (body.error) {
-      return body.error;
+      return normalizeDeployErrorMessage(body.error);
     }
     // Include raw response body for debugging when no structured error is available
     return `HTTP ${response.status}: ${response.statusText}\nResponse: ${rawBody}`;
@@ -531,4 +534,17 @@ export async function deployToMain(
  */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeDeployErrorMessage(message: string): string {
+  const trimmedMessage = message.trim();
+  const isForwardClassicError =
+    trimmedMessage.includes("Tinybird Forward workspace") &&
+    trimmedMessage.includes("Tinybird Classic workspaces");
+
+  if (!isForwardClassicError || trimmedMessage.includes(FORWARD_CLASSIC_GUIDANCE)) {
+    return message;
+  }
+
+  return `${trimmedMessage}\n${FORWARD_CLASSIC_GUIDANCE}`;
 }
