@@ -103,6 +103,30 @@ describe("Deploy API", () => {
       expect(result.error).toContain("General error without filename");
     });
 
+    it("handles deployment feedback entries with null resource", async () => {
+      server.use(
+        http.post(`${BASE_URL}/v1/deploy`, () => {
+          return HttpResponse.json(
+            {
+              result: "failed",
+              deployment: {
+                id: "deploy-null-resource",
+                status: "failed",
+                feedback: [{ resource: null, level: "ERROR", message: "Invalid token" }],
+              },
+            },
+            { status: 200 }
+          );
+        })
+      );
+
+      const result = await deployToMain(config, resources);
+
+      expect(result.success).toBe(false);
+      expect(result.result).toBe("failed");
+      expect(result.error).toContain("unknown: Invalid token");
+    });
+
     it("handles HTTP error responses", async () => {
       server.use(
         http.post(`${BASE_URL}/v1/deploy`, () => {
