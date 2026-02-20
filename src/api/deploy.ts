@@ -14,7 +14,7 @@ const FORWARD_CLASSIC_GUIDANCE =
  * Feedback item from deployment response
  */
 export interface DeploymentFeedback {
-  resource: string;
+  resource: string | null;
   level: "ERROR" | "WARNING" | "INFO";
   message: string;
 }
@@ -245,7 +245,7 @@ export async function deployToMain(
     return feedback
       .map((f) => {
         // Extract just the filename from "Datasource events.datasource" format
-        const resourceName = f.resource.split(" ").pop() ?? f.resource;
+        const resourceName = f.resource?.split(" ").pop() ?? f.resource ?? "unknown";
         return `${resourceName}: ${normalizeDeployErrorMessage(f.message)}`;
       })
       .join("\n");
