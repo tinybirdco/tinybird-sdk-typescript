@@ -52,8 +52,14 @@ function toTinybirdDateTime(value: Date): string {
   return value.toISOString().slice(0, 19).replace("T", " ");
 }
 
-function writeProductionTestEntities(projectDir: string): void {
+function writeProductionTestEntities(
+  projectDir: string,
+  options?: { requireNonNegativeMetric?: boolean }
+): void {
   const tinybirdFile = path.join(projectDir, "lib", "tinybird.ts");
+  const whereClause = options?.requireNonNegativeMetric
+    ? "        WHERE metric_value >= 0\n"
+    : "";
   const content = `import {
   defineDatasource,
   defineEndpoint,
@@ -84,7 +90,7 @@ export const prodDeployRows = defineEndpoint("${ENDPOINT_NAME}", {
           run_id,
           metric_value
         FROM ${DATASOURCE_NAME}
-        ORDER BY timestamp DESC
+${whereClause}        ORDER BY timestamp DESC
         LIMIT 100
       \`,
     }),
@@ -207,6 +213,57 @@ describeLive("E2E Live: deploy", () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(
       rows.some(
+        (row) => row.run_id === runId && Number(row.metric_value) === metricValue
+      )
+    ).toBe(true);
+  });
+
+  it("creates a second deploy after ingestion and keeps deployment live with data preserved", async () => {
+    const initResult = await runInit({
+      cwd: tempDir,
+      skipLogin: true,
+      devMode: "branch",
+      clientPath: "lib/tinybird.ts",
+    });
+    expect(initResult.success).toBe(true);
+
+    setConfigBaseUrl(tempDir, config.baseUrl);
+    writeProductionTestEntities(tempDir);
+
+    const firstDeployResult = await runDeploy({ cwd: tempDir });
+    expect(firstDeployResult.success).toBe(true);
+    expect(firstDeployResult.deploy?.success).toBe(true);
+
+    const tinybird = await importTinybirdClient(tempDir);
+    const runId = `prod_deploy_second_${Date.now()}`;
+    const metricValue = 2048;
+
+    await tinybird.prodDeployEvents.ingest({
+      timestamp: toTinybirdDateTime(new Date()),
+      run_id: runId,
+      metric_value: metricValue,
+    });
+
+    const rowsAfterIngest = await waitForEndpointRows(tinybird, runId);
+    expect(rowsAfterIngest.length).toBeGreaterThan(0);
+    expect(
+      rowsAfterIngest.some(
+        (row) => row.run_id === runId && Number(row.metric_value) === metricValue
+      )
+    ).toBe(true);
+
+    writeProductionTestEntities(tempDir, { requireNonNegativeMetric: true });
+
+    const secondDeployResult = await runDeploy({ cwd: tempDir });
+    expect(secondDeployResult.success).toBe(true);
+    expect(secondDeployResult.deploy?.success).toBe(true);
+    expect(secondDeployResult.deploy?.result).toBe("success");
+    expect(secondDeployResult.deploy?.buildId).toBeTruthy();
+
+    const rowsAfterSecondDeploy = await waitForEndpointRows(tinybird, runId);
+    expect(rowsAfterSecondDeploy.length).toBeGreaterThan(0);
+    expect(
+      rowsAfterSecondDeploy.some(
         (row) => row.run_id === runId && Number(row.metric_value) === metricValue
       )
     ).toBe(true);
