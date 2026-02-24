@@ -192,11 +192,11 @@ function createValidator<TType, TTinybirdType extends string>(
  *   metadata: t.json(),
  * };
  *
- * // With branded/nominal types for extra type safety:
+ * // With custom types for narrower type inference:
  * type UserId = string & { readonly __brand: 'UserId' };
  * type Timestamp = string & { readonly __brand: 'Timestamp' };
  *
- * const brandedSchema = {
+ * const typedSchema = {
  *   user_id: t.string<UserId>(),
  *   created_at: t.dateTime<Timestamp>(),
  * };
