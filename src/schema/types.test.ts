@@ -223,4 +223,84 @@ describe('Type Validators (t.*)', () => {
       expect(type._tinybirdType).toBe("Enum8('only' = 1)");
     });
   });
+
+  describe('Generic type parameters (branded types)', () => {
+    it('string with generic produces same runtime type', () => {
+      type UserId = string & { readonly __brand: 'UserId' };
+      const plain = t.string();
+      const branded = t.string<UserId>();
+      expect(branded._tinybirdType).toBe(plain._tinybirdType);
+      expect(branded._tinybirdType).toBe('String');
+    });
+
+    it('int32 with generic produces same runtime type', () => {
+      type Count = number & { readonly __brand: 'Count' };
+      const plain = t.int32();
+      const branded = t.int32<Count>();
+      expect(branded._tinybirdType).toBe(plain._tinybirdType);
+      expect(branded._tinybirdType).toBe('Int32');
+    });
+
+    it('uuid with generic produces same runtime type', () => {
+      type TraceId = string & { readonly __brand: 'TraceId' };
+      const branded = t.uuid<TraceId>();
+      expect(branded._tinybirdType).toBe('UUID');
+    });
+
+    it('dateTime with generic produces same runtime type', () => {
+      type Timestamp = string & { readonly __brand: 'Timestamp' };
+      const branded = t.dateTime<Timestamp>();
+      expect(branded._tinybirdType).toBe('DateTime');
+    });
+
+    it('dateTime with timezone and generic produces same runtime type', () => {
+      type Timestamp = string & { readonly __brand: 'Timestamp' };
+      const branded = t.dateTime<Timestamp>('UTC');
+      expect(branded._tinybirdType).toBe("DateTime('UTC')");
+    });
+
+    it('bool with generic produces same runtime type', () => {
+      type IsActive = boolean & { readonly __brand: 'IsActive' };
+      const branded = t.bool<IsActive>();
+      expect(branded._tinybirdType).toBe('Bool');
+    });
+
+    it('int128 with generic produces same runtime type', () => {
+      type BigId = bigint & { readonly __brand: 'BigId' };
+      const branded = t.int128<BigId>();
+      expect(branded._tinybirdType).toBe('Int128');
+    });
+
+    it('decimal with generic produces same runtime type', () => {
+      type Price = number & { readonly __brand: 'Price' };
+      const branded = t.decimal<Price>(10, 2);
+      expect(branded._tinybirdType).toBe('Decimal(10, 2)');
+    });
+
+    it('fixedString with generic produces same runtime type', () => {
+      type CountryCode = string & { readonly __brand: 'CountryCode' };
+      const branded = t.fixedString<CountryCode>(2);
+      expect(branded._tinybirdType).toBe('FixedString(2)');
+    });
+
+    it('branded validators support nullable modifier', () => {
+      type UserId = string & { readonly __brand: 'UserId' };
+      const branded = t.string<UserId>().nullable();
+      expect(branded._tinybirdType).toBe('Nullable(String)');
+      expect(branded._modifiers.nullable).toBe(true);
+    });
+
+    it('branded validators support lowCardinality modifier', () => {
+      type StatusCode = string & { readonly __brand: 'StatusCode' };
+      const branded = t.string<StatusCode>().lowCardinality();
+      expect(branded._tinybirdType).toBe('LowCardinality(String)');
+    });
+
+    it('branded validators support default values', () => {
+      type StatusCode = string & { readonly __brand: 'StatusCode' };
+      const branded = t.string<StatusCode>().default('active' as StatusCode);
+      expect(branded._modifiers.hasDefault).toBe(true);
+      expect(branded._modifiers.defaultValue).toBe('active');
+    });
+  });
 });
