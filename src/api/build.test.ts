@@ -195,6 +195,36 @@ describe("Build API", () => {
       const allValues = capturedFormData!.getAll("data_project://");
       expect(allValues.length).toBe(3);
     });
+
+    it("includes connections in form data", async () => {
+      const resourcesWithConnections: GeneratedResources = {
+        ...resources,
+        connections: [
+          {
+            name: "my_kafka",
+            content: "TYPE kafka\nKAFKA_BROKERS kafka:9092\nKAFKA_TOPIC events\n",
+          },
+        ],
+      };
+
+      let capturedFormData: FormData | null = null;
+
+      server.use(
+        http.post(`${BASE_URL}/v1/build`, async ({ request }) => {
+          capturedFormData = await request.formData();
+          return HttpResponse.json(createBuildSuccessResponse());
+        })
+      );
+
+      const result = await buildToTinybird(config, resourcesWithConnections);
+
+      expect(result.success).toBe(true);
+      expect(result.connectionCount).toBe(1);
+      expect(capturedFormData).not.toBeNull();
+      // 2 datasources + 1 pipe + 1 connection
+      const allValues = capturedFormData!.getAll("data_project://");
+      expect(allValues.length).toBe(4);
+    });
   });
 
   describe("validateBuildConfig", () => {
