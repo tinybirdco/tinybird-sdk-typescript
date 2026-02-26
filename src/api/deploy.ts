@@ -202,6 +202,21 @@ export async function deployToMain(
     );
   }
 
+  // Add connections
+  for (const conn of resources.connections ?? []) {
+    const fieldName = `data_project://`;
+    const fileName = `${conn.name}.connection`;
+    if (debug) {
+      console.log(`[debug] Adding connection: ${fieldName} (filename: ${fileName})`);
+      console.log(`[debug] Content:\n${conn.content}\n`);
+    }
+    formData.append(
+      fieldName,
+      new Blob([conn.content], { type: "text/plain" }),
+      fileName
+    );
+  }
+
   // Step 0: Clean up any stale non-live deployments that might block the new deployment
   try {
     const deploymentsUrl = `${baseUrl}/v1/deployments`;
