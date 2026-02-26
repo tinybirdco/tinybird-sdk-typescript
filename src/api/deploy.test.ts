@@ -374,5 +374,47 @@ describe("Deploy API", () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain("Deployment timed out");
     });
+
+    it("includes connections in deploy form data", async () => {
+      const resourcesWithConnections: GeneratedResources = {
+        ...resources,
+        connections: [
+          {
+            name: "my_kafka",
+            content: "TYPE kafka\nKAFKA_BROKERS kafka:9092\nKAFKA_TOPIC events\n",
+          },
+        ],
+      };
+
+      let capturedFormData: FormData | null = null;
+
+      server.use(
+        http.post(`${BASE_URL}/v1/deploy`, async ({ request }) => {
+          capturedFormData = await request.formData();
+          return HttpResponse.json(
+            createDeploySuccessResponse({ deploymentId: "deploy-conn", status: "pending" })
+          );
+        }),
+        http.get(`${BASE_URL}/v1/deployments/deploy-conn`, () => {
+          return HttpResponse.json(
+            createDeploymentStatusResponse({ deploymentId: "deploy-conn", status: "data_ready" })
+          );
+        }),
+        http.post(`${BASE_URL}/v1/deployments/deploy-conn/set-live`, () => {
+          return HttpResponse.json(createSetLiveSuccessResponse());
+        })
+      );
+
+      const result = await deployToMain(config, resourcesWithConnections, {
+        pollIntervalMs: 1,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.connectionCount).toBe(1);
+      expect(capturedFormData).not.toBeNull();
+      // 1 datasource + 1 pipe + 1 connection
+      const allValues = capturedFormData!.getAll("data_project://");
+      expect(allValues.length).toBe(3);
+    });
   });
 });
