@@ -22,6 +22,10 @@
       "import": "./dist/cli/commands/build.js",
       "types": "./dist/cli/commands/build.d.ts"
     },
+    "./cli/commands/generate": {
+      "import": "./dist/cli/commands/generate.js",
+      "types": "./dist/cli/commands/generate.d.ts"
+    },
     "./cli/commands/login": {
       "import": "./dist/cli/commands/login.js",
       "types": "./dist/cli/commands/login.d.ts"
