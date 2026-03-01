@@ -18,6 +18,7 @@ import pc from "picocolors";
 import { runInit } from "./commands/init.js";
 import { runBuild } from "./commands/build.js";
 import { runDeploy } from "./commands/deploy.js";
+import { runGenerate } from "./commands/generate.js";
 import { runPreview } from "./commands/preview.js";
 import { runDev } from "./commands/dev.js";
 import { runMigrate } from "./commands/migrate.js";
@@ -358,6 +359,46 @@ function createCli(): Command {
           output.showBuildSuccess(result.durationMs);
         }
       }
+    });
+
+  // Generate command
+  program
+    .command("generate")
+    .description("Generate Tinybird datafiles from TypeScript definitions")
+    .option("--json", "Output JSON artifacts (for external consumers)")
+    .option(
+      "-o, --output-dir <path>",
+      "Write generated files to a target directory"
+    )
+    .action(async (options) => {
+      const result = await runGenerate({
+        outputDir: options.outputDir,
+      });
+
+      if (!result.success) {
+        console.error(`Error: ${result.error}`);
+        process.exit(1);
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      const stats = result.stats ?? {
+        datasourceCount: 0,
+        pipeCount: 0,
+        connectionCount: 0,
+        totalCount: 0,
+      };
+
+      console.log(
+        `Generated ${stats.totalCount} resources (${stats.datasourceCount} datasources, ${stats.pipeCount} pipes, ${stats.connectionCount} connections)`
+      );
+      if (result.outputDir) {
+        console.log(`Written to: ${result.outputDir}`);
+      }
+      console.log(`Completed in ${output.formatDuration(result.durationMs)}`);
     });
 
   // Migrate command

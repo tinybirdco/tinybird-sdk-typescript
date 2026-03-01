@@ -1,6 +1,6 @@
 {
   "name": "@tinybirdco/sdk",
-  "version": "0.0.56",
+  "version": "0.0.57",
   "description": "TypeScript SDK for Tinybird Forward - define datasources and pipes as TypeScript",
   "type": "module",
   "main": "./dist/index.js",
@@ -21,6 +21,10 @@
     "./cli/commands/build": {
       "import": "./dist/cli/commands/build.js",
       "types": "./dist/cli/commands/build.d.ts"
+    },
+    "./cli/commands/generate": {
+      "import": "./dist/cli/commands/generate.js",
+      "types": "./dist/cli/commands/generate.d.ts"
     },
     "./cli/commands/login": {
       "import": "./dist/cli/commands/login.js",
