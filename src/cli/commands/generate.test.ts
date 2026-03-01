@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { runGenerate } from "./generate.js";
 
 vi.mock("../config.js", () => ({
@@ -90,5 +93,88 @@ describe("Generate command", () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain("No tinybird config");
   });
-});
 
+  it("writes artifacts to outputDir when requested", async () => {
+    const { loadConfigAsync } = await import("../config.js");
+    const { buildFromInclude } = await import("../../generator/index.js");
+
+    vi.mocked(loadConfigAsync).mockResolvedValue({
+      include: ["lib/tinybird.ts"],
+      token: "p.test-token",
+      baseUrl: "https://api.tinybird.co",
+      configPath: "/tmp/tinybird.config.json",
+      cwd: "/tmp",
+      gitBranch: "feature-x",
+      tinybirdBranch: "feature_x",
+      isMainBranch: false,
+      devMode: "branch",
+    });
+
+    vi.mocked(buildFromInclude).mockResolvedValue({
+      resources: {
+        datasources: [{ name: "events", content: "SCHEMA >" }],
+        pipes: [{ name: "events_endpoint", content: "TYPE endpoint" }],
+        connections: [{ name: "kafka_main", content: "TYPE kafka" }],
+      },
+      entities: {
+        datasources: {},
+        pipes: {},
+        connections: {},
+        rawDatasources: [],
+        rawPipes: [],
+        sourceFiles: [],
+      },
+      stats: {
+        datasourceCount: 1,
+        pipeCount: 1,
+        connectionCount: 1,
+      },
+    });
+
+    const outputDir = await mkdtemp(join(tmpdir(), "tb-generate-test-"));
+    try {
+      const result = await runGenerate({ outputDir });
+
+      expect(result.success).toBe(true);
+      expect(
+        await readFile(join(outputDir, "datasources/events.datasource"), "utf-8")
+      ).toBe("SCHEMA >");
+      expect(
+        await readFile(join(outputDir, "pipes/events_endpoint.pipe"), "utf-8")
+      ).toBe("TYPE endpoint");
+      expect(
+        await readFile(
+          join(outputDir, "connections/kafka_main.connection"),
+          "utf-8"
+        )
+      ).toBe("TYPE kafka");
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns an error when buildFromInclude fails", async () => {
+    const { loadConfigAsync } = await import("../config.js");
+    const { buildFromInclude } = await import("../../generator/index.js");
+
+    vi.mocked(loadConfigAsync).mockResolvedValue({
+      include: ["lib/tinybird.ts"],
+      token: "p.test-token",
+      baseUrl: "https://api.tinybird.co",
+      configPath: "/tmp/tinybird.config.json",
+      cwd: "/tmp",
+      gitBranch: "feature-x",
+      tinybirdBranch: "feature_x",
+      isMainBranch: false,
+      devMode: "branch",
+    });
+    vi.mocked(buildFromInclude).mockRejectedValue(
+      new Error("generator failed")
+    );
+
+    const result = await runGenerate();
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("generator failed");
+  });
+});
