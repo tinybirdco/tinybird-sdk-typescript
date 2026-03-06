@@ -239,6 +239,48 @@ describe("TinybirdApi", () => {
     expect(attempts).toBe(1);
   });
 
+  it("retries ingest on 503 with exponential backoff when configured", async () => {
+    let attempts = 0;
+
+    server.use(
+      http.post(`${BASE_URL}/v0/events`, () => {
+        attempts += 1;
+        if (attempts === 1) {
+          return new HttpResponse("Service unavailable", { status: 503 });
+        }
+
+        return HttpResponse.json({
+          successful_rows: 1,
+          quarantined_rows: 0,
+        });
+      })
+    );
+
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+    });
+
+    const result = await api.ingest(
+      "events",
+      { timestamp: "2024-01-01 00:00:00" },
+      {
+        retry: {
+          maxRetries: 1,
+          retry503: {
+            maxRetries: 1,
+            baseDelayMs: 0,
+            maxDelayMs: 0,
+            jitter: false,
+          },
+        },
+      }
+    );
+
+    expect(result).toEqual({ successful_rows: 1, quarantined_rows: 0 });
+    expect(attempts).toBe(2);
+  });
+
   it("retries ingest on 429 with retry-after header and succeeds", async () => {
     let attempts = 0;
 
@@ -439,6 +481,83 @@ describe("TinybirdApi", () => {
     });
 
     expect(attempts).toBe(3);
+  });
+
+  it("stops retrying ingest after maxRetries on 503 when configured", async () => {
+    let attempts = 0;
+
+    server.use(
+      http.post(`${BASE_URL}/v0/events`, () => {
+        attempts += 1;
+        return new HttpResponse("Service unavailable", { status: 503 });
+      })
+    );
+
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+    });
+
+    await expect(
+      api.ingest(
+        "events",
+        { timestamp: "2024-01-01 00:00:00" },
+        {
+          retry: {
+            retry503: {
+              maxRetries: 2,
+              baseDelayMs: 0,
+              maxDelayMs: 0,
+              jitter: false,
+            },
+          },
+        }
+      )
+    ).rejects.toMatchObject({
+      name: "TinybirdApiError",
+      statusCode: 503,
+    });
+
+    expect(attempts).toBe(3);
+  });
+
+  it("does not retry ingest on 503 when wait is false", async () => {
+    let attempts = 0;
+
+    server.use(
+      http.post(`${BASE_URL}/v0/events`, () => {
+        attempts += 1;
+        return new HttpResponse("Service unavailable", { status: 503 });
+      })
+    );
+
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+    });
+
+    await expect(
+      api.ingest(
+        "events",
+        { timestamp: "2024-01-01 00:00:00" },
+        {
+          wait: false,
+          retry: {
+            retry503: {
+              maxRetries: 3,
+              baseDelayMs: 0,
+              maxDelayMs: 0,
+              jitter: false,
+            },
+          },
+        }
+      )
+    ).rejects.toMatchObject({
+      name: "TinybirdApiError",
+      statusCode: 503,
+    });
+
+    expect(attempts).toBe(1);
   });
 
   it("does not retry 500 even when wait is false", async () => {

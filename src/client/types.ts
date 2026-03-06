@@ -161,15 +161,37 @@ export interface IngestOptions {
 
 /**
  * Retry strategy for ingest requests.
- * Retries apply only to HTTP 429 responses and only when the response includes
- * Retry-After or X-RateLimit-Reset headers.
+ * - HTTP 429: retries require Retry-After or X-RateLimit-Reset headers.
+ * - HTTP 503: retries are optional and configurable via `retry503`.
  */
 export interface IngestRetryOptions {
   /**
-   * Number of retry attempts after the first request.
+   * Number of retry attempts after the first request for HTTP 429.
    * Example: 2 means at most 3 total attempts.
    */
   maxRetries?: number;
+  /**
+   * Optional retry strategy for HTTP 503 responses (wait=true only).
+   * Set to false or leave undefined to disable 503 retries.
+   */
+  retry503?: IngestRetry503Options | false;
+}
+
+/**
+ * Retry strategy for HTTP 503 ingest responses.
+ */
+export interface IngestRetry503Options {
+  /**
+   * Number of retry attempts after the first 503 response.
+   * Example: 2 means at most 3 total attempts.
+   */
+  maxRetries?: number;
+  /** Base delay in milliseconds for exponential backoff (default: 200) */
+  baseDelayMs?: number;
+  /** Maximum delay in milliseconds for exponential backoff (default: 3000) */
+  maxDelayMs?: number;
+  /** Add random jitter to delay to avoid synchronized retries (default: true) */
+  jitter?: boolean;
 }
 
 /**

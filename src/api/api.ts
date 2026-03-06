@@ -5,6 +5,7 @@ import type {
   DeleteOptions,
   DeleteResult,
   IngestOptions,
+  IngestRetry503Options,
   IngestResult,
   QueryOptions,
   QueryResult,
@@ -15,6 +16,9 @@ import type {
 
 const DEFAULT_TIMEOUT = 30000;
 const DEFAULT_INGEST_RETRY_MAX_RETRIES = 2;
+const DEFAULT_INGEST_RETRY_503_MAX_RETRIES = 2;
+const DEFAULT_INGEST_RETRY_503_BASE_DELAY_MS = 200;
+const DEFAULT_INGEST_RETRY_503_MAX_DELAY_MS = 3000;
 
 /**
  * Public, decoupled Tinybird API wrapper configuration
@@ -67,6 +71,14 @@ export interface TinybirdApiTruncateOptions extends TruncateOptions {
 
 interface NormalizedIngestRetryOptions {
   maxRetries: number;
+  retry503?: NormalizedIngestRetry503Options;
+}
+
+interface NormalizedIngestRetry503Options {
+  maxRetries: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  jitter: boolean;
 }
 
 /**
@@ -286,7 +298,9 @@ export class TinybirdApi {
       .join("\n");
     const signal = this.createAbortSignal(options.timeout, options.signal);
     const retryOptions = this.resolveIngestRetryOptions(options.retry);
-    let retryCount = 0;
+    const waitEnabled = options.wait !== false;
+    let retry429Count = 0;
+    let retry503Count = 0;
 
     while (true) {
       let response: Response;
@@ -309,22 +323,28 @@ export class TinybirdApi {
         return (await response.json()) as IngestResult;
       }
 
-      if (
-        !retryOptions ||
-        retryCount >= retryOptions.maxRetries ||
-        !this.shouldRetryIngestStatus(response.status)
-      ) {
-        await this.handleErrorResponse(response);
+      const retry429Delay = this.resolveRetry429Delay(response, retryOptions, retry429Count);
+      if (retry429Delay !== undefined) {
+        await this.discardResponseBody(response);
+        await this.sleep(retry429Delay, signal);
+        retry429Count += 1;
+        continue;
       }
 
-      const retryDelay = this.resolveRetryDelayFromHeaders(response);
-      if (retryDelay === undefined) {
-        await this.handleErrorResponse(response);
+      const retry503Delay = this.resolveRetry503Delay(
+        response,
+        retryOptions,
+        retry503Count,
+        waitEnabled
+      );
+      if (retry503Delay !== undefined) {
+        await this.discardResponseBody(response);
+        await this.sleep(retry503Delay, signal);
+        retry503Count += 1;
+        continue;
       }
 
-      await this.discardResponseBody(response);
-      await this.sleep(retryDelay!, signal);
-      retryCount += 1;
+      await this.handleErrorResponse(response);
     }
   }
 
@@ -613,13 +633,67 @@ export class TinybirdApi {
       return undefined;
     }
 
-    return {
+    const normalized: NormalizedIngestRetryOptions = {
       maxRetries: retry.maxRetries ?? DEFAULT_INGEST_RETRY_MAX_RETRIES,
+    };
+
+    if (retry.retry503) {
+      normalized.retry503 = this.resolveIngestRetry503Options(retry.retry503);
+    }
+
+    return normalized;
+  }
+
+  private resolveIngestRetry503Options(
+    retry503: IngestRetry503Options
+  ): NormalizedIngestRetry503Options {
+    return {
+      maxRetries: retry503.maxRetries ?? DEFAULT_INGEST_RETRY_503_MAX_RETRIES,
+      baseDelayMs: retry503.baseDelayMs ?? DEFAULT_INGEST_RETRY_503_BASE_DELAY_MS,
+      maxDelayMs: retry503.maxDelayMs ?? DEFAULT_INGEST_RETRY_503_MAX_DELAY_MS,
+      jitter: retry503.jitter ?? true,
     };
   }
 
-  private shouldRetryIngestStatus(statusCode: number): boolean {
-    return statusCode === 429;
+  private resolveRetry429Delay(
+    response: Response,
+    retryOptions: NormalizedIngestRetryOptions | undefined,
+    retry429Count: number
+  ): number | undefined {
+    if (!retryOptions) {
+      return undefined;
+    }
+
+    if (response.status !== 429) {
+      return undefined;
+    }
+
+    if (retry429Count >= retryOptions.maxRetries) {
+      return undefined;
+    }
+
+    return this.resolveRetryDelayFromHeaders(response);
+  }
+
+  private resolveRetry503Delay(
+    response: Response,
+    retryOptions: NormalizedIngestRetryOptions | undefined,
+    retry503Count: number,
+    waitEnabled: boolean
+  ): number | undefined {
+    if (!retryOptions?.retry503 || !waitEnabled) {
+      return undefined;
+    }
+
+    if (response.status !== 503) {
+      return undefined;
+    }
+
+    if (retry503Count >= retryOptions.retry503.maxRetries) {
+      return undefined;
+    }
+
+    return this.calculateRetry503DelayMs(retryOptions.retry503, retry503Count);
   }
 
   private resolveRetryDelayFromHeaders(response: Response): number | undefined {
@@ -667,6 +741,22 @@ export class TinybirdApi {
     }
 
     return Math.max(0, Math.floor(numericValue * 1000));
+  }
+
+  private calculateRetry503DelayMs(
+    retry503: NormalizedIngestRetry503Options,
+    retryCount: number
+  ): number {
+    const exponentialDelay = Math.min(
+      retry503.maxDelayMs,
+      retry503.baseDelayMs * 2 ** retryCount
+    );
+
+    if (!retry503.jitter) {
+      return exponentialDelay;
+    }
+
+    return Math.floor(Math.random() * (exponentialDelay + 1));
   }
 
   private async discardResponseBody(response: Response): Promise<void> {

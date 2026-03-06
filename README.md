@@ -247,8 +247,9 @@ await api.ingest<EventRow>("events", {
   pathname: "/home",
 });
 
-// Ingest with retries for rate limiting (HTTP 429 only, disabled by default).
-// Retries are attempted only when Retry-After / X-RateLimit-Reset is present.
+// Ingest retry behavior (disabled by default):
+// - 429 retries use Retry-After / X-RateLimit-Reset headers.
+// - 503 retries are optional and use exponential backoff (wait=true only).
 await api.ingest<EventRow>(
   "events",
   {
@@ -260,6 +261,11 @@ await api.ingest<EventRow>(
     wait: true,
     retry: {
       maxRetries: 3,
+      retry503: {
+        maxRetries: 2,
+        baseDelayMs: 250,
+        maxDelayMs: 3000,
+      },
     },
   }
 );
