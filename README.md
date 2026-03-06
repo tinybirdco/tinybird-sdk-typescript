@@ -247,6 +247,23 @@ await api.ingest<EventRow>("events", {
   pathname: "/home",
 });
 
+// Ingest with retries for rate limiting (HTTP 429 only, disabled by default).
+// Retries are attempted only when Retry-After / X-RateLimit-Reset is present.
+await api.ingest<EventRow>(
+  "events",
+  {
+    timestamp: "2024-01-15 10:31:00",
+    event_name: "button_click",
+    pathname: "/pricing",
+  },
+  {
+    wait: true,
+    retry: {
+      maxRetries: 3,
+    },
+  }
+);
+
 // Import rows from URL/file
 await api.appendDatasource("events", {
   url: "https://example.com/events.csv",

@@ -14,6 +14,7 @@ import type {
 } from "../client/types.js";
 
 const DEFAULT_TIMEOUT = 30000;
+const DEFAULT_INGEST_RETRY_MAX_RETRIES = 2;
 
 /**
  * Public, decoupled Tinybird API wrapper configuration
@@ -62,6 +63,10 @@ export interface TinybirdApiDeleteOptions extends Omit<DeleteOptions, 'deleteCon
 export interface TinybirdApiTruncateOptions extends TruncateOptions {
   /** Optional token override for this request */
   token?: string;
+}
+
+interface NormalizedIngestRetryOptions {
+  maxRetries: number;
 }
 
 /**
@@ -279,22 +284,47 @@ export class TinybirdApi {
     const ndjson = events
       .map((event) => JSON.stringify(this.serializeEvent(event)))
       .join("\n");
+    const signal = this.createAbortSignal(options.timeout, options.signal);
+    const retryOptions = this.resolveIngestRetryOptions(options.retry);
+    let retryCount = 0;
 
-    const response = await this.request(url.toString(), {
-      method: "POST",
-      token: options.token,
-      headers: {
-        "Content-Type": "application/x-ndjson",
-      },
-      body: ndjson,
-      signal: this.createAbortSignal(options.timeout, options.signal),
-    });
+    while (true) {
+      let response: Response;
 
-    if (!response.ok) {
-      await this.handleErrorResponse(response);
+      try {
+        response = await this.request(url.toString(), {
+          method: "POST",
+          token: options.token,
+          headers: {
+            "Content-Type": "application/x-ndjson",
+          },
+          body: ndjson,
+          signal,
+        });
+      } catch (error) {
+        throw error;
+      }
+
+      if (response.ok) {
+        return (await response.json()) as IngestResult;
+      }
+
+      if (
+        !retryOptions ||
+        retryCount >= retryOptions.maxRetries ||
+        !this.shouldRetryIngestStatus(response.status)
+      ) {
+        await this.handleErrorResponse(response);
+      }
+
+      const retryDelay = this.resolveRetryDelayFromHeaders(response);
+      if (retryDelay === undefined) {
+        await this.handleErrorResponse(response);
+      }
+
+      await this.sleep(retryDelay!, signal);
+      retryCount += 1;
     }
-
-    return (await response.json()) as IngestResult;
   }
 
   /**
@@ -573,6 +603,103 @@ export class TinybirdApi {
     }
 
     return AbortSignal.any([timeoutSignal, existingSignal]);
+  }
+
+  private resolveIngestRetryOptions(
+    retry: TinybirdApiIngestOptions["retry"]
+  ): NormalizedIngestRetryOptions | undefined {
+    if (!retry) {
+      return undefined;
+    }
+
+    return {
+      maxRetries: retry.maxRetries ?? DEFAULT_INGEST_RETRY_MAX_RETRIES,
+    };
+  }
+
+  private shouldRetryIngestStatus(statusCode: number): boolean {
+    return statusCode === 429;
+  }
+
+  private resolveRetryDelayFromHeaders(response: Response): number | undefined {
+    const retryAfter = response.headers.get("retry-after");
+    const retryAfterDelay = this.parseRetryAfterDelayMs(retryAfter);
+    if (retryAfterDelay !== undefined) {
+      return retryAfterDelay;
+    }
+
+    const rateLimitReset = response.headers.get("x-ratelimit-reset");
+    const rateLimitResetDelay = this.parseRateLimitResetDelayMs(rateLimitReset);
+    if (rateLimitResetDelay !== undefined) {
+      return rateLimitResetDelay;
+    }
+    return undefined;
+  }
+
+  private parseRetryAfterDelayMs(value: string | null): number | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    const seconds = Number(trimmed);
+    if (Number.isFinite(seconds)) {
+      return Math.max(0, Math.floor(seconds * 1000));
+    }
+
+    const retryDateMs = Date.parse(trimmed);
+    if (Number.isNaN(retryDateMs)) {
+      return undefined;
+    }
+
+    return Math.max(0, retryDateMs - Date.now());
+  }
+
+  private parseRateLimitResetDelayMs(value: string | null): number | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    const numericValue = Number(value.trim());
+    if (!Number.isFinite(numericValue)) {
+      return undefined;
+    }
+
+    return Math.max(0, Math.floor(numericValue * 1000));
+  }
+
+  private async sleep(delayMs: number, signal?: AbortSignal): Promise<void> {
+    if (delayMs <= 0) {
+      return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve();
+      }, delayMs);
+
+      const onAbort = () => {
+        cleanup();
+        reject(signal?.reason ?? new DOMException("The operation was aborted.", "AbortError"));
+      };
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+      };
+
+      if (!signal) {
+        return;
+      }
+
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
   }
 
   private serializeEvent(

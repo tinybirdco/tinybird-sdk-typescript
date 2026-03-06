@@ -207,6 +207,256 @@ describe("TinybirdApi", () => {
     ).rejects.toThrow("Date values are not supported in ingest payloads");
   });
 
+  it("does not retry ingest on 503", async () => {
+    let attempts = 0;
+
+    server.use(
+      http.post(`${BASE_URL}/v0/events`, () => {
+        attempts += 1;
+        return new HttpResponse("Service unavailable", { status: 503 });
+      })
+    );
+
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+    });
+
+    await expect(
+      api.ingest(
+        "events",
+        { timestamp: "2024-01-01 00:00:00" },
+        {
+          retry: {
+            maxRetries: 1,
+          },
+        }
+      )
+    ).rejects.toMatchObject({
+      name: "TinybirdApiError",
+      statusCode: 503,
+    });
+    expect(attempts).toBe(1);
+  });
+
+  it("retries ingest on 429 with retry-after header and succeeds", async () => {
+    let attempts = 0;
+
+    server.use(
+      http.post(`${BASE_URL}/v0/events`, () => {
+        attempts += 1;
+        if (attempts === 1) {
+          return new HttpResponse("Rate limited", {
+            status: 429,
+            headers: {
+              "Retry-After": "0",
+            },
+          });
+        }
+
+        return HttpResponse.json({
+          successful_rows: 1,
+          quarantined_rows: 0,
+        });
+      })
+    );
+
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+    });
+
+    const result = await api.ingest(
+      "events",
+      { timestamp: "2024-01-01 00:00:00" },
+      {
+        retry: {
+          maxRetries: 1,
+        },
+      }
+    );
+
+    expect(result).toEqual({ successful_rows: 1, quarantined_rows: 0 });
+    expect(attempts).toBe(2);
+  });
+
+  it("does not retry 429 when rate-limit delay headers are missing", async () => {
+    let attempts = 0;
+
+    server.use(
+      http.post(`${BASE_URL}/v0/events`, () => {
+        attempts += 1;
+        return new HttpResponse("Rate limited", { status: 429 });
+      })
+    );
+
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+    });
+
+    await expect(
+      api.ingest(
+        "events",
+        { timestamp: "2024-01-01 00:00:00" },
+        {
+          retry: {
+            maxRetries: 3,
+          },
+        }
+      )
+    ).rejects.toMatchObject({
+      name: "TinybirdApiError",
+      statusCode: 429,
+    });
+    expect(attempts).toBe(1);
+  });
+
+  it("does not retry ingest on non-retryable status by default", async () => {
+    let attempts = 0;
+
+    server.use(
+      http.post(`${BASE_URL}/v0/events`, () => {
+        attempts += 1;
+        return HttpResponse.json({ error: "Invalid payload" }, { status: 400 });
+      })
+    );
+
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+    });
+
+    await expect(
+      api.ingest(
+        "events",
+        { timestamp: "2024-01-01 00:00:00" },
+        {
+          retry: {
+            maxRetries: 3,
+          },
+        }
+      )
+    ).rejects.toMatchObject({
+      name: "TinybirdApiError",
+      statusCode: 400,
+    });
+
+    expect(attempts).toBe(1);
+  });
+
+  it("stops retrying ingest after maxRetries on 429", async () => {
+    let attempts = 0;
+
+    server.use(
+      http.post(`${BASE_URL}/v0/events`, () => {
+        attempts += 1;
+        return new HttpResponse("Rate limited", {
+          status: 429,
+          headers: {
+            "Retry-After": "0",
+          },
+        });
+      })
+    );
+
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+    });
+
+    await expect(
+      api.ingest(
+        "events",
+        { timestamp: "2024-01-01 00:00:00" },
+        {
+          retry: {
+            maxRetries: 2,
+          },
+        }
+      )
+    ).rejects.toMatchObject({
+      name: "TinybirdApiError",
+      statusCode: 429,
+    });
+
+    expect(attempts).toBe(3);
+  });
+
+  it("does not retry 500 even when wait is false", async () => {
+    let attempts = 0;
+
+    server.use(
+      http.post(`${BASE_URL}/v0/events`, () => {
+        attempts += 1;
+        return new HttpResponse("Internal error", { status: 500 });
+      })
+    );
+
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+    });
+
+    await expect(
+      api.ingest(
+        "events",
+        { timestamp: "2024-01-01 00:00:00" },
+        {
+          wait: false,
+          retry: {
+            maxRetries: 3,
+          },
+        }
+      )
+    ).rejects.toMatchObject({
+      name: "TinybirdApiError",
+      statusCode: 500,
+    });
+
+    expect(attempts).toBe(1);
+  });
+
+  it("does not retry ingest on transient network errors", async () => {
+    let fetchAttempts = 0;
+
+    server.use(
+      http.post(`${BASE_URL}/v0/events`, () => {
+        return HttpResponse.json({
+          successful_rows: 1,
+          quarantined_rows: 0,
+        });
+      })
+    );
+
+    const flakyFetch: typeof fetch = async (input, init) => {
+      fetchAttempts += 1;
+      if (fetchAttempts === 1) {
+        throw new TypeError("fetch failed");
+      }
+      return fetch(input, init);
+    };
+
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+      fetch: flakyFetch,
+    });
+
+    await expect(
+      api.ingest(
+        "events",
+        { timestamp: "2024-01-01 00:00:00" },
+        {
+          retry: {
+            maxRetries: 1,
+          },
+        }
+      )
+    ).rejects.toThrow("fetch failed");
+    expect(fetchAttempts).toBe(1);
+  });
+
   it("executes raw SQL via tinybirdApi.sql", async () => {
     let rawSql: string | null = null;
     let contentType: string | null = null;

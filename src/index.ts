@@ -249,6 +249,7 @@ export type {
   IngestResult,
   QueryOptions,
   IngestOptions,
+  IngestRetryOptions,
   TruncateOptions,
   TruncateResult,
   ColumnMeta,

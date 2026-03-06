@@ -152,6 +152,24 @@ export interface IngestOptions {
   signal?: AbortSignal;
   /** Wait for the ingestion to complete before returning */
   wait?: boolean;
+  /**
+   * Retry strategy for transient ingest failures.
+   * Set to false to disable retries (default behavior).
+   */
+  retry?: IngestRetryOptions | false;
+}
+
+/**
+ * Retry strategy for ingest requests.
+ * Retries apply only to HTTP 429 responses and only when the response includes
+ * Retry-After or X-RateLimit-Reset headers.
+ */
+export interface IngestRetryOptions {
+  /**
+   * Number of retry attempts after the first request.
+   * Example: 2 means at most 3 total attempts.
+   */
+  maxRetries?: number;
 }
 
 /**
