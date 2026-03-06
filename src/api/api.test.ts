@@ -280,6 +280,64 @@ describe("TinybirdApi", () => {
     expect(attempts).toBe(2);
   });
 
+  it("drains retryable 429 response body before retrying", async () => {
+    let attempts = 0;
+    let firstResponse: Response | undefined;
+
+    const customFetch: typeof fetch = async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode("rate limited"));
+            controller.close();
+          },
+        });
+
+        firstResponse = new Response(stream, {
+          status: 429,
+          headers: {
+            "Retry-After": "0",
+          },
+        });
+        return firstResponse;
+      }
+
+      return new Response(
+        JSON.stringify({
+          successful_rows: 1,
+          quarantined_rows: 0,
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    };
+
+    const api = createTinybirdApi({
+      baseUrl: BASE_URL,
+      token: "p.default-token",
+      fetch: customFetch,
+    });
+
+    const result = await api.ingest(
+      "events",
+      { timestamp: "2024-01-01 00:00:00" },
+      {
+        retry: {
+          maxRetries: 1,
+        },
+      }
+    );
+
+    expect(result).toEqual({ successful_rows: 1, quarantined_rows: 0 });
+    expect(attempts).toBe(2);
+    expect(firstResponse?.bodyUsed).toBe(true);
+  });
+
   it("does not retry 429 when rate-limit delay headers are missing", async () => {
     let attempts = 0;
 

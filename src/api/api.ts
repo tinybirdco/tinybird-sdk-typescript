@@ -322,6 +322,7 @@ export class TinybirdApi {
         await this.handleErrorResponse(response);
       }
 
+      await this.discardResponseBody(response);
       await this.sleep(retryDelay!, signal);
       retryCount += 1;
     }
@@ -666,6 +667,22 @@ export class TinybirdApi {
     }
 
     return Math.max(0, Math.floor(numericValue * 1000));
+  }
+
+  private async discardResponseBody(response: Response): Promise<void> {
+    if (response.bodyUsed || !response.body) {
+      return;
+    }
+
+    try {
+      await response.arrayBuffer();
+    } catch {
+      try {
+        await response.body.cancel();
+      } catch {
+        // Best effort cleanup only; never mask retry/error flow.
+      }
+    }
   }
 
   private async sleep(delayMs: number, signal?: AbortSignal): Promise<void> {
