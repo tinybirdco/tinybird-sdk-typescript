@@ -78,7 +78,6 @@ interface NormalizedIngestRetry503Options {
   maxRetries: number;
   baseDelayMs: number;
   maxDelayMs: number;
-  jitter: boolean;
 }
 
 /**
@@ -651,7 +650,6 @@ export class TinybirdApi {
       maxRetries: retry503.maxRetries ?? DEFAULT_INGEST_RETRY_503_MAX_RETRIES,
       baseDelayMs: retry503.baseDelayMs ?? DEFAULT_INGEST_RETRY_503_BASE_DELAY_MS,
       maxDelayMs: retry503.maxDelayMs ?? DEFAULT_INGEST_RETRY_503_MAX_DELAY_MS,
-      jitter: retry503.jitter ?? true,
     };
   }
 
@@ -747,16 +745,10 @@ export class TinybirdApi {
     retry503: NormalizedIngestRetry503Options,
     retryCount: number
   ): number {
-    const exponentialDelay = Math.min(
+    return Math.min(
       retry503.maxDelayMs,
       retry503.baseDelayMs * 2 ** retryCount
     );
-
-    if (!retry503.jitter) {
-      return exponentialDelay;
-    }
-
-    return Math.floor(Math.random() * (exponentialDelay + 1));
   }
 
   private async discardResponseBody(response: Response): Promise<void> {

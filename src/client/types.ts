@@ -190,8 +190,6 @@ export interface IngestRetry503Options {
   baseDelayMs?: number;
   /** Maximum delay in milliseconds for exponential backoff (default: 3000) */
   maxDelayMs?: number;
-  /** Add random jitter to delay to avoid synchronized retries (default: true) */
-  jitter?: boolean;
 }
 
 /**

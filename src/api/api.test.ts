@@ -271,7 +271,6 @@ describe("TinybirdApi", () => {
             maxRetries: 1,
             baseDelayMs: 0,
             maxDelayMs: 0,
-            jitter: false,
           },
         },
       }
@@ -508,7 +507,6 @@ describe("TinybirdApi", () => {
               maxRetries: 2,
               baseDelayMs: 0,
               maxDelayMs: 0,
-              jitter: false,
             },
           },
         }
@@ -547,7 +545,6 @@ describe("TinybirdApi", () => {
               maxRetries: 3,
               baseDelayMs: 0,
               maxDelayMs: 0,
-              jitter: false,
             },
           },
         }
