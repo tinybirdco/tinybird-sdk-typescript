@@ -258,9 +258,7 @@ await api.ingest<EventRow>(
     pathname: "/pricing",
   },
   {
-    retry: {
-      maxRetries: 3,
-    },
+    maxRetries: 3,
   }
 );
 

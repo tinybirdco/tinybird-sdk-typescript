@@ -257,9 +257,7 @@ describe("TinybirdApi", () => {
       "events",
       { timestamp: "2024-01-01 00:00:00" },
       {
-        retry: {
-          maxRetries: 1,
-        },
+        maxRetries: 1,
       }
     );
 
@@ -298,9 +296,7 @@ describe("TinybirdApi", () => {
       "events",
       { timestamp: "2024-01-01 00:00:00" },
       {
-        retry: {
-          maxRetries: 1,
-        },
+        maxRetries: 1,
       }
     );
 
@@ -355,9 +351,7 @@ describe("TinybirdApi", () => {
       "events",
       { timestamp: "2024-01-01 00:00:00" },
       {
-        retry: {
-          maxRetries: 1,
-        },
+        maxRetries: 1,
       }
     );
 
@@ -386,9 +380,7 @@ describe("TinybirdApi", () => {
         "events",
         { timestamp: "2024-01-01 00:00:00" },
         {
-          retry: {
-            maxRetries: 3,
-          },
+          maxRetries: 3,
         }
       )
     ).rejects.toMatchObject({
@@ -418,9 +410,7 @@ describe("TinybirdApi", () => {
         "events",
         { timestamp: "2024-01-01 00:00:00" },
         {
-          retry: {
-            maxRetries: 3,
-          },
+          maxRetries: 3,
         }
       )
     ).rejects.toMatchObject({
@@ -456,9 +446,7 @@ describe("TinybirdApi", () => {
         "events",
         { timestamp: "2024-01-01 00:00:00" },
         {
-          retry: {
-            maxRetries: 2,
-          },
+          maxRetries: 2,
         }
       )
     ).rejects.toMatchObject({
@@ -489,9 +477,7 @@ describe("TinybirdApi", () => {
         "events",
         { timestamp: "2024-01-01 00:00:00" },
         {
-          retry: {
-            maxRetries: 2,
-          },
+          maxRetries: 2,
         }
       )
     ).rejects.toMatchObject({
@@ -529,9 +515,7 @@ describe("TinybirdApi", () => {
       { timestamp: "2024-01-01 00:00:00" },
       {
         wait: false,
-        retry: {
-          maxRetries: 1,
-        },
+        maxRetries: 1,
       }
     );
 
@@ -563,9 +547,7 @@ describe("TinybirdApi", () => {
         { timestamp: "2024-01-01 00:00:00" },
         {
           wait: false,
-          retry: {
-            maxRetries: 3,
-          },
+          maxRetries: 3,
         }
       )
     ).rejects.toMatchObject({
@@ -607,9 +589,7 @@ describe("TinybirdApi", () => {
         "events",
         { timestamp: "2024-01-01 00:00:00" },
         {
-          retry: {
-            maxRetries: 1,
-          },
+          maxRetries: 1,
         }
       )
     ).rejects.toThrow("fetch failed");

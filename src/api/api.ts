@@ -14,7 +14,6 @@ import type {
 } from "../client/types.js";
 
 const DEFAULT_TIMEOUT = 30000;
-const DEFAULT_INGEST_RETRY_MAX_RETRIES = 2;
 const DEFAULT_INGEST_RETRY_503_BASE_DELAY_MS = 200;
 const DEFAULT_INGEST_RETRY_503_MAX_DELAY_MS = 3000;
 
@@ -65,10 +64,6 @@ export interface TinybirdApiDeleteOptions extends Omit<DeleteOptions, 'deleteCon
 export interface TinybirdApiTruncateOptions extends TruncateOptions {
   /** Optional token override for this request */
   token?: string;
-}
-
-interface NormalizedIngestRetryOptions {
-  maxRetries: number;
 }
 
 /**
@@ -287,7 +282,7 @@ export class TinybirdApi {
       .map((event) => JSON.stringify(this.serializeEvent(event)))
       .join("\n");
     const signal = this.createAbortSignal(options.timeout, options.signal);
-    const retryOptions = this.resolveIngestRetryOptions(options.retry);
+    const maxRetries = this.resolveIngestMaxRetries(options.maxRetries);
     let retryCount = 0;
 
     while (true) {
@@ -311,7 +306,7 @@ export class TinybirdApi {
         return (await response.json()) as IngestResult;
       }
 
-      const retry429Delay = this.resolveRetry429Delay(response, retryOptions, retryCount);
+      const retry429Delay = this.resolveRetry429Delay(response, maxRetries, retryCount);
       if (retry429Delay !== undefined) {
         await this.discardResponseBody(response);
         await this.sleep(retry429Delay, signal);
@@ -319,7 +314,7 @@ export class TinybirdApi {
         continue;
       }
 
-      const retry503Delay = this.resolveRetry503Delay(response, retryOptions, retryCount);
+      const retry503Delay = this.resolveRetry503Delay(response, maxRetries, retryCount);
       if (retry503Delay !== undefined) {
         await this.discardResponseBody(response);
         await this.sleep(retry503Delay, signal);
@@ -609,24 +604,26 @@ export class TinybirdApi {
     return AbortSignal.any([timeoutSignal, existingSignal]);
   }
 
-  private resolveIngestRetryOptions(
-    retry: TinybirdApiIngestOptions["retry"]
-  ): NormalizedIngestRetryOptions | undefined {
-    if (!retry) {
+  private resolveIngestMaxRetries(
+    maxRetries: TinybirdApiIngestOptions["maxRetries"]
+  ): number | undefined {
+    if (maxRetries === undefined) {
       return undefined;
     }
 
-    return {
-      maxRetries: retry.maxRetries ?? DEFAULT_INGEST_RETRY_MAX_RETRIES,
-    };
+    if (!Number.isFinite(maxRetries)) {
+      throw new Error("'maxRetries' must be a finite number");
+    }
+
+    return Math.max(0, Math.floor(maxRetries));
   }
 
   private resolveRetry429Delay(
     response: Response,
-    retryOptions: NormalizedIngestRetryOptions | undefined,
+    maxRetries: number | undefined,
     retryCount: number
   ): number | undefined {
-    if (!retryOptions) {
+    if (maxRetries === undefined) {
       return undefined;
     }
 
@@ -634,7 +631,7 @@ export class TinybirdApi {
       return undefined;
     }
 
-    if (retryCount >= retryOptions.maxRetries) {
+    if (retryCount >= maxRetries) {
       return undefined;
     }
 
@@ -643,10 +640,10 @@ export class TinybirdApi {
 
   private resolveRetry503Delay(
     response: Response,
-    retryOptions: NormalizedIngestRetryOptions | undefined,
+    maxRetries: number | undefined,
     retryCount: number
   ): number | undefined {
-    if (!retryOptions) {
+    if (maxRetries === undefined) {
       return undefined;
     }
 
@@ -654,7 +651,7 @@ export class TinybirdApi {
       return undefined;
     }
 
-    if (retryCount >= retryOptions.maxRetries) {
+    if (retryCount >= maxRetries) {
       return undefined;
     }
 

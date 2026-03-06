@@ -153,21 +153,8 @@ export interface IngestOptions {
   /** Wait for the ingestion to complete before returning */
   wait?: boolean;
   /**
-   * Retry strategy for transient ingest failures.
-   * Set to false to disable retries (default behavior).
-   */
-  retry?: IngestRetryOptions | false;
-}
-
-/**
- * Retry strategy for ingest requests.
- * - HTTP 429: retries require Retry-After or X-RateLimit-Reset headers.
- * - HTTP 503: retries use SDK default exponential backoff.
- */
-export interface IngestRetryOptions {
-  /**
    * Number of retry attempts after the first request.
-   * Example: 2 means at most 3 total attempts.
+   * Retries are disabled by default when undefined.
    */
   maxRetries?: number;
 }
