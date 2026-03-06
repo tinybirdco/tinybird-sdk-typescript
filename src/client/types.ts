@@ -152,6 +152,11 @@ export interface IngestOptions {
   signal?: AbortSignal;
   /** Wait for the ingestion to complete before returning */
   wait?: boolean;
+  /**
+   * Number of retry attempts after the first request.
+   * Retries are disabled by default when undefined.
+   */
+  maxRetries?: number;
 }
 
 /**

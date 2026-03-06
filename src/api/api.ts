@@ -14,6 +14,8 @@ import type {
 } from "../client/types.js";
 
 const DEFAULT_TIMEOUT = 30000;
+const DEFAULT_INGEST_RETRY_503_BASE_DELAY_MS = 200;
+const DEFAULT_INGEST_RETRY_503_MAX_DELAY_MS = 3000;
 
 /**
  * Public, decoupled Tinybird API wrapper configuration
@@ -279,22 +281,49 @@ export class TinybirdApi {
     const ndjson = events
       .map((event) => JSON.stringify(this.serializeEvent(event)))
       .join("\n");
+    const signal = this.createAbortSignal(options.timeout, options.signal);
+    const maxRetries = this.resolveIngestMaxRetries(options.maxRetries);
+    let retryCount = 0;
 
-    const response = await this.request(url.toString(), {
-      method: "POST",
-      token: options.token,
-      headers: {
-        "Content-Type": "application/x-ndjson",
-      },
-      body: ndjson,
-      signal: this.createAbortSignal(options.timeout, options.signal),
-    });
+    while (true) {
+      let response: Response;
 
-    if (!response.ok) {
+      try {
+        response = await this.request(url.toString(), {
+          method: "POST",
+          token: options.token,
+          headers: {
+            "Content-Type": "application/x-ndjson",
+          },
+          body: ndjson,
+          signal,
+        });
+      } catch (error) {
+        throw error;
+      }
+
+      if (response.ok) {
+        return (await response.json()) as IngestResult;
+      }
+
+      const retry429Delay = this.resolveRetry429Delay(response, maxRetries, retryCount);
+      if (retry429Delay !== undefined) {
+        await this.discardResponseBody(response);
+        await this.sleep(retry429Delay, signal);
+        retryCount += 1;
+        continue;
+      }
+
+      const retry503Delay = this.resolveRetry503Delay(response, maxRetries, retryCount);
+      if (retry503Delay !== undefined) {
+        await this.discardResponseBody(response);
+        await this.sleep(retry503Delay, signal);
+        retryCount += 1;
+        continue;
+      }
+
       await this.handleErrorResponse(response);
     }
-
-    return (await response.json()) as IngestResult;
   }
 
   /**
@@ -573,6 +602,164 @@ export class TinybirdApi {
     }
 
     return AbortSignal.any([timeoutSignal, existingSignal]);
+  }
+
+  private resolveIngestMaxRetries(
+    maxRetries: TinybirdApiIngestOptions["maxRetries"]
+  ): number | undefined {
+    if (maxRetries === undefined) {
+      return undefined;
+    }
+
+    if (!Number.isFinite(maxRetries)) {
+      throw new Error("'maxRetries' must be a finite number");
+    }
+
+    return Math.max(0, Math.floor(maxRetries));
+  }
+
+  private resolveRetry429Delay(
+    response: Response,
+    maxRetries: number | undefined,
+    retryCount: number
+  ): number | undefined {
+    if (maxRetries === undefined) {
+      return undefined;
+    }
+
+    if (response.status !== 429) {
+      return undefined;
+    }
+
+    if (retryCount >= maxRetries) {
+      return undefined;
+    }
+
+    return this.resolveRetryDelayFromHeaders(response);
+  }
+
+  private resolveRetry503Delay(
+    response: Response,
+    maxRetries: number | undefined,
+    retryCount: number
+  ): number | undefined {
+    if (maxRetries === undefined) {
+      return undefined;
+    }
+
+    if (response.status !== 503) {
+      return undefined;
+    }
+
+    if (retryCount >= maxRetries) {
+      return undefined;
+    }
+
+    return this.calculateRetry503DelayMs(retryCount);
+  }
+
+  private resolveRetryDelayFromHeaders(response: Response): number | undefined {
+    const retryAfter = response.headers.get("retry-after");
+    const retryAfterDelay = this.parseRetryAfterDelayMs(retryAfter);
+    if (retryAfterDelay !== undefined) {
+      return retryAfterDelay;
+    }
+
+    const rateLimitReset = response.headers.get("x-ratelimit-reset");
+    const rateLimitResetDelay = this.parseRateLimitResetDelayMs(rateLimitReset);
+    if (rateLimitResetDelay !== undefined) {
+      return rateLimitResetDelay;
+    }
+    return undefined;
+  }
+
+  private parseRetryAfterDelayMs(value: string | null): number | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    const seconds = Number(trimmed);
+    if (Number.isFinite(seconds)) {
+      return Math.max(0, Math.floor(seconds * 1000));
+    }
+
+    const retryDateMs = Date.parse(trimmed);
+    if (Number.isNaN(retryDateMs)) {
+      return undefined;
+    }
+
+    return Math.max(0, retryDateMs - Date.now());
+  }
+
+  private parseRateLimitResetDelayMs(value: string | null): number | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    const numericValue = Number(value.trim());
+    if (!Number.isFinite(numericValue)) {
+      return undefined;
+    }
+
+    return Math.max(0, Math.floor(numericValue * 1000));
+  }
+
+  private calculateRetry503DelayMs(retryCount: number): number {
+    return Math.min(
+      DEFAULT_INGEST_RETRY_503_MAX_DELAY_MS,
+      DEFAULT_INGEST_RETRY_503_BASE_DELAY_MS * 2 ** retryCount
+    );
+  }
+
+  private async discardResponseBody(response: Response): Promise<void> {
+    if (response.bodyUsed || !response.body) {
+      return;
+    }
+
+    try {
+      await response.arrayBuffer();
+    } catch {
+      try {
+        await response.body.cancel();
+      } catch {
+        // Best effort cleanup only; never mask retry/error flow.
+      }
+    }
+  }
+
+  private async sleep(delayMs: number, signal?: AbortSignal): Promise<void> {
+    if (delayMs <= 0) {
+      return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve();
+      }, delayMs);
+
+      const onAbort = () => {
+        cleanup();
+        reject(signal?.reason ?? new DOMException("The operation was aborted.", "AbortError"));
+      };
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+      };
+
+      if (!signal) {
+        return;
+      }
+
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
   }
 
   private serializeEvent(

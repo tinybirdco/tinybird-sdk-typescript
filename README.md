@@ -247,6 +247,21 @@ await api.ingest<EventRow>("events", {
   pathname: "/home",
 });
 
+// Ingest retry behavior (disabled by default):
+// - 429 retries use Retry-After / X-RateLimit-Reset headers.
+// - 503 retries use SDK default exponential backoff.
+await api.ingest<EventRow>(
+  "events",
+  {
+    timestamp: "2024-01-15 10:31:00",
+    event_name: "button_click",
+    pathname: "/pricing",
+  },
+  {
+    maxRetries: 3,
+  }
+);
+
 // Import rows from URL/file
 await api.appendDatasource("events", {
   url: "https://example.com/events.csv",
