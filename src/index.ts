@@ -250,7 +250,6 @@ export type {
   QueryOptions,
   IngestOptions,
   IngestRetryOptions,
-  IngestRetry503Options,
   TruncateOptions,
   TruncateResult,
   ColumnMeta,

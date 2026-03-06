@@ -249,7 +249,7 @@ await api.ingest<EventRow>("events", {
 
 // Ingest retry behavior (disabled by default):
 // - 429 retries use Retry-After / X-RateLimit-Reset headers.
-// - 503 retries are optional and use exponential backoff (wait=true only).
+// - 503 retries use SDK default exponential backoff.
 await api.ingest<EventRow>(
   "events",
   {
@@ -258,14 +258,8 @@ await api.ingest<EventRow>(
     pathname: "/pricing",
   },
   {
-    wait: true,
     retry: {
       maxRetries: 3,
-      retry503: {
-        maxRetries: 2,
-        baseDelayMs: 250,
-        maxDelayMs: 3000,
-      },
     },
   }
 );
