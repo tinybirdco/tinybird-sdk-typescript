@@ -7,7 +7,7 @@ import {
   getColumnNames,
   column,
 } from "./datasource.js";
-import { t } from "./types.js";
+import { t, type AnyTypeValidator } from "./types.js";
 import { engine } from "./engines.js";
 import { defineKafkaConnection, defineS3Connection, defineGCSConnection } from "./connection.js";
 
@@ -259,14 +259,16 @@ describe("Datasource Schema", () => {
       expect(result).toBeUndefined();
     });
 
-    it("never returns a function even if isTypeValidator fails", () => {
-      // This tests the defensive check - if isTypeValidator incorrectly returns false
-      // for a validator (e.g., due to cross-module Symbol issues), getColumnJsonPath
-      // should still not return the jsonPath method as a value
+    it("never returns a function when validator branding is missing", () => {
       const validator = t.string();
-      const result = getColumnJsonPath(validator);
+      // Simulate a validator-like object where isTypeValidator() fails by
+      // removing symbol keys (including the validator brand).
+      const unbrandedValidator = Object.fromEntries(
+        Object.entries(validator as unknown as Record<string, unknown>)
+      ) as unknown as AnyTypeValidator;
 
-      // Result should be undefined, not the jsonPath function
+      const result = getColumnJsonPath(unbrandedValidator);
+
       expect(result).toBeUndefined();
       expect(typeof result).not.toBe("function");
     });
