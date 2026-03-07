@@ -7,7 +7,7 @@ import {
   getColumnNames,
   column,
 } from "./datasource.js";
-import { t } from "./types.js";
+import { t, type AnyTypeValidator } from "./types.js";
 import { engine } from "./engines.js";
 import { defineKafkaConnection, defineS3Connection, defineGCSConnection } from "./connection.js";
 
@@ -257,6 +257,20 @@ describe("Datasource Schema", () => {
       const result = getColumnJsonPath(col);
 
       expect(result).toBeUndefined();
+    });
+
+    it("never returns a function when validator branding is missing", () => {
+      const validator = t.string();
+      // Simulate a validator-like object where isTypeValidator() fails by
+      // removing symbol keys (including the validator brand).
+      const unbrandedValidator = Object.fromEntries(
+        Object.entries(validator as unknown as Record<string, unknown>)
+      ) as unknown as AnyTypeValidator;
+
+      const result = getColumnJsonPath(unbrandedValidator);
+
+      expect(result).toBeUndefined();
+      expect(typeof result).not.toBe("function");
     });
 
     it("returns jsonPath from validator modifier", () => {
