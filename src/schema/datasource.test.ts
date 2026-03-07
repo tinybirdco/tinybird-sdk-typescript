@@ -259,6 +259,18 @@ describe("Datasource Schema", () => {
       expect(result).toBeUndefined();
     });
 
+    it("never returns a function even if isTypeValidator fails", () => {
+      // This tests the defensive check - if isTypeValidator incorrectly returns false
+      // for a validator (e.g., due to cross-module Symbol issues), getColumnJsonPath
+      // should still not return the jsonPath method as a value
+      const validator = t.string();
+      const result = getColumnJsonPath(validator);
+
+      // Result should be undefined, not the jsonPath function
+      expect(result).toBeUndefined();
+      expect(typeof result).not.toBe("function");
+    });
+
     it("returns jsonPath from validator modifier", () => {
       const validator = t.string().jsonPath("$.user.id");
       const result = getColumnJsonPath(validator);

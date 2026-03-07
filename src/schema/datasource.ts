@@ -272,7 +272,9 @@ export function getColumnJsonPath(column: AnyTypeValidator | ColumnDefinition): 
     return getModifiers(column).jsonPath;
   }
 
-  if (column.jsonPath !== undefined) {
+  // Check typeof to avoid returning the jsonPath method from validators
+  // if isTypeValidator incorrectly returns false (e.g., cross-module Symbol issues)
+  if (typeof column.jsonPath === "string") {
     return column.jsonPath;
   }
 
