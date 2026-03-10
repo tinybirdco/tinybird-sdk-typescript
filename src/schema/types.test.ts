@@ -109,6 +109,24 @@ describe("Type Validators (t.*)", () => {
       const type = t.int32().default(42);
       expect(type._modifiers.defaultValue).toBe(42);
     });
+
+    it("stores default SQL expression in modifiers", () => {
+      const type = t.uuid().defaultExpr("generateUUIDv4()");
+      expect(type._modifiers.hasDefault).toBe(true);
+      expect(type._modifiers.defaultExpression).toBe("generateUUIDv4()");
+      expect(type._modifiers.defaultValue).toBeUndefined();
+    });
+
+    it("trims default SQL expression", () => {
+      const type = t.uuid().defaultExpr("  generateUUIDv4()  ");
+      expect(type._modifiers.defaultExpression).toBe("generateUUIDv4()");
+    });
+
+    it("throws on empty default SQL expression", () => {
+      expect(() => t.uuid().defaultExpr("   ")).toThrow(
+        "Default expression cannot be empty."
+      );
+    });
   });
 
   describe("Codec modifier", () => {
