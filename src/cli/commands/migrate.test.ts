@@ -1912,4 +1912,34 @@ EXPORT_SCHEDULE @on-demand
     expect(result.success).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
+
+  it("emits defaultExpr for datasource SQL function defaults", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "events.datasource",
+      `SCHEMA >
+    id UUID DEFAULT generateUUIDv4(),
+    payload String DEFAULT '{}'
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "id"
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('id: t.uuid().defaultExpr("generateUUIDv4()"),');
+    expect(output).toContain('payload: t.string().default("{}"),');
+  });
 });

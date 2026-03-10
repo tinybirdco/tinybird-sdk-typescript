@@ -288,20 +288,24 @@ function emitDatasource(ds: DatasourceModel): string {
     const columnKey = emitObjectKey(column.name);
 
     if (column.defaultExpression !== undefined) {
-      const parsedDefault = parseLiteralFromDatafile(column.defaultExpression);
-      let literalValue = parsedDefault;
-      if (typeof parsedDefault === "number" && isBooleanType(column.type)) {
-        if (parsedDefault === 0 || parsedDefault === 1) {
-          literalValue = parsedDefault === 1;
-        } else {
-          throw new Error(
-            `Boolean default value must be 0 or 1 for column "${column.name}" in datasource "${ds.name}".`
-          );
+      try {
+        const parsedDefault = parseLiteralFromDatafile(column.defaultExpression);
+        let literalValue = parsedDefault;
+        if (typeof parsedDefault === "number" && isBooleanType(column.type)) {
+          if (parsedDefault === 0 || parsedDefault === 1) {
+            literalValue = parsedDefault === 1;
+          } else {
+            throw new Error(
+              `Boolean default value must be 0 or 1 for column "${column.name}" in datasource "${ds.name}".`
+            );
+          }
         }
+        validator += `.default(${toTsLiteral(
+          literalValue as string | number | boolean | null | Record<string, unknown> | unknown[]
+        )})`;
+      } catch {
+        validator += `.defaultExpr(${escapeString(column.defaultExpression)})`;
       }
-      validator += `.default(${toTsLiteral(
-        literalValue as string | number | boolean | null | Record<string, unknown> | unknown[]
-      )})`;
     }
 
     if (column.codec) {

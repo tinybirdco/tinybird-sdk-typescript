@@ -902,6 +902,7 @@ const schema = {
   optional_field: t.string().nullable(),
   category: t.string().lowCardinality(),
   status: t.string().default("pending"),
+  event_id: t.uuid().defaultExpr("generateUUIDv4()"),
 };
 ```
 

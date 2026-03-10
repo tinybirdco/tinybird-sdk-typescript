@@ -164,6 +164,17 @@ describe('Datasource Generator', () => {
       expect(result.content).toContain("status String `json:$.status` DEFAULT 'pending'");
     });
 
+    it("includes raw SQL default expressions without quoting", () => {
+      const ds = defineDatasource("test_ds", {
+        schema: {
+          id: t.uuid().defaultExpr("generateUUIDv4()"),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain("id UUID `json:$.id` DEFAULT generateUUIDv4()");
+    });
+
     it('formats null default values', () => {
       const ds = defineDatasource('test_ds', {
         schema: {

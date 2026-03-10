@@ -107,10 +107,14 @@ function generateColumnLine(
     parts.push(`\`json:${effectiveJsonPath}\``);
   }
 
-  // Add default value if defined
-  if (modifiers.hasDefault && modifiers.defaultValue !== undefined) {
-    const defaultStr = formatDefaultValue(modifiers.defaultValue, tinybirdType);
-    parts.push(`DEFAULT ${defaultStr}`);
+  // Add default value/expression if defined
+  if (modifiers.hasDefault) {
+    if (typeof modifiers.defaultExpression === "string") {
+      parts.push(`DEFAULT ${modifiers.defaultExpression}`);
+    } else if (modifiers.defaultValue !== undefined) {
+      const defaultStr = formatDefaultValue(modifiers.defaultValue, tinybirdType);
+      parts.push(`DEFAULT ${defaultStr}`);
+    }
   }
 
   // Add codec if defined

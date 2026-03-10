@@ -44,6 +44,14 @@ export interface TypeValidator<
     TTinybirdType,
     TModifiers & { hasDefault: true; defaultValue: TType }
   >;
+  /** Set a default SQL expression for the column (for example: generateUUIDv4()) */
+  defaultExpr(
+    expression: string,
+  ): TypeValidator<
+    TType,
+    TTinybirdType,
+    TModifiers & { hasDefault: true; defaultExpression: string }
+  >;
   /** Set a codec for compression */
   codec(
     codec: string,
@@ -59,6 +67,7 @@ export interface TypeModifiers {
   lowCardinality?: boolean;
   hasDefault?: boolean;
   defaultValue?: unknown;
+  defaultExpression?: string;
   codec?: string;
   jsonPath?: string;
 }
@@ -144,10 +153,28 @@ function createValidator<TType, TTinybirdType extends string>(
         ...modifiers,
         hasDefault: true,
         defaultValue: value,
+        defaultExpression: undefined,
       }) as TypeValidator<
         TType,
         TTinybirdType,
         TypeModifiers & { hasDefault: true; defaultValue: TType }
+      >;
+    },
+
+    defaultExpr(expression: string) {
+      const trimmed = expression.trim();
+      if (!trimmed) {
+        throw new Error("Default expression cannot be empty.");
+      }
+      return createValidator<TType, TTinybirdType>(tinybirdType, {
+        ...modifiers,
+        hasDefault: true,
+        defaultValue: undefined,
+        defaultExpression: trimmed,
+      }) as TypeValidator<
+        TType,
+        TTinybirdType,
+        TypeModifiers & { hasDefault: true; defaultExpression: string }
       >;
     },
 
