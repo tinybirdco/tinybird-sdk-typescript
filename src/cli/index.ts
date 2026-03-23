@@ -270,6 +270,7 @@ function createCli(): Command {
     .option("--debug", "Show debug output including API requests/responses")
     .option("--local", "Use local Tinybird container")
     .option("--branch", "Use Tinybird cloud with branches")
+    .option("--last-partition", "Copy the last partition of production data when creating a branch")
     .action(async (options) => {
       if (options.debug) {
         process.env.TINYBIRD_DEBUG = "1";
@@ -286,6 +287,7 @@ function createCli(): Command {
       const result = await runBuild({
         dryRun: options.dryRun,
         devModeOverride,
+        lastPartition: options.lastPartition,
       });
 
       const { build, deploy, branchInfo } = result;
@@ -677,6 +679,7 @@ function createCli(): Command {
     .description("Watch for changes and sync with Tinybird")
     .option("--local", "Use local Tinybird container")
     .option("--branch", "Use Tinybird cloud with branches")
+    .option("--last-partition", "Copy the last partition of production data when creating a branch")
     .action(async (options) => {
       // Determine devMode override
       let devModeOverride: DevMode | undefined;
@@ -689,6 +692,7 @@ function createCli(): Command {
       try {
         const controller = await runDev({
           devModeOverride,
+          lastPartition: options.lastPartition,
           onLoginComplete: (info) => {
             console.log("\nAuthentication successful!");
             if (info.workspaceName) {

@@ -27,6 +27,8 @@ export interface BuildCommandOptions {
   tokenOverride?: string;
   /** Override the devMode from config */
   devModeOverride?: DevMode;
+  /** Copy the last partition of production data when creating a branch */
+  lastPartition?: boolean;
 }
 
 /**
@@ -225,7 +227,8 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
             baseUrl: config.baseUrl,
             token: config.token,
           },
-          config.tinybirdBranch!
+          config.tinybirdBranch!,
+          { lastPartition: options.lastPartition }
         );
 
         if (!tinybirdBranch.token) {
