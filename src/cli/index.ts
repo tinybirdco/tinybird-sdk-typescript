@@ -303,6 +303,8 @@ function createCli(): Command {
           output.showBuildErrors(deploy.errors);
         } else if (result.error) {
           output.error(result.error);
+        } else {
+          output.error("Build failed with no error details. Run with TINYBIRD_DEBUG=1 for more info.");
         }
         output.showBuildFailure();
         process.exit(1);
@@ -541,6 +543,8 @@ function createCli(): Command {
           output.showBuildErrors(deploy.errors);
         } else if (result.error) {
           output.error(result.error);
+        } else {
+          output.error("Deploy failed with no error details. Run with TINYBIRD_DEBUG=1 for more info.");
         }
         output.showDeployFailure();
         process.exit(1);
@@ -732,6 +736,8 @@ function createCli(): Command {
                 output.showBuildErrors(deploy.errors);
               } else if (result.error) {
                 output.error(result.error);
+              } else {
+                output.error("Build failed with no error details. Run with TINYBIRD_DEBUG=1 for more info.");
               }
               output.showBuildFailure(true);
               return;
