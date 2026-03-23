@@ -539,10 +539,9 @@ function createCli(): Command {
         // Show detailed errors if available
         if (deploy?.errors && deploy.errors.length > 0) {
           output.showBuildErrors(deploy.errors);
-        } else if (result.error) {
-          output.error(result.error);
         } else {
-          output.error("Deploy failed (no error details available, run with TINYBIRD_DEBUG=1 for more info)");
+          const errorMessage = result.error ?? deploy?.error;
+          output.error(errorMessage ?? "Deploy failed (run with TINYBIRD_DEBUG=1 for more info)");
         }
         output.showDeployFailure();
         process.exit(1);
@@ -732,10 +731,9 @@ function createCli(): Command {
               const { deploy } = result;
               if (deploy?.errors && deploy.errors.length > 0) {
                 output.showBuildErrors(deploy.errors);
-              } else if (result.error) {
-                output.error(result.error);
               } else {
-                output.error("Build failed (no error details available, run with TINYBIRD_DEBUG=1 for more info)");
+                const errorMessage = result.error ?? deploy?.error;
+                output.error(errorMessage ?? "Build failed (run with TINYBIRD_DEBUG=1 for more info)");
               }
               output.showBuildFailure(true);
               return;

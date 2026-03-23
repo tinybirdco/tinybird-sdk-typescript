@@ -218,7 +218,7 @@ export async function buildToTinybird(
     );
   }
 
-  // Helper to format errors
+  // Helper to format errors - always returns a meaningful string
   const formatErrors = (): string => {
     if (body.errors && body.errors.length > 0) {
       return body.errors.map(e => {
