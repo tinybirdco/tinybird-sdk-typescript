@@ -363,7 +363,7 @@ export const Tinybird: TinybirdConstructor = class Tinybird<
         },
         ingestBatch: async (events: unknown[], options: IngestOptions = {}) => {
           const client = await this.#getClient();
-          return client.datasources.ingestBatch(tinybirdName, events as Record<string, unknown>[], options);
+          return client.ingestBatch(tinybirdName, events as Record<string, unknown>[], options);
         },
         append: async (options: AppendOptions) => {
           const client = await this.#getClient();
