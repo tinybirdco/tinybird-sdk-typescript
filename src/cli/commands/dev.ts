@@ -64,6 +64,8 @@ export interface DevCommandOptions {
   onSchemaValidation?: (result: SchemaValidationResult) => void;
   /** Override the devMode from config */
   devModeOverride?: DevMode;
+  /** Copy the last partition of production data when creating a branch */
+  lastPartition?: boolean;
 }
 
 /**
@@ -241,7 +243,8 @@ export async function runDev(
           baseUrl: config.baseUrl,
           token: config.token,
         },
-        branchName
+        branchName,
+        { lastPartition: options.lastPartition }
       );
 
       if (!tinybirdBranch.token) {

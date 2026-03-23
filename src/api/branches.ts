@@ -143,12 +143,26 @@ async function pollJob(
  * @param name - Branch name to create
  * @returns The created branch with token
  */
+export interface CreateBranchOptions {
+  /** Copy the last partition of production data into the branch */
+  lastPartition?: boolean;
+}
+
 export async function createBranch(
   config: BranchApiConfig,
-  name: string
+  name: string,
+  options?: CreateBranchOptions
 ): Promise<TinybirdBranch> {
   const url = new URL("/v1/environments", config.baseUrl);
   url.searchParams.set("name", name);
+  if (options?.lastPartition) {
+    url.searchParams.set("last_partition", "1");
+  }
+
+  const debug = !!process.env.TINYBIRD_DEBUG;
+  if (debug) {
+    console.log(`[debug] POST ${url.toString()}`);
+  }
 
   const response = await tinybirdFetch(url.toString(), {
     method: "POST",
@@ -325,7 +339,8 @@ export async function branchExists(
  */
 export async function getOrCreateBranch(
   config: BranchApiConfig,
-  name: string
+  name: string,
+  options?: CreateBranchOptions
 ): Promise<GetOrCreateBranchResult> {
   // First try to get the existing branch
   try {
@@ -334,7 +349,7 @@ export async function getOrCreateBranch(
   } catch (error) {
     // If it's a 404, create the branch
     if (error instanceof BranchApiError && error.status === 404) {
-      const branch = await createBranch(config, name);
+      const branch = await createBranch(config, name, options);
       return { ...branch, wasCreated: true };
     }
     throw error;
