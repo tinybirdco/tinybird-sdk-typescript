@@ -55,7 +55,15 @@ function generateKafkaConnection(connection: KafkaConnectionDefinition): string 
   }
 
   if (options.sslCaPem) {
-    parts.push(`KAFKA_SSL_CA_PEM ${options.sslCaPem}`);
+    if (options.sslCaPem.includes("\n")) {
+      const indented = options.sslCaPem
+        .split("\n")
+        .map((line) => `    ${line}`)
+        .join("\n");
+      parts.push(`KAFKA_SSL_CA_PEM >\n${indented}`);
+    } else {
+      parts.push(`KAFKA_SSL_CA_PEM ${options.sslCaPem}`);
+    }
   }
 
   return parts.join("\n");

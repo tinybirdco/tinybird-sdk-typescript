@@ -79,6 +79,31 @@ describe("Connection Generator", () => {
       expect(result.content).toContain('KAFKA_SSL_CA_PEM {{ tb_secret("KAFKA_CA_CERT") }}');
     });
 
+    it("emits multiline SSL CA PEM with > syntax", () => {
+      const conn = defineKafkaConnection("my_kafka", {
+        bootstrapServers: "kafka.example.com:9092",
+        sslCaPem: "-----BEGIN CERTIFICATE-----\nMIIDXTCCAkWgAwIBAgIJAM\n-----END CERTIFICATE-----",
+      });
+
+      const result = generateConnection(conn);
+
+      expect(result.content).toContain("KAFKA_SSL_CA_PEM >");
+      expect(result.content).toContain("    -----BEGIN CERTIFICATE-----");
+      expect(result.content).toContain("    MIIDXTCCAkWgAwIBAgIJAM");
+      expect(result.content).toContain("    -----END CERTIFICATE-----");
+    });
+
+    it("emits single-line SSL CA PEM for secret references", () => {
+      const conn = defineKafkaConnection("my_kafka", {
+        bootstrapServers: "kafka.example.com:9092",
+        sslCaPem: "{{ tb_secret('KAFKA_CA_CERT') }}",
+      });
+
+      const result = generateConnection(conn);
+
+      expect(result.content).toContain("KAFKA_SSL_CA_PEM {{ tb_secret('KAFKA_CA_CERT') }}");
+    });
+
     it("generates full Kafka connection with all options", () => {
       const conn = defineKafkaConnection("my_kafka", {
         bootstrapServers: "kafka.example.com:9092",

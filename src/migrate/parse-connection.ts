@@ -9,8 +9,33 @@ import {
   isBlank,
   parseDirectiveLine,
   parseQuotedValue,
+  readDirectiveBlock,
   splitLines,
 } from "./parser-utils.js";
+
+const CONNECTION_DIRECTIVES = new Set([
+  "TYPE",
+  "KAFKA_BOOTSTRAP_SERVERS",
+  "KAFKA_SECURITY_PROTOCOL",
+  "KAFKA_SASL_MECHANISM",
+  "KAFKA_KEY",
+  "KAFKA_SECRET",
+  "KAFKA_SCHEMA_REGISTRY_URL",
+  "KAFKA_SSL_CA_PEM",
+  "S3_REGION",
+  "S3_ARN",
+  "S3_ACCESS_KEY",
+  "S3_SECRET",
+  "GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON",
+]);
+
+function isConnectionDirectiveLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith("#")) return false;
+  const firstSpace = trimmed.indexOf(" ");
+  const word = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
+  return CONNECTION_DIRECTIVES.has(word);
+}
 
 export function parseConnectionFile(
   resource: ResourceFile
@@ -41,9 +66,12 @@ export function parseConnectionFile(
   let accessSecret: string | undefined;
   let serviceAccountCredentialsJson: string | undefined;
 
-  for (const rawLine of lines) {
+  let i = 0;
+  while (i < lines.length) {
+    const rawLine = lines[i] ?? "";
     const line = rawLine.trim();
     if (isBlank(line) || line.startsWith("#")) {
+      i += 1;
       continue;
     }
 
@@ -92,6 +120,12 @@ export function parseConnectionFile(
         schemaRegistryUrl = value;
         break;
       case "KAFKA_SSL_CA_PEM":
+        if (value === ">") {
+          const block = readDirectiveBlock(lines, i + 1, isConnectionDirectiveLine);
+          sslCaPem = block.lines.join("\n");
+          i = block.nextIndex;
+          continue;
+        }
         sslCaPem = value;
         break;
       case "S3_REGION":
@@ -107,6 +141,12 @@ export function parseConnectionFile(
         accessSecret = parseQuotedValue(value);
         break;
       case "GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON":
+        if (value === ">") {
+          const block = readDirectiveBlock(lines, i + 1, isConnectionDirectiveLine);
+          serviceAccountCredentialsJson = block.lines.join("\n");
+          i = block.nextIndex;
+          continue;
+        }
         serviceAccountCredentialsJson = parseQuotedValue(value);
         break;
       default:
@@ -117,6 +157,7 @@ export function parseConnectionFile(
           `Unsupported connection directive in strict mode: "${line}"`
         );
     }
+    i += 1;
   }
 
   if (!connectionType) {
