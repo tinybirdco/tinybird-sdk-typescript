@@ -223,7 +223,7 @@ export async function buildToTinybird(
     if (body.errors && body.errors.length > 0) {
       return body.errors.map(e => {
         const prefix = e.filename ? `[${e.filename}] ` : '';
-        return `${prefix}${e.error}`;
+        return `${prefix}${e.error ?? 'Unknown error'}`;
       }).join('\n');
     }
     return body.error || `HTTP ${response.status}: ${response.statusText}`;
