@@ -159,6 +159,11 @@ export async function createBranch(
     url.searchParams.set("last_partition", "1");
   }
 
+  const debug = !!process.env.TINYBIRD_DEBUG;
+  if (debug) {
+    console.log(`[debug] POST ${url.toString()}`);
+  }
+
   const response = await tinybirdFetch(url.toString(), {
     method: "POST",
     headers: {
