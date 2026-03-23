@@ -94,7 +94,7 @@ describe("Project Schema", () => {
       expect((project.tinybird as unknown as Record<string, unknown>).pipes).toBeUndefined();
     });
 
-    it("creates datasource accessors with ingest/append/replace/delete/truncate methods", () => {
+    it("creates datasource accessors with ingest/ingestBatch/append/replace/delete/truncate methods", () => {
       const events = defineDatasource("events", {
         schema: { timestamp: t.dateTime() },
       });
@@ -105,6 +105,7 @@ describe("Project Schema", () => {
 
       expect(project.tinybird.events).toBeDefined();
       expect(typeof project.tinybird.events.ingest).toBe("function");
+      expect(typeof project.tinybird.events.ingestBatch).toBe("function");
       expect(typeof project.tinybird.events.append).toBe("function");
       expect(typeof project.tinybird.events.replace).toBe("function");
       expect(typeof project.tinybird.events.delete).toBe("function");
@@ -316,7 +317,7 @@ describe("Project Schema", () => {
       expect((client as unknown as Record<string, unknown>).pipes).toBeUndefined();
     });
 
-    it("creates datasource accessors with ingest/append/replace/delete/truncate methods", () => {
+    it("creates datasource accessors with ingest/ingestBatch/append/replace/delete/truncate methods", () => {
       const events = defineDatasource("events", {
         schema: { id: t.string() },
       });
@@ -328,6 +329,7 @@ describe("Project Schema", () => {
 
       expect(client.events).toBeDefined();
       expect(typeof client.events.ingest).toBe("function");
+      expect(typeof client.events.ingestBatch).toBe("function");
       expect(typeof client.events.append).toBe("function");
       expect(typeof client.events.replace).toBe("function");
       expect(typeof client.events.delete).toBe("function");

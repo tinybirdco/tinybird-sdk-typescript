@@ -14,6 +14,7 @@ import type {
   DatasourcesNamespace,
   DeleteOptions,
   DeleteResult,
+  IngestOptions,
   IngestResult,
   QueryOptions,
   QueryResult,
@@ -69,6 +70,8 @@ type PipeEntityAccessors<T extends PipesDefinition> = {
 type DatasourceAccessor<T extends DatasourceDefinition<SchemaDefinition>> = {
   /** Ingest a single event row */
   ingest(event: InferRow<T>): Promise<IngestResult>;
+  /** Ingest multiple event rows in a batch */
+  ingestBatch(events: InferRow<T>[], options?: IngestOptions): Promise<IngestResult>;
   /** Append data from a URL or file */
   append(options: AppendOptions): Promise<AppendResult>;
   /** Replace datasource content from a URL or file */
@@ -357,6 +360,10 @@ export const Tinybird: TinybirdConstructor = class Tinybird<
         ingest: async (event: unknown) => {
           const client = await this.#getClient();
           return client.datasources.ingest(tinybirdName, event as Record<string, unknown>);
+        },
+        ingestBatch: async (events: unknown[], options: IngestOptions = {}) => {
+          const client = await this.#getClient();
+          return client.datasources.ingestBatch(tinybirdName, events as Record<string, unknown>[], options);
         },
         append: async (options: AppendOptions) => {
           const client = await this.#getClient();
