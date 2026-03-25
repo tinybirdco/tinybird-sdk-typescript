@@ -106,7 +106,6 @@ function createValidator<TType, TTinybirdType extends string>(
           `LowCardinality(Nullable(${string}))`
         >(newType as `LowCardinality(Nullable(${string}))`, {
           ...modifiers,
-          nullable: true,
         }) as unknown as TypeValidator<
           TType | null,
           `Nullable(${TTinybirdType})`,
@@ -129,9 +128,10 @@ function createValidator<TType, TTinybirdType extends string>(
         // Extract base type from Nullable(X) and wrap as LowCardinality(Nullable(X))
         const baseType = tinybirdType.replace(/^Nullable\((.+)\)$/, "$1");
         const newType = `LowCardinality(Nullable(${baseType}))`;
+        const { nullable: _, ...rest } = modifiers;
         return createValidator<TType, `LowCardinality(Nullable(${string}))`>(
           newType as `LowCardinality(Nullable(${string}))`,
-          { ...modifiers, lowCardinality: true },
+          { ...rest, lowCardinality: true },
         ) as unknown as TypeValidator<
           TType,
           `LowCardinality(${TTinybirdType})`,
