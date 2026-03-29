@@ -13,15 +13,31 @@ vi.mock("../api/branches.js", () => ({
 }));
 
 describe("TinybirdClient", () => {
+  const originalEnv = { ...process.env };
   const mockedLoadConfigAsync = vi.mocked(loadConfigAsync);
   const mockedGetOrCreateBranch = vi.mocked(getOrCreateBranch);
 
   beforeEach(() => {
+    process.env = { ...originalEnv };
+    delete process.env.VERCEL_ENV;
+    delete process.env.GITHUB_HEAD_REF;
+    delete process.env.CI_MERGE_REQUEST_SOURCE_BRANCH_NAME;
+    delete process.env.CI;
+    delete process.env.TINYBIRD_PREVIEW_MODE;
+    delete process.env.VERCEL_GIT_COMMIT_REF;
+    delete process.env.GITHUB_REF_NAME;
+    delete process.env.CI_COMMIT_BRANCH;
+    delete process.env.CIRCLE_BRANCH;
+    delete process.env.BUILD_SOURCEBRANCHNAME;
+    delete process.env.BITBUCKET_BRANCH;
+    delete process.env.TINYBIRD_BRANCH_NAME;
+    delete process.env.TINYBIRD_BRANCH_TOKEN;
     mockedLoadConfigAsync.mockReset();
     mockedGetOrCreateBranch.mockReset();
   });
 
   afterEach(() => {
+    process.env = { ...originalEnv };
     vi.restoreAllMocks();
   });
 

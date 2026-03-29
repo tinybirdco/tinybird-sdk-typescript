@@ -13,6 +13,29 @@ import { definePipe, node } from "./pipe.js";
 import { t } from "./types.js";
 
 describe("Project Schema", () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    delete process.env.VERCEL_ENV;
+    delete process.env.GITHUB_HEAD_REF;
+    delete process.env.CI_MERGE_REQUEST_SOURCE_BRANCH_NAME;
+    delete process.env.CI;
+    delete process.env.TINYBIRD_PREVIEW_MODE;
+    delete process.env.VERCEL_GIT_COMMIT_REF;
+    delete process.env.GITHUB_REF_NAME;
+    delete process.env.CI_COMMIT_BRANCH;
+    delete process.env.CIRCLE_BRANCH;
+    delete process.env.BUILD_SOURCEBRANCHNAME;
+    delete process.env.BITBUCKET_BRANCH;
+    delete process.env.TINYBIRD_BRANCH_NAME;
+    delete process.env.TINYBIRD_BRANCH_TOKEN;
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
   describe("defineProject", () => {
     it("creates a project with empty config", () => {
       const project = defineProject({});
