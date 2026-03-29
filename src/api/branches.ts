@@ -3,7 +3,7 @@
  * Uses the /v1/environments endpoints (Forward API)
  */
 
-import { tinybirdFetch } from "./fetcher.js";
+import { createTinybirdFetcher } from "./fetcher.js";
 
 /**
  * Branch information from Tinybird API
@@ -35,6 +35,12 @@ export interface BranchApiConfig {
   baseUrl: string;
   /** Parent workspace token (used to create/manage branches) */
   token: string;
+  /** Custom fetch implementation (optional) */
+  fetch?: typeof fetch;
+}
+
+function getFetch(config: BranchApiConfig) {
+  return createTinybirdFetcher(config.fetch ?? globalThis.fetch);
 }
 
 /**
@@ -89,10 +95,12 @@ async function pollJob(
   maxAttempts = 120,
   intervalMs = 1000
 ): Promise<JobStatusResponse> {
+  const fetchFn = getFetch(config);
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const url = new URL(`/v0/jobs/${jobId}`, config.baseUrl);
 
-    const response = await tinybirdFetch(url.toString(), {
+    const response = await fetchFn(url.toString(), {
       method: "GET",
       headers: {
         Authorization: `Bearer ${config.token}`,
@@ -153,6 +161,7 @@ export async function createBranch(
   name: string,
   options?: CreateBranchOptions
 ): Promise<TinybirdBranch> {
+  const fetchFn = getFetch(config);
   const url = new URL("/v1/environments", config.baseUrl);
   url.searchParams.set("name", name);
   if (options?.lastPartition) {
@@ -164,7 +173,7 @@ export async function createBranch(
     console.log(`[debug] POST ${url.toString()}`);
   }
 
-  const response = await tinybirdFetch(url.toString(), {
+  const response = await fetchFn(url.toString(), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.token}`,
@@ -219,9 +228,10 @@ export async function createBranch(
 export async function listBranches(
   config: BranchApiConfig
 ): Promise<TinybirdBranch[]> {
+  const fetchFn = getFetch(config);
   const url = new URL("/v1/environments", config.baseUrl);
 
-  const response = await tinybirdFetch(url.toString(), {
+  const response = await fetchFn(url.toString(), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${config.token}`,
@@ -253,10 +263,11 @@ export async function getBranch(
   config: BranchApiConfig,
   name: string
 ): Promise<TinybirdBranch> {
+  const fetchFn = getFetch(config);
   const url = new URL(`/v0/environments/${encodeURIComponent(name)}`, config.baseUrl);
   url.searchParams.set("with_token", "true");
 
-  const response = await tinybirdFetch(url.toString(), {
+  const response = await fetchFn(url.toString(), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${config.token}`,
@@ -292,10 +303,11 @@ export async function deleteBranch(
 ): Promise<void> {
   // First get the branch to find its ID
   const branch = await getBranch(config, name);
+  const fetchFn = getFetch(config);
 
   const url = new URL(`/v0/environments/${branch.id}`, config.baseUrl);
 
-  const response = await tinybirdFetch(url.toString(), {
+  const response = await fetchFn(url.toString(), {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${config.token}`,

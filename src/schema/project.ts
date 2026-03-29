@@ -130,6 +130,8 @@ export interface TinybirdClientConfig<
   baseUrl?: string;
   /** Tinybird API token (defaults to TINYBIRD_TOKEN env var) */
   token?: string;
+  /** Custom fetch implementation (optional, defaults to global fetch) */
+  fetch?: typeof fetch;
   /**
    * Directory to use as the starting point when searching for tinybird.json config.
    * In monorepo setups, this should be set to the directory containing tinybird.json
@@ -295,6 +297,7 @@ export const Tinybird: TinybirdConstructor = class Tinybird<
   readonly #options: {
     baseUrl?: string;
     token?: string;
+    fetch?: typeof fetch;
     configDir?: string;
     devMode?: boolean;
   };
@@ -303,6 +306,7 @@ export const Tinybird: TinybirdConstructor = class Tinybird<
     this.#options = {
       baseUrl: config.baseUrl,
       token: config.token,
+      fetch: config.fetch,
       configDir: config.configDir,
       devMode: config.devMode,
     };
@@ -392,11 +396,16 @@ export const Tinybird: TinybirdConstructor = class Tinybird<
 
       const baseUrl =
         this.#options.baseUrl ?? process.env.TINYBIRD_URL ?? "https://api.tinybird.co";
-      const token = await resolveToken({ baseUrl, token: this.#options.token });
+      const token = await resolveToken({
+        baseUrl,
+        token: this.#options.token,
+        fetch: this.#options.fetch,
+      });
 
       this.#client = createClient({
         baseUrl,
         token,
+        fetch: this.#options.fetch,
         devMode: this.#options.devMode ?? process.env.NODE_ENV === "development",
         configDir: this.#options.configDir,
       });

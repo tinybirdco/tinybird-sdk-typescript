@@ -390,6 +390,7 @@ describe("Project Schema", () => {
       const events = defineDatasource("events", {
         schema: { id: t.string() },
       });
+      const customFetch = vi.fn();
 
       // Should accept all options without throwing
       const client = createTinybirdClient({
@@ -397,6 +398,7 @@ describe("Project Schema", () => {
         pipes: {},
         baseUrl: "https://custom.tinybird.co",
         token: "test-token",
+        fetch: customFetch as typeof fetch,
         configDir: "/custom/config/dir",
         devMode: true,
       });
@@ -439,6 +441,60 @@ describe("Project Schema", () => {
 
       expect(client._options).toBeDefined();
       expect(() => client.client).toThrow("Client not initialized");
+    });
+
+    it("uses custom fetch for typed endpoint queries", async () => {
+      const topEvents = definePipe("top_events", {
+        nodes: [node({ name: "endpoint", sql: "SELECT 1" })],
+        output: { count: t.int64() },
+        endpoint: true,
+      });
+      const customFetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            data: [],
+            meta: [],
+            rows: 0,
+            statistics: {
+              elapsed: 0,
+              rows_read: 0,
+              bytes_read: 0,
+            },
+          }),
+      });
+      const originalFetch = global.fetch;
+      const globalFetch = vi.fn().mockRejectedValue(
+        new Error("global fetch should not be called")
+      );
+      global.fetch = globalFetch as typeof fetch;
+
+      try {
+        const client = createTinybirdClient({
+          datasources: {},
+          pipes: { topEvents },
+          baseUrl: "https://api.tinybird.co",
+          token: "test-token",
+          fetch: customFetch as typeof fetch,
+          devMode: false,
+        });
+
+        const result = await client.topEvents.query({});
+
+        expect(result.rows).toBe(0);
+        expect(customFetch).toHaveBeenCalledTimes(1);
+        expect(globalFetch).not.toHaveBeenCalled();
+
+        const [url, init] = customFetch.mock.calls[0] as [string, RequestInit];
+        const parsed = new URL(url);
+        expect(parsed.pathname).toBe("/v0/pipes/top_events.json");
+        expect(parsed.searchParams.get("from")).toBe("ts-sdk");
+        expect(new Headers(init.headers).get("Authorization")).toBe(
+          "Bearer test-token"
+        );
+      } finally {
+        global.fetch = originalFetch;
+      }
     });
   });
 });

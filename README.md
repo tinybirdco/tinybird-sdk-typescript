@@ -125,6 +125,13 @@ export const tinybird = new Tinybird({
   pipes: { topPages },
 });
 
+// Optional: customize fetch for framework-specific cache or runtime behavior
+export const tinybirdNoStore = new Tinybird({
+  datasources: { pageViews },
+  pipes: { topPages },
+  fetch: (url, init) => fetch(url, { ...init, cache: "no-store" }),
+});
+
 // Re-export types for convenience
 export type { PageViewsRow, TopPagesParams, TopPagesOutput };
 export { pageViews, topPages };
