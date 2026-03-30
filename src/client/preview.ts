@@ -5,7 +5,7 @@
  * Tinybird branch token for the current git branch.
  */
 
-import { tinybirdFetch } from "../api/fetcher.js";
+import { createTinybirdFetcher } from "../api/fetcher.js";
 
 /**
  * Branch information with token
@@ -110,13 +110,15 @@ function sanitizeBranchName(branchName: string): string {
 async function fetchBranchToken(
   baseUrl: string,
   workspaceToken: string,
-  branchName: string
+  branchName: string,
+  fetchFn?: typeof fetch
 ): Promise<string | null> {
   const sanitizedName = sanitizeBranchName(branchName);
   // Look for the preview branch with tmp_ci_ prefix (matches what tinybird preview creates)
   const previewBranchName = `tmp_ci_${sanitizedName}`;
   const url = new URL(`/v0/environments/${encodeURIComponent(previewBranchName)}`, baseUrl);
   url.searchParams.set("with_token", "true");
+  const tinybirdFetch = createTinybirdFetcher(fetchFn ?? globalThis.fetch);
 
   try {
     const response = await tinybirdFetch(url.toString(), {
@@ -153,6 +155,7 @@ async function fetchBranchToken(
 export async function resolveToken(options?: {
   baseUrl?: string;
   token?: string;
+  fetch?: typeof fetch;
 }): Promise<string> {
   // 1. Check for explicit branch token override
   if (process.env.TINYBIRD_BRANCH_TOKEN) {
@@ -181,7 +184,12 @@ export async function resolveToken(options?: {
       const baseUrl = options?.baseUrl ?? process.env.TINYBIRD_URL ?? "https://api.tinybird.co";
 
       // Fetch branch token
-      const branchToken = await fetchBranchToken(baseUrl, configuredToken, branchName);
+      const branchToken = await fetchBranchToken(
+        baseUrl,
+        configuredToken,
+        branchName,
+        options?.fetch
+      );
 
       if (branchToken) {
         // Cache for subsequent calls
