@@ -157,6 +157,50 @@ describe("Preview environment detection", () => {
       const token = await resolveToken({ token: "my-token" });
       expect(token).toBe("my-token");
     });
+
+    it("uses custom fetch for preview branch token resolution", async () => {
+      process.env.VERCEL_ENV = "preview";
+      process.env.VERCEL_GIT_COMMIT_REF = "feature/add-fetch";
+
+      const customFetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: "branch-123",
+            name: "tmp_ci_feature_add_fetch",
+            token: "branch-token",
+            created_at: "2024-01-01T00:00:00Z",
+          }),
+      });
+      const originalFetch = global.fetch;
+      const globalFetch = vi.fn().mockRejectedValue(
+        new Error("global fetch should not be called")
+      );
+      global.fetch = globalFetch as typeof fetch;
+
+      try {
+        const token = await resolveToken({
+          baseUrl: "https://api.tinybird.co",
+          token: "workspace-token",
+          fetch: customFetch as typeof fetch,
+        });
+
+        expect(token).toBe("branch-token");
+        expect(customFetch).toHaveBeenCalledTimes(1);
+        expect(globalFetch).not.toHaveBeenCalled();
+
+        const [url, init] = customFetch.mock.calls[0] as [string, RequestInit];
+        const parsed = new URL(url);
+        expect(parsed.pathname).toBe("/v0/environments/tmp_ci_feature_add_fetch");
+        expect(parsed.searchParams.get("with_token")).toBe("true");
+        expect(parsed.searchParams.get("from")).toBe("ts-sdk");
+        expect(new Headers(init.headers).get("Authorization")).toBe(
+          "Bearer workspace-token"
+        );
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
   });
 
   describe("clearTokenCache", () => {

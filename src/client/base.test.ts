@@ -1,8 +1,46 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TinybirdClient, createClient } from "./base.js";
 import type { DatasourcesNamespace } from "./types.js";
+import { loadConfigAsync } from "../cli/config.js";
+import { getOrCreateBranch } from "../api/branches.js";
+
+vi.mock("../cli/config.js", () => ({
+  loadConfigAsync: vi.fn(),
+}));
+
+vi.mock("../api/branches.js", () => ({
+  getOrCreateBranch: vi.fn(),
+}));
 
 describe("TinybirdClient", () => {
+  const originalEnv = { ...process.env };
+  const mockedLoadConfigAsync = vi.mocked(loadConfigAsync);
+  const mockedGetOrCreateBranch = vi.mocked(getOrCreateBranch);
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    delete process.env.VERCEL_ENV;
+    delete process.env.GITHUB_HEAD_REF;
+    delete process.env.CI_MERGE_REQUEST_SOURCE_BRANCH_NAME;
+    delete process.env.CI;
+    delete process.env.TINYBIRD_PREVIEW_MODE;
+    delete process.env.VERCEL_GIT_COMMIT_REF;
+    delete process.env.GITHUB_REF_NAME;
+    delete process.env.CI_COMMIT_BRANCH;
+    delete process.env.CIRCLE_BRANCH;
+    delete process.env.BUILD_SOURCEBRANCHNAME;
+    delete process.env.BITBUCKET_BRANCH;
+    delete process.env.TINYBIRD_BRANCH_NAME;
+    delete process.env.TINYBIRD_BRANCH_TOKEN;
+    mockedLoadConfigAsync.mockReset();
+    mockedGetOrCreateBranch.mockReset();
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    vi.restoreAllMocks();
+  });
+
   describe("constructor", () => {
     it("throws error when baseUrl is missing", () => {
       expect(() => new TinybirdClient({ baseUrl: "", token: "test-token" })).toThrow(
@@ -114,6 +152,52 @@ describe("TinybirdClient", () => {
       const context = await client.getContext();
       expect(context.baseUrl).toBe("https://api.us-east.tinybird.co");
       expect(context.token).toBe("us-token");
+    });
+
+    it("passes custom fetch to devMode branch resolution", async () => {
+      const customFetch = vi.fn();
+
+      mockedLoadConfigAsync.mockResolvedValue({
+        include: [],
+        token: "workspace-token",
+        baseUrl: "https://api.tinybird.co",
+        configPath: "/tmp/tinybird.config.json",
+        cwd: "/tmp",
+        gitBranch: "feature/add-fetch",
+        tinybirdBranch: "feature_add_fetch",
+        isMainBranch: false,
+        devMode: "branch",
+      });
+      mockedGetOrCreateBranch.mockResolvedValue({
+        id: "branch-123",
+        name: "feature_add_fetch",
+        token: "branch-token",
+        created_at: "2024-01-01T00:00:00Z",
+        wasCreated: false,
+      });
+
+      const client = new TinybirdClient({
+        baseUrl: "https://api.tinybird.co",
+        token: "workspace-token",
+        fetch: customFetch as typeof fetch,
+        devMode: true,
+      });
+
+      const context = await client.getContext();
+
+      expect(mockedLoadConfigAsync).toHaveBeenCalled();
+      expect(mockedGetOrCreateBranch).toHaveBeenCalledWith(
+        {
+          baseUrl: "https://api.tinybird.co",
+          token: "workspace-token",
+          fetch: customFetch,
+        },
+        "feature_add_fetch"
+      );
+      expect(context.token).toBe("branch-token");
+      expect(context.isBranchToken).toBe(true);
+      expect(context.branchName).toBe("feature_add_fetch");
+      expect(context.gitBranch).toBe("feature/add-fetch");
     });
   });
 

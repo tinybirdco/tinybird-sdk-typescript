@@ -343,7 +343,11 @@ export class TinybirdClient {
 
       // Get or create branch (always fetch fresh to avoid stale cache issues)
       const branch = await getOrCreateBranch(
-        { baseUrl: this.config.baseUrl, token: this.config.token },
+        {
+          baseUrl: this.config.baseUrl,
+          token: this.config.token,
+          fetch: this.config.fetch,
+        },
         branchName
       );
 

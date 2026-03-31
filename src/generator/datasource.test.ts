@@ -142,7 +142,7 @@ describe('Datasource Generator', () => {
       expect(result.content).toContain('country LowCardinality(String)');
     });
 
-    it('formats LowCardinality(Nullable) correctly', () => {
+    it('formats LowCardinality(Nullable) correctly with .lowCardinality().nullable()', () => {
       const ds = defineDatasource('test_ds', {
         schema: {
           country: t.string().lowCardinality().nullable(),
@@ -151,6 +151,19 @@ describe('Datasource Generator', () => {
 
       const result = generateDatasource(ds);
       expect(result.content).toContain('country LowCardinality(Nullable(String))');
+      expect(result.content).not.toContain('Nullable(LowCardinality');
+    });
+
+    it('formats LowCardinality(Nullable) correctly with .nullable().lowCardinality()', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          country: t.string().nullable().lowCardinality(),
+        },
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('country LowCardinality(Nullable(String))');
+      expect(result.content).not.toContain('Nullable(LowCardinality');
     });
 
     it('includes default values', () => {

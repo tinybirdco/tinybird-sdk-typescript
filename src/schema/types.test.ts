@@ -87,10 +87,18 @@ describe("Type Validators (t.*)", () => {
       expect(type._tinybirdType).toBe("LowCardinality(Nullable(String))");
     });
 
-    it("preserves both modifiers when chained", () => {
+    it("preserves lowCardinality modifier and omits nullable when combined (nullable is in the type string)", () => {
       const type = t.string().lowCardinality().nullable();
       expect(type._modifiers.lowCardinality).toBe(true);
-      expect(type._modifiers.nullable).toBe(true);
+      expect(type._modifiers.nullable).toBeUndefined();
+      expect(type._tinybirdType).toBe("LowCardinality(Nullable(String))");
+    });
+
+    it("omits nullable modifier when nullable().lowCardinality() is chained", () => {
+      const type = t.string().nullable().lowCardinality();
+      expect(type._modifiers.lowCardinality).toBe(true);
+      expect(type._modifiers.nullable).toBeUndefined();
+      expect(type._tinybirdType).toBe("LowCardinality(Nullable(String))");
     });
   });
 

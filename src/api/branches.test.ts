@@ -188,6 +188,45 @@ describe("Branch API client", () => {
         BranchApiError
       );
     });
+
+    it("uses custom fetch when provided", async () => {
+      const customFetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              job: { id: "job-123", status: "waiting" },
+              workspace: { id: "ws-123" },
+            }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: "job-123", status: "done" }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              id: "branch-123",
+              name: "my-feature",
+              token: "p.branch-token",
+              created_at: "2024-01-01T00:00:00Z",
+            }),
+        });
+
+      const result = await createBranch(
+        {
+          ...config,
+          fetch: customFetch as typeof fetch,
+        },
+        "my-feature"
+      );
+
+      expect(customFetch).toHaveBeenCalledTimes(3);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(result.token).toBe("p.branch-token");
+    });
   });
 
   describe("listBranches", () => {
