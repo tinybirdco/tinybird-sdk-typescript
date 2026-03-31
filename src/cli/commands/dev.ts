@@ -193,16 +193,19 @@ export async function runDev(
     // Local mode: get tokens from local container and set up workspace
     const localTokens = await getLocalTokens();
 
+    // Always fetch the cloud workspace name for dashboard URL
+    const authenticatedWorkspace = await getWorkspace({
+      baseUrl: config.baseUrl,
+      token: config.token,
+    });
+    const cloudWorkspaceName = authenticatedWorkspace.name;
+
     // Determine workspace name: use authenticated workspace name on main branch,
     // otherwise use branch name (for trunk-based development support)
     let workspaceName: string;
     if (config.isMainBranch || !config.tinybirdBranch) {
       // On main branch: use the authenticated workspace name
-      const authenticatedWorkspace = await getWorkspace({
-        baseUrl: config.baseUrl,
-        token: config.token,
-      });
-      workspaceName = authenticatedWorkspace.name;
+      workspaceName = cloudWorkspaceName;
     } else {
       // On feature branch: use branch name
       workspaceName = getLocalWorkspaceName(config.tinybirdBranch, config.cwd);
@@ -221,7 +224,7 @@ export async function runDev(
       isLocal: true,
       localWorkspace: workspace,
       wasCreated,
-      dashboardUrl: getLocalDashboardUrl(workspace.name),
+      dashboardUrl: getLocalDashboardUrl(config.baseUrl, cloudWorkspaceName, workspace.name) ?? undefined,
     };
   } else {
     // Branch mode: use Tinybird cloud with branches

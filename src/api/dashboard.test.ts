@@ -98,18 +98,28 @@ describe("getBranchDashboardUrl", () => {
 });
 
 describe("getLocalDashboardUrl", () => {
-  it("generates local dashboard URL with default port", () => {
-    const result = getLocalDashboardUrl("my_local_workspace");
-    expect(result).toBe("https://cloud.tinybird.co/local/7181/my_local_workspace");
+  it("generates local dashboard URL with region info", () => {
+    const result = getLocalDashboardUrl("https://api.tinybird.co", "my_cloud_workspace", "my_local_workspace");
+    expect(result).toBe("https://cloud.tinybird.co/gcp/europe-west3/my_cloud_workspace~local~my_local_workspace");
   });
 
-  it("generates local dashboard URL with custom port", () => {
-    const result = getLocalDashboardUrl("my_local_workspace", 8080);
-    expect(result).toBe("https://cloud.tinybird.co/local/8080/my_local_workspace");
+  it("generates local dashboard URL for US East GCP", () => {
+    const result = getLocalDashboardUrl("https://api.us-east.tinybird.co", "my_cloud_workspace", "feature_branch");
+    expect(result).toBe("https://cloud.tinybird.co/gcp/us-east4/my_cloud_workspace~local~feature_branch");
+  });
+
+  it("generates local dashboard URL for AWS", () => {
+    const result = getLocalDashboardUrl("https://api.us-west-2.aws.tinybird.co", "my_cloud_workspace", "feature_branch");
+    expect(result).toBe("https://cloud.tinybird.co/aws/us-west-2/my_cloud_workspace~local~feature_branch");
+  });
+
+  it("returns null for unknown regions", () => {
+    const result = getLocalDashboardUrl("https://api.unknown.tinybird.co", "my_cloud_workspace", "feature_branch");
+    expect(result).toBeNull();
   });
 
   it("handles workspace names with underscores", () => {
-    const result = getLocalDashboardUrl("dublin_feature_branch");
-    expect(result).toBe("https://cloud.tinybird.co/local/7181/dublin_feature_branch");
+    const result = getLocalDashboardUrl("https://api.tinybird.co", "tssdkgnzinit", "dublin_feature_branch");
+    expect(result).toBe("https://cloud.tinybird.co/gcp/europe-west3/tssdkgnzinit~local~dublin_feature_branch");
   });
 });

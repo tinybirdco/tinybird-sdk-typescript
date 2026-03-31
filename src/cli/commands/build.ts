@@ -135,16 +135,19 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
 
       const localTokens = await getLocalTokens();
 
+      // Always fetch the cloud workspace name for dashboard URL
+      const authenticatedWorkspace = await getWorkspace({
+        baseUrl: config.baseUrl,
+        token: config.token,
+      });
+      const cloudWorkspaceName = authenticatedWorkspace.name;
+
       // Determine workspace name: use authenticated workspace name on main branch,
       // otherwise use branch name (for trunk-based development support)
       let workspaceName: string;
       if (config.isMainBranch || !config.tinybirdBranch) {
         // On main branch: use the authenticated workspace name
-        const authenticatedWorkspace = await getWorkspace({
-          baseUrl: config.baseUrl,
-          token: config.token,
-        });
-        workspaceName = authenticatedWorkspace.name;
+        workspaceName = cloudWorkspaceName;
         if (debug) {
           console.log(`[debug] Using authenticated workspace name: ${workspaceName}`);
         }
@@ -165,7 +168,7 @@ export async function runBuild(options: BuildCommandOptions = {}): Promise<Build
         gitBranch: config.gitBranch,
         tinybirdBranch: workspaceName,
         wasCreated,
-        dashboardUrl: getLocalDashboardUrl(workspaceName),
+        dashboardUrl: getLocalDashboardUrl(config.baseUrl, cloudWorkspaceName, workspaceName) ?? undefined,
         isLocal: true,
       };
 

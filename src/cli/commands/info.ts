@@ -195,7 +195,7 @@ export async function runInfo(
           workspaceName: localWorkspace.name,
           workspaceId: localWorkspace.id,
           apiHost: LOCAL_BASE_URL,
-          dashboardUrl: getLocalDashboardUrl(localWorkspace.name),
+          dashboardUrl: getLocalDashboardUrl(config.baseUrl, workspace.name, localWorkspace.name) ?? undefined,
           token: localWorkspace.token,
         };
       } catch {
