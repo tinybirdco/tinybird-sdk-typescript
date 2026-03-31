@@ -106,16 +106,24 @@ export function getBranchDashboardUrl(
 /**
  * Generate a local Tinybird dashboard URL
  *
- * @param workspaceName - The local workspace name
- * @param port - The local Tinybird port (default: 7181)
- * @returns Local dashboard URL
+ * The URL follows the format: https://cloud.tinybird.co/{provider}/{region}/{cloudWorkspaceName}~local~{localWorkspaceName}
+ *
+ * @param apiUrl - The Tinybird API base URL (e.g., "https://api.tinybird.co")
+ * @param cloudWorkspaceName - The cloud workspace name (e.g., "tssdkgnzinit")
+ * @param localWorkspaceName - The local workspace/branch name (e.g., "rama_nuria")
+ * @returns Local dashboard URL or null if the API URL is not recognized
  *
  * @example
  * ```ts
- * getLocalDashboardUrl("my_local_workspace")
- * // => "https://cloud.tinybird.co/local/7181/my_local_workspace"
+ * getLocalDashboardUrl("https://api.tinybird.co", "tssdkgnzinit", "rama_nuria")
+ * // => "https://cloud.tinybird.co/gcp/europe-west3/tssdkgnzinit~local~rama_nuria"
  * ```
  */
-export function getLocalDashboardUrl(workspaceName: string, port = 7181): string {
-  return `https://cloud.tinybird.co/local/${port}/${workspaceName}`;
+export function getLocalDashboardUrl(apiUrl: string, cloudWorkspaceName: string, localWorkspaceName: string): string | null {
+  const regionInfo = parseApiUrl(apiUrl);
+  if (!regionInfo) {
+    return null;
+  }
+
+  return `https://cloud.tinybird.co/${regionInfo.provider}/${regionInfo.region}/${cloudWorkspaceName}~local~${localWorkspaceName}`;
 }

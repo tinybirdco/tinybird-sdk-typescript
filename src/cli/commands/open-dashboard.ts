@@ -125,7 +125,7 @@ export async function runOpenDashboard(
         tokens,
         workspaceName
       );
-      url = getLocalDashboardUrl(localWorkspace.name);
+      url = getLocalDashboardUrl(config.baseUrl, workspace.name, localWorkspace.name);
     } catch (error) {
       return {
         success: false,

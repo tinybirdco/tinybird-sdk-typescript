@@ -268,9 +268,9 @@ export function showBranchInfo(info: BranchDisplayInfo): void {
     if (info.gitBranch) {
       console.log(`» Git branch:      ${info.gitBranch}`);
     }
-    // Show local workspace
+    // Show local branch
     const name = info.tinybirdBranch ?? "unknown";
-    console.log(`» Local workspace: ${name} ${status}`);
+    console.log(`» Tinybird Local branch: ${name} ${status}`);
     // Show dashboard URL
     if (info.dashboardUrl) {
       console.log(colorize(`  ↳ ${info.dashboardUrl}`, "gray"));
