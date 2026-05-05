@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { buildFromInclude } from "../../generator/index.js";
 import { runMigrate } from "./migrate.js";
 
 function writeFile(dir: string, relativePath: string, content: string): void {
@@ -1508,6 +1509,51 @@ TYPE endpoint
       'days: p.int32().optional(1).describe("Number of days to analyze (defaults to 1 day)"),'
     );
     expect(output).toContain("{{ Int32(days) }}");
+  });
+
+  it("escapes pipe SQL backslashes in migrated TypeScript template literals", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "escape_percent.pipe",
+      String.raw`NODE endpoint
+SQL >
+  %
+  SELECT replaceAll({{ String(value) }}, '\\%', '%') AS value
+TYPE endpoint
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain(
+      String.raw`SELECT replaceAll({{ String(value) }}, '\\\\%', '%') AS value`
+    );
+
+    fs.writeFileSync(
+      result.outputPath,
+      output.replace("@tinybirdco/sdk", path.resolve(process.cwd(), "src/index.ts"))
+    );
+
+    const build = await buildFromInclude({
+      cwd: tempDir,
+      includePaths: [result.outputPath],
+    });
+
+    expect(build.resources.pipes).toHaveLength(1);
+    expect(build.resources.pipes[0]?.content).toContain(
+      String.raw`SELECT replaceAll({{ String(value) }}, '\\%', '%') AS value`
+    );
   });
 
   it("migrates datasource with mixed explicit and default json paths", async () => {
