@@ -219,8 +219,10 @@ function validateOutputSchema(
 
     if (!actualType) {
       // Column missing from response
-      result.missingColumns.push({ name, expectedType });
-      result.valid = false;
+      if (!validator._modifiers?.optional) {
+        result.missingColumns.push({ name, expectedType });
+        result.valid = false;
+      }
     } else if (!typesAreCompatible(actualType, expectedType)) {
       // Column exists but type doesn't match
       result.typeMismatches.push({ name, expectedType, actualType });

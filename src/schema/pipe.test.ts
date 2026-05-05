@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, expectTypeOf } from "vitest";
 import {
   definePipe,
   defineSinkPipe,
@@ -19,6 +19,7 @@ import { defineKafkaConnection, defineS3Connection } from "./connection.js";
 import { t } from "./types.js";
 import { p } from "./params.js";
 import { engine } from "./engines.js";
+import type { InferOutputRow } from "../infer/index.js";
 
 describe("Pipe Schema", () => {
   describe("node", () => {
@@ -80,6 +81,30 @@ describe("Pipe Schema", () => {
       });
 
       expect(pipe.options.description).toBe("A test pipe");
+    });
+
+    it("infers optional output fields as optional object properties", () => {
+      const pipe = definePipe("my_pipe", {
+        nodes: [node({ name: "endpoint", sql: "SELECT 1" })],
+        output: {
+          id: t.uint64(),
+          subtitle: t.string().optional(),
+          metadata: t.string().nullable().optional(),
+        },
+        endpoint: true,
+      });
+
+      type Row = InferOutputRow<typeof pipe>;
+
+      const requiredOnly: Row = { id: 1 };
+      const withOptionals: Row = { id: 1, subtitle: "hello", metadata: null };
+
+      expectTypeOf<Row["id"]>().toEqualTypeOf<number>();
+      expectTypeOf<Row["subtitle"]>().toEqualTypeOf<string | undefined>();
+      expectTypeOf<Row["metadata"]>().toEqualTypeOf<string | null | undefined>();
+      expect(requiredOnly).toEqual({ id: 1 });
+      expect(withOptionals).toEqual({ id: 1, subtitle: "hello", metadata: null });
+      expect(pipe._output?.subtitle?._modifiers.optional).toBe(true);
     });
 
     it("throws error for invalid pipe name", () => {

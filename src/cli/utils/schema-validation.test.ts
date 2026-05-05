@@ -93,6 +93,20 @@ describe("validateOutputSchema", () => {
     });
   });
 
+  it("allows missing optional output columns", () => {
+    const responseMeta: ColumnMeta[] = [{ name: "id", type: "UInt64" }];
+
+    const outputSchema = {
+      id: { _tinybirdType: "UInt64", _modifiers: {} },
+      name: { _tinybirdType: "String", _modifiers: { optional: true } },
+    };
+
+    const result = _validateOutputSchema(responseMeta, outputSchema as any);
+
+    expect(result.valid).toBe(true);
+    expect(result.missingColumns).toHaveLength(0);
+  });
+
   it("detects extra columns", () => {
     const responseMeta: ColumnMeta[] = [
       { name: "id", type: "UInt64" },

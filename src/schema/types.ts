@@ -24,6 +24,12 @@ export interface TypeValidator<
   /** Metadata about modifiers applied */
   readonly _modifiers: TModifiers;
 
+  /** Mark this output field as optional (it may be absent from endpoint responses) */
+  optional(): TypeValidator<
+    TType,
+    TTinybirdType,
+    TModifiers & { optional: true }
+  >;
   /** Make this column nullable */
   nullable(): TypeValidator<
     TType | null,
@@ -63,6 +69,7 @@ export interface TypeValidator<
 }
 
 export interface TypeModifiers {
+  optional?: boolean;
   nullable?: boolean;
   lowCardinality?: boolean;
   hasDefault?: boolean;
@@ -93,6 +100,17 @@ function createValidator<TType, TTinybirdType extends string>(
     _modifiers: modifiers,
     tinybirdType,
     modifiers,
+
+    optional() {
+      return createValidator<TType, TTinybirdType>(tinybirdType, {
+        ...modifiers,
+        optional: true,
+      }) as TypeValidator<
+        TType,
+        TTinybirdType,
+        TypeModifiers & { optional: true }
+      >;
+    },
 
     nullable() {
       // If already has LowCardinality, we need to move Nullable inside

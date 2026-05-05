@@ -676,11 +676,13 @@ export const topEvents = defineEndpoint("top_events", {
   output: {
     event_name: t.string(),
     event_count: t.uint64(),
+    debug_info: t.string().optional(), // May be absent from some responses
   },
 });
 
 export type TopEventsParams = InferParams<typeof topEvents>;
 export type TopEventsOutput = InferOutputRow<typeof topEvents>;
+// { event_name: string; event_count: number; debug_info?: string }
 ```
 
 ### Internal Pipes (not exposed as API)
@@ -906,7 +908,8 @@ const schema = {
   unique_users: t.aggregateFunction("uniq", t.string()),
 
   // Modifiers
-  optional_field: t.string().nullable(),
+  nullable_field: t.string().nullable(),
+  optional_output_field: t.string().optional(), // For endpoint output schemas
   category: t.string().lowCardinality(),
   status: t.string().default("pending"),
   event_id: t.uuid().defaultExpr("generateUUIDv4()"),
