@@ -175,7 +175,7 @@ describe("clickhouseTypeToValidator", () => {
 
     it("handles AggregateFunction(count) without explicit state type", () => {
       expect(clickhouseTypeToValidator("AggregateFunction(count)")).toBe(
-        't.aggregateFunction("count", t.uint64())'
+        't.aggregateFunction("count")'
       );
     });
   });

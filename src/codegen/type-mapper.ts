@@ -257,7 +257,7 @@ export function clickhouseTypeToValidator(chType: string): string {
   if (aggNoArgMatch) {
     const func = aggNoArgMatch[1];
     if (func === "count") {
-      return 't.aggregateFunction("count", t.uint64())';
+      return 't.aggregateFunction("count")';
     }
     return `t.string() /* TODO: Unknown type: ${chType} */`;
   }

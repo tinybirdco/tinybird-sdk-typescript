@@ -204,6 +204,38 @@ function createValidator<TType, TTinybirdType extends string>(
   return validator;
 }
 
+type AggregateFunctionValidator = {
+  <TFunc extends string>(
+    func: TFunc,
+  ): TypeValidator<unknown, `AggregateFunction(${TFunc})`, TypeModifiers>;
+  <
+    TFunc extends string,
+    TType extends TypeValidator<unknown, string, TypeModifiers>,
+  >(
+    func: TFunc,
+    type: TType,
+  ): TypeValidator<
+    TType["_type"],
+    `AggregateFunction(${TFunc}, ${TType["_tinybirdType"]})`,
+    TypeModifiers
+  >;
+};
+
+const aggregateFunction = ((
+  func: string,
+  type?: TypeValidator<unknown, string, TypeModifiers>,
+) => {
+  if (type === undefined) {
+    return createValidator<unknown, `AggregateFunction(${string})`>(
+      `AggregateFunction(${func})`,
+    );
+  }
+
+  return createValidator<unknown, `AggregateFunction(${string}, ${string})`>(
+    `AggregateFunction(${func}, ${type._tinybirdType})`,
+  );
+}) as AggregateFunctionValidator;
+
 /**
  * Type validators for Tinybird columns
  *
@@ -434,21 +466,7 @@ export const t = {
     >(`SimpleAggregateFunction(${func}, ${type._tinybirdType})`),
 
   /** AggregateFunction - for materialized views with complex aggregates */
-  aggregateFunction: <
-    TFunc extends string,
-    TType extends TypeValidator<unknown, string, TypeModifiers>,
-  >(
-    func: TFunc,
-    type: TType,
-  ): TypeValidator<
-    TType["_type"],
-    `AggregateFunction(${TFunc}, ${TType["_tinybirdType"]})`,
-    TypeModifiers
-  > =>
-    createValidator<
-      TType["_type"],
-      `AggregateFunction(${TFunc}, ${TType["_tinybirdType"]})`
-    >(`AggregateFunction(${func}, ${type._tinybirdType})`),
+  aggregateFunction,
 } as const;
 
 /** Type alias for any type validator */

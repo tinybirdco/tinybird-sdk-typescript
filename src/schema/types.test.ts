@@ -200,6 +200,20 @@ describe("Type Validators (t.*)", () => {
     });
   });
 
+  describe("Aggregate function types", () => {
+    it("generates AggregateFunction with an explicit state type", () => {
+      const type = t.aggregateFunction("uniq", t.string());
+      expect(type._tinybirdType).toBe("AggregateFunction(uniq, String)");
+      expectTypeOf(type._type).toEqualTypeOf<string>();
+    });
+
+    it("generates AggregateFunction without an explicit state type", () => {
+      const type = t.aggregateFunction("count");
+      expect(type._tinybirdType).toBe("AggregateFunction(count)");
+      expectTypeOf(type._type).toEqualTypeOf<unknown>();
+    });
+  });
+
   describe("Helper functions", () => {
     it("isTypeValidator returns true for validators", () => {
       expect(isTypeValidator(t.string())).toBe(true);
