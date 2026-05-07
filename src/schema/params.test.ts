@@ -111,6 +111,7 @@ describe('Parameter Validators (p.*)', () => {
       const param = p.int32().optional();
       expect(param._required).toBe(false);
       expect(param._default).toBeUndefined();
+      expect(param._requiredModifier).toBe('optional');
     });
 
     it('makes parameter optional with default value', () => {
@@ -130,6 +131,11 @@ describe('Parameter Validators (p.*)', () => {
     it('makes optional parameter required again', () => {
       const param = p.int32().optional(10).required();
       expect(param._required).toBe(true);
+    });
+
+    it('tracks explicit required modifier separately from required by default', () => {
+      expect(p.string()._requiredModifier).toBeUndefined();
+      expect(p.string().required()._requiredModifier).toBe('required');
     });
   });
 

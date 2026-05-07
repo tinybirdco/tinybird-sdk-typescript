@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generatePipe, generateAllPipes } from './pipe.js';
-import { definePipe, defineMaterializedView, defineSinkPipe, node } from '../schema/pipe.js';
+import { definePipe, defineEndpoint, defineMaterializedView, defineSinkPipe, node } from '../schema/pipe.js';
 import { defineDatasource } from '../schema/datasource.js';
 import { defineKafkaConnection, defineS3Connection } from '../schema/connection.js';
 import { defineToken } from '../schema/token.js';
@@ -182,8 +182,8 @@ describe('Pipe Generator', () => {
       });
 
       const result = generatePipe(pipe);
-      expect(result.content).toContain("{{ Date(start_date, '2025-03-01') }}");
-      expect(result.content).toContain('{{ Int32(page, 0) }}');
+      expect(result.content).toContain("{{ Date(start_date, '2025-03-01', required=False) }}");
+      expect(result.content).toContain('{{ Int32(page, 0, required=False) }}');
     });
   });
 
@@ -254,6 +254,77 @@ describe('Pipe Generator', () => {
       const result = generatePipe(pipe);
       expect(result.content).toContain('CACHE 60');
     });
+
+    it('emits explicit required and description metadata for endpoint params', () => {
+      const pipe = definePipe('account_demos', {
+        params: {
+          id: p.string().required().describe('The company account ID'),
+          workspaceId: p.string().required().describe('The workspace ID'),
+        },
+        nodes: [
+          node({
+            name: 'endpoint',
+            sql: `
+SELECT *
+FROM events
+WHERE workspaceId = {{ String(workspaceId) }}
+  AND companyAccountId = {{ String(id) }}
+            `.trim(),
+          }),
+        ],
+        output: simpleOutput,
+        endpoint: true,
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain(
+        '{{ String(workspaceId, required=True, description="The workspace ID") }}'
+      );
+      expect(result.content).toContain(
+        '{{ String(id, required=True, description="The company account ID") }}'
+      );
+    });
+
+    it('emits optional metadata without duplicating existing default or description args', () => {
+      const pipe = definePipe('test_pipe', {
+        params: {
+          limit: p.int32().optional(10).describe('Number of rows'),
+        },
+        nodes: [
+          node({
+            name: 'endpoint',
+            sql: 'SELECT * FROM events LIMIT {{ Int32(limit, 10, description="Existing") }}',
+          }),
+        ],
+        output: simpleOutput,
+        endpoint: true,
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain(
+        '{{ Int32(limit, 10, description="Existing", required=False) }}'
+      );
+    });
+
+    it('emits param metadata for defineEndpoint helper', () => {
+      const pipe = defineEndpoint('test_endpoint', {
+        params: {
+          workspaceId: p.string().required().describe('The workspace ID'),
+        },
+        nodes: [
+          node({
+            name: 'endpoint',
+            sql: 'SELECT * FROM events WHERE workspaceId = {{ String(workspaceId) }}',
+          }),
+        ],
+        output: simpleOutput,
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain(
+        '{{ String(workspaceId, required=True, description="The workspace ID") }}'
+      );
+    });
   });
 
   describe('generateAllPipes', () => {
@@ -317,7 +388,7 @@ LIMIT {{Int32(limit, 10)}}
       expect(result.content).toContain('    %\n');
       expect(result.content).toContain('pathname');
       expect(result.content).toContain('{{DateTime(start_date)}}');
-      expect(result.content).toContain('{{Int32(limit, 10)}}');
+      expect(result.content).toContain('{{ Int32(limit, 10, required=False) }}');
       expect(result.content).toContain('TYPE endpoint');
     });
   });
