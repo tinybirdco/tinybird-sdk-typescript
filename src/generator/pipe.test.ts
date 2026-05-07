@@ -306,6 +306,27 @@ WHERE workspaceId = {{ String(workspaceId) }}
       );
     });
 
+    it('does not emit unsupported keyword args for column params', () => {
+      const pipe = definePipe('visitor_filters', {
+        params: {
+          orderBy: p.column().optional('lastSeen').describe('Column used for sorting'),
+        },
+        nodes: [
+          node({
+            name: 'endpoint',
+            sql: 'SELECT * FROM visitors ORDER BY {{ column(orderBy) }}',
+          }),
+        ],
+        output: simpleOutput,
+        endpoint: true,
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain("{{ column(orderBy, 'lastSeen') }}");
+      expect(result.content).not.toContain('column(orderBy, \'lastSeen\', required=False)');
+      expect(result.content).not.toContain('description="Column used for sorting"');
+    });
+
     it('emits param metadata for defineEndpoint helper', () => {
       const pipe = defineEndpoint('test_endpoint', {
         params: {

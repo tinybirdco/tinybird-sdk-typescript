@@ -22,6 +22,7 @@ import type { AnyParamValidator } from "../schema/params.js";
 import {
   getParamDefault,
   getParamDescription,
+  getParamTinybirdType,
   getParamRequiredModifier,
   isParamRequired,
 } from "../schema/params.js";
@@ -132,6 +133,10 @@ function buildParamTemplateArgs(
     !hasKeywordArg(nextArgs, "default")
   ) {
     nextArgs.push(toTemplateDefaultLiteral(defaultValue as string | number | boolean));
+  }
+
+  if (getParamTinybirdType(validator) === "column") {
+    return nextArgs;
   }
 
   const requiredModifier = getParamRequiredModifier(validator);
