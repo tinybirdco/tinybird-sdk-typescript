@@ -19,7 +19,12 @@ import {
   getSinkConfig,
 } from "../schema/pipe.js";
 import type { AnyParamValidator } from "../schema/params.js";
-import { getParamDefault } from "../schema/params.js";
+import {
+  getParamDefault,
+  getParamDescription,
+  getParamRequiredModifier,
+  isParamRequired,
+} from "../schema/params.js";
 
 /**
  * Generated pipe content
@@ -96,23 +101,57 @@ function toTemplateDefaultLiteral(value: string | number | boolean): string {
   return String(value);
 }
 
-function applyParamDefaultsToSql(
+function toTemplateStringLiteral(value: string): string {
+  return JSON.stringify(value);
+}
+
+function hasKeywordArg(args: string[], key: string): boolean {
+  const keyLower = key.toLowerCase();
+  return args.some((arg) => {
+    const equalsIndex = arg.indexOf("=");
+    if (equalsIndex <= 0) {
+      return false;
+    }
+    return arg.slice(0, equalsIndex).trim().toLowerCase() === keyLower;
+  });
+}
+
+function hasPositionalDefaultArg(args: string[]): boolean {
+  return args.slice(1).some((arg) => !/^[a-zA-Z_][a-zA-Z0-9_]*\s*=/.test(arg.trim()));
+}
+
+function buildParamTemplateArgs(
+  args: string[],
+  validator: AnyParamValidator
+): string[] {
+  const nextArgs = [...args];
+  const defaultValue = getParamDefault(validator);
+  if (
+    defaultValue !== undefined &&
+    !hasPositionalDefaultArg(nextArgs) &&
+    !hasKeywordArg(nextArgs, "default")
+  ) {
+    nextArgs.push(toTemplateDefaultLiteral(defaultValue as string | number | boolean));
+  }
+
+  const requiredModifier = getParamRequiredModifier(validator);
+  if (requiredModifier && !hasKeywordArg(nextArgs, "required")) {
+    nextArgs.push(`required=${isParamRequired(validator) ? "True" : "False"}`);
+  }
+
+  const description = getParamDescription(validator);
+  if (description !== undefined && !hasKeywordArg(nextArgs, "description")) {
+    nextArgs.push(`description=${toTemplateStringLiteral(description)}`);
+  }
+
+  return nextArgs;
+}
+
+function applyParamMetadataToSql(
   sql: string,
   params?: Record<string, AnyParamValidator>
 ): string {
   if (!params) {
-    return sql;
-  }
-
-  const defaults = new Map<string, string>();
-  for (const [name, validator] of Object.entries(params)) {
-    const defaultValue = getParamDefault(validator);
-    if (defaultValue !== undefined) {
-      defaults.set(name, toTemplateDefaultLiteral(defaultValue as string | number | boolean));
-    }
-  }
-
-  if (defaults.size === 0) {
     return sql;
   }
 
@@ -123,7 +162,7 @@ function applyParamDefaultsToSql(
       /([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^()]*)\)/g,
       (call, _functionName, rawArgs) => {
         const args = splitTopLevelComma(String(rawArgs));
-        if (args.length !== 1) {
+        if (args.length === 0) {
           return call;
         }
 
@@ -132,12 +171,17 @@ function applyParamDefaultsToSql(
           return call;
         }
 
-        const defaultLiteral = defaults.get(paramName);
-        if (!defaultLiteral) {
+        const validator = params[paramName];
+        if (!validator) {
           return call;
         }
 
-        return call.replace(/\)\s*$/, `, ${defaultLiteral})`);
+        const nextArgs = buildParamTemplateArgs(args, validator);
+        if (nextArgs.length === args.length) {
+          return call;
+        }
+
+        return call.replace(/\([^()]*\)\s*$/, `(${nextArgs.join(", ")})`);
       }
     );
 
@@ -172,8 +216,8 @@ function generateNode(
     parts.push(`    %`);
   }
 
-  const sqlWithDefaults = applyParamDefaultsToSql(node.sql, params);
-  const sqlLines = sqlWithDefaults.trim().split("\n");
+  const sqlWithParamMetadata = applyParamMetadataToSql(node.sql, params);
+  const sqlLines = sqlWithParamMetadata.trim().split("\n");
   sqlLines.forEach((line) => {
     parts.push(`    ${line}`);
   });

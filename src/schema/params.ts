@@ -26,6 +26,8 @@ export interface ParamValidator<
   readonly _default?: TType;
   /** Description for documentation */
   readonly _description?: string;
+  /** Whether required/optional was explicitly set by a modifier */
+  readonly _requiredModifier?: "required" | "optional";
 
   /** Make this parameter optional with an optional default value */
   optional<TDefault extends TType | undefined = undefined>(
@@ -62,6 +64,7 @@ function createParamValidator<
     required?: TRequired;
     defaultValue?: TType;
     description?: string;
+    requiredModifier?: "required" | "optional";
   } = {}
 ): ParamValidator<TType, TTinybirdType, TRequired> {
   const isRequired = (options.required ?? true) as TRequired;
@@ -73,6 +76,7 @@ function createParamValidator<
     _required: isRequired,
     _default: options.defaultValue,
     _description: options.description,
+    _requiredModifier: options.requiredModifier,
     tinybirdType,
     isRequired,
     defaultValue: options.defaultValue,
@@ -87,6 +91,7 @@ function createParamValidator<
         required: false,
         defaultValue: defaultValue as TDefault extends undefined ? TType | undefined : TType,
         description: options.description,
+        requiredModifier: "optional",
       });
     },
 
@@ -94,6 +99,7 @@ function createParamValidator<
       return createParamValidator<TType, TTinybirdType, true>(tinybirdType, {
         required: true,
         description: options.description,
+        requiredModifier: "required",
       });
     },
 
@@ -102,6 +108,7 @@ function createParamValidator<
         required: isRequired,
         defaultValue: options.defaultValue,
         description,
+        requiredModifier: options.requiredModifier,
       });
     },
   };
@@ -247,4 +254,11 @@ export function getParamDefault<T>(validator: ParamValidator<T, string, boolean>
 /** Get the description of a parameter */
 export function getParamDescription(validator: AnyParamValidator): string | undefined {
   return validator._description;
+}
+
+/** Check whether required/optional was explicitly set by a modifier */
+export function getParamRequiredModifier(
+  validator: AnyParamValidator
+): "required" | "optional" | undefined {
+  return validator._requiredModifier;
 }
