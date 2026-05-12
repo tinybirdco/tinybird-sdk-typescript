@@ -136,6 +136,13 @@ async function waitForMaterializedColumnData(
   return [];
 }
 
+function expectBuildSuccess(buildResult: Awaited<ReturnType<typeof runBuild>>): void {
+  if (!buildResult.success) {
+    throw new Error(buildResult.error ?? "Build failed without an error message.");
+  }
+  expect(buildResult.success).toBe(true);
+}
+
 describeLive("E2E Live: build", () => {
   const config = liveConfig as LiveE2EConfig;
 
@@ -203,7 +210,7 @@ describeLive("E2E Live: build", () => {
     setConfigBaseUrl(tempDir, config.baseUrl);
 
     const buildResult = await runBuild({ cwd: tempDir });
-    expect(buildResult.success).toBe(true);
+    expectBuildSuccess(buildResult);
     expect(buildResult.deploy?.success).toBe(true);
     expect(buildResult.branchInfo?.tinybirdBranch).toBeTruthy();
 
@@ -250,7 +257,7 @@ describeLive("E2E Live: build", () => {
     writeMaterializedColumnProject(tempDir, config.baseUrl);
 
     const buildResult = await runBuild({ cwd: tempDir });
-    expect(buildResult.success).toBe(true);
+    expectBuildSuccess(buildResult);
     expect(buildResult.deploy?.success).toBe(true);
     expect(buildResult.branchInfo?.tinybirdBranch).toBeTruthy();
 
