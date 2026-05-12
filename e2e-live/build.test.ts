@@ -146,6 +146,7 @@ describeLive("E2E Live: build", () => {
   let workspaceName = "";
   let workspaceToken = "";
   const tinybirdBranchNames: string[] = [];
+  let testBranchIndex = 0;
 
   beforeAll(async () => {
     ensureDistBuild();
@@ -159,7 +160,10 @@ describeLive("E2E Live: build", () => {
   beforeEach(() => {
     tempDir = createTempProjectDir();
     originalEnv = { ...process.env };
-    process.env.GITHUB_REF_NAME = `live-build/${workspaceName}`;
+    testBranchIndex += 1;
+    const testBranchName = `live-build/${workspaceName}/${testBranchIndex}`;
+    process.env.GITHUB_HEAD_REF = testBranchName;
+    process.env.GITHUB_REF_NAME = testBranchName;
     process.env.TINYBIRD_TOKEN = workspaceToken;
   });
 
