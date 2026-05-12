@@ -207,6 +207,39 @@ describe('Datasource Generator', () => {
       expect(result.content).not.toContain("`json:$.level`");
     });
 
+    it("generates the full datasource file for a schema with a materialized column", () => {
+      const ds = defineDatasource("raw_logs", {
+        description: "Raw logs with extracted severity",
+        schema: {
+          timestamp: t.dateTime(),
+          body: t.string(),
+          service_name: t.string().jsonPath("$.resource.service.name"),
+          level: t
+            .string()
+            .lowCardinality()
+            .materialized("JSONExtractString(body, 'level')"),
+        },
+        engine: engine.mergeTree({
+          sortingKey: ["service_name", "level", "timestamp"],
+          partitionKey: "toYYYYMM(timestamp)",
+        }),
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toBe(`DESCRIPTION >
+    Raw logs with extracted severity
+
+SCHEMA >
+    timestamp DateTime \`json:$.timestamp\`,
+    body String \`json:$.body\`,
+    service_name String \`json:$.resource.service.name\`,
+    level LowCardinality(String) MATERIALIZED JSONExtractString(body, 'level')
+
+ENGINE "MergeTree"
+ENGINE_PARTITION_KEY "toYYYYMM(timestamp)"
+ENGINE_SORTING_KEY "service_name, level, timestamp"`);
+    });
+
     it("includes explicit JSON paths on materialized columns", () => {
       const ds = defineDatasource("test_ds", {
         schema: {
