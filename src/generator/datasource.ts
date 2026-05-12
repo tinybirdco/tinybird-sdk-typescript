@@ -99,16 +99,19 @@ function generateColumnLine(
   const modifiers = getModifiersFromValidator(validator);
 
   const parts: string[] = [`    ${columnName} ${tinybirdType}`];
+  const hasMaterializedExpression = typeof modifiers.materializedExpression === "string";
 
   // Add JSON path for Events API ingestion support if enabled
   // Use explicit jsonPath if defined, otherwise default to $.columnName
-  if (includeJsonPaths) {
+  if (includeJsonPaths && (!hasMaterializedExpression || jsonPath !== undefined)) {
     const effectiveJsonPath = jsonPath ?? `$.${columnName}`;
     parts.push(`\`json:${effectiveJsonPath}\``);
   }
 
-  // Add default value/expression if defined
-  if (modifiers.hasDefault) {
+  // Add materialized expression or default value/expression if defined
+  if (hasMaterializedExpression) {
+    parts.push(`MATERIALIZED ${modifiers.materializedExpression}`);
+  } else if (modifiers.hasDefault) {
     if (typeof modifiers.defaultExpression === "string") {
       parts.push(`DEFAULT ${modifiers.defaultExpression}`);
     } else if (modifiers.defaultValue !== undefined) {

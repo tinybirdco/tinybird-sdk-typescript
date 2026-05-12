@@ -137,6 +137,32 @@ describe("Type Validators (t.*)", () => {
     });
   });
 
+  describe("Materialized expression modifier", () => {
+    it("stores materialized SQL expression in modifiers", () => {
+      const type = t.string().materialized("JSONExtractString(body, 'level')");
+      expect(type._modifiers.materializedExpression).toBe("JSONExtractString(body, 'level')");
+    });
+
+    it("trims materialized SQL expression", () => {
+      const type = t.string().materialized("  lower(service_name)  ");
+      expect(type._modifiers.materializedExpression).toBe("lower(service_name)");
+    });
+
+    it("throws on empty materialized SQL expression", () => {
+      expect(() => t.string().materialized("   ")).toThrow(
+        "Materialized expression cannot be empty."
+      );
+    });
+
+    it("clears default modifiers when materialized is chained after a default", () => {
+      const type = t.string().default("unknown").materialized("lower(name)");
+      expect(type._modifiers.materializedExpression).toBe("lower(name)");
+      expect(type._modifiers.hasDefault).toBeUndefined();
+      expect(type._modifiers.defaultValue).toBeUndefined();
+      expect(type._modifiers.defaultExpression).toBeUndefined();
+    });
+  });
+
   describe("Codec modifier", () => {
     it("sets codec in modifiers", () => {
       const type = t.string().codec("LZ4");
