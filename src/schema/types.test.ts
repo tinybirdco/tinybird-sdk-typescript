@@ -64,6 +64,21 @@ describe("Type Validators (t.*)", () => {
     });
   });
 
+  describe("Optional modifier", () => {
+    it("marks field as optional without changing the Tinybird type", () => {
+      const type = t.string().optional();
+      expect(type._tinybirdType).toBe("String");
+      expect(type._modifiers.optional).toBe(true);
+    });
+
+    it("can be combined with nullable fields", () => {
+      const type = t.string().nullable().optional();
+      expect(type._tinybirdType).toBe("Nullable(String)");
+      expect(type._modifiers.nullable).toBe(true);
+      expect(type._modifiers.optional).toBe(true);
+    });
+  });
+
   describe("LowCardinality modifier", () => {
     it("wraps type in LowCardinality", () => {
       const type = t.string().lowCardinality();

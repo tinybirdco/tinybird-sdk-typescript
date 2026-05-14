@@ -83,6 +83,37 @@ type OptionalParamKeys<T extends ParamsDefinition> = {
 }[keyof T];
 
 /**
+ * Extract the required output keys from an output definition
+ */
+type RequiredOutputKeys<T extends OutputDefinition> = {
+  [K in keyof T]: T[K] extends TypeValidator<unknown, string, infer M>
+    ? M extends { optional: true }
+      ? never
+      : K
+    : K;
+}[keyof T];
+
+/**
+ * Extract the optional output keys from an output definition
+ */
+type OptionalOutputKeys<T extends OutputDefinition> = {
+  [K in keyof T]: T[K] extends TypeValidator<unknown, string, infer M>
+    ? M extends { optional: true }
+      ? K
+      : never
+    : never;
+}[keyof T];
+
+/**
+ * Extract a single output row type from an output definition
+ */
+type InferOutputObject<T extends OutputDefinition> = {
+  [K in RequiredOutputKeys<T>]: InferColumn<T[K]>;
+} & {
+  [K in OptionalOutputKeys<T>]?: InferColumn<T[K]>;
+};
+
+/**
  * Extract the params type from a pipe definition
  *
  * @example
@@ -131,14 +162,14 @@ export type InferParams<T> = T extends PipeDefinition<infer P, OutputDefinition>
  * ```
  */
 export type InferOutput<T> = T extends PipeDefinition<ParamsDefinition, infer O>
-  ? { [K in keyof O]: InferColumn<O[K]> }[]
+  ? InferOutputObject<O>[]
   : never;
 
 /**
  * Extract a single output row type (without array wrapper)
  */
 export type InferOutputRow<T> = T extends PipeDefinition<ParamsDefinition, infer O>
-  ? { [K in keyof O]: InferColumn<O[K]> }
+  ? InferOutputObject<O>
   : never;
 
 /**
