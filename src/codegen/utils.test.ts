@@ -187,6 +187,13 @@ describe("generateEngineCode", () => {
     expect(code).toContain('version: "version"');
   });
 
+  it("generates Null engine", () => {
+    const code = generateEngineCode({
+      type: "Null",
+    });
+    expect(code).toBe("engine.null()");
+  });
+
   it("defaults to mergeTree for unknown engine types", () => {
     const code = generateEngineCode({
       type: "UnknownEngine",

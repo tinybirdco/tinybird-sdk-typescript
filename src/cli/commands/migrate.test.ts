@@ -1284,6 +1284,35 @@ TYPE endpoint
     expect(output).not.toContain(", engine,");
   });
 
+  it("migrates datasource with Null engine", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "null_source.datasource",
+      `SCHEMA >
+  id String,
+  timestamp DateTime
+
+ENGINE Null
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain('export const nullSource = defineDatasource("null_source", {');
+    expect(output).toContain("engine: engine.null(),");
+  });
+
   it("infers MergeTree when engine options exist without ENGINE directive", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
     tempDirs.push(tempDir);

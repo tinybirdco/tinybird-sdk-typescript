@@ -88,6 +88,7 @@ export {
 export { engine, getEngineClause, getSortingKey, getPrimaryKey } from "./schema/engines.js";
 export type {
   EngineConfig,
+  MergeTreeEngineConfig,
   BaseMergeTreeConfig,
   MergeTreeConfig,
   ReplacingMergeTreeConfig,
@@ -95,6 +96,7 @@ export type {
   AggregatingMergeTreeConfig,
   CollapsingMergeTreeConfig,
   VersionedCollapsingMergeTreeConfig,
+  NullEngineConfig,
 } from "./schema/engines.js";
 
 // ============ Utilities ============

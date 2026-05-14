@@ -100,6 +100,13 @@ describe('Engine Configurations', () => {
     });
   });
 
+  describe('Null', () => {
+    it('creates Null config', () => {
+      const config = engine.null();
+      expect(config.type).toBe('Null');
+    });
+  });
+
   describe('getEngineClause', () => {
     it('generates basic MergeTree clause', () => {
       const config = engine.mergeTree({ sortingKey: ['id'] });
@@ -186,6 +193,12 @@ describe('Engine Configurations', () => {
       expect(clause).toContain('ENGINE "VersionedCollapsingMergeTree"');
       expect(clause).toContain('ENGINE_SIGN "sign_col"');
       expect(clause).toContain('ENGINE_VERSION "version_col"');
+    });
+
+    it('generates Null engine without MergeTree directives', () => {
+      const clause = getEngineClause(engine.null());
+      expect(clause).toBe('ENGINE Null');
+      expect(clause).not.toContain('ENGINE_SORTING_KEY');
     });
   });
 

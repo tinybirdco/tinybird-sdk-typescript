@@ -540,7 +540,7 @@ export function parseDatasourceFile(resource: ResourceFile): DatasourceModel {
     engineType = "MergeTree";
   }
 
-  if (engineType && sortingKey.length === 0) {
+  if (engineType && engineType !== "Null" && sortingKey.length === 0) {
     throw new MigrationParseError(
       resource.filePath,
       "datasource",
