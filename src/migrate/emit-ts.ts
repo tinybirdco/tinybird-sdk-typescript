@@ -15,6 +15,10 @@ function escapeString(value: string): string {
   return JSON.stringify(value);
 }
 
+function escapeTemplateLiteral(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\${/g, "\\${");
+}
+
 function emitObjectKey(key: string): string {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : escapeString(key);
 }
@@ -383,7 +387,7 @@ function emitDatasource(ds: DatasourceModel): string {
 
   if (ds.forwardQuery) {
     lines.push("  forwardQuery: `");
-    lines.push(ds.forwardQuery.replace(/`/g, "\\`").replace(/\${/g, "\\${"));
+    lines.push(escapeTemplateLiteral(ds.forwardQuery));
     lines.push("  `,");
   }
 
@@ -566,7 +570,7 @@ function emitPipe(pipe: PipeModel): string {
       lines.push(`      description: ${escapeString(node.description)},`);
     }
     lines.push("      sql: `");
-    lines.push(node.sql.replace(/`/g, "\\`").replace(/\${/g, "\\${"));
+    lines.push(escapeTemplateLiteral(node.sql));
     lines.push("      `,");
     lines.push("    }),");
   }
