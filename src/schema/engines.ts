@@ -80,15 +80,25 @@ export interface VersionedCollapsingMergeTreeConfig extends BaseMergeTreeConfig 
 }
 
 /**
+ * Null engine configuration
+ * Discards inserted rows and returns an empty response when read
+ */
+export interface NullEngineConfig {
+  type: "Null";
+}
+
+/**
  * Union type of all engine configurations
  */
-export type EngineConfig =
+export type MergeTreeEngineConfig =
   | MergeTreeConfig
   | ReplacingMergeTreeConfig
   | SummingMergeTreeConfig
   | AggregatingMergeTreeConfig
   | CollapsingMergeTreeConfig
   | VersionedCollapsingMergeTreeConfig;
+
+export type EngineConfig = MergeTreeEngineConfig | NullEngineConfig;
 
 /**
  * Helper to normalize sorting key to array format
@@ -121,6 +131,9 @@ function normalizeSortingKey(key: string | readonly string[]): readonly string[]
  *   sortingKey: ['date', 'metric_name'],
  *   columns: ['value'],
  * });
+ *
+ * // Null engine for materialized view source tables
+ * engine.null();
  * ```
  */
 export const engine = {
@@ -196,19 +209,27 @@ export const engine = {
     type: "VersionedCollapsingMergeTree",
     ...config,
   }),
+
+  /**
+   * Null - Discards inserted rows and returns no rows when read
+   * Best for: Materialized view source tables that transform and discard raw input
+   */
+  null: (): NullEngineConfig => ({
+    type: "Null",
+  }),
 } as const;
 
 /**
  * Get the sorting key as an array
  */
-export function getSortingKey(config: EngineConfig): readonly string[] {
+export function getSortingKey(config: MergeTreeEngineConfig): readonly string[] {
   return normalizeSortingKey(config.sortingKey);
 }
 
 /**
  * Get the primary key as an array (defaults to sorting key)
  */
-export function getPrimaryKey(config: EngineConfig): readonly string[] {
+export function getPrimaryKey(config: MergeTreeEngineConfig): readonly string[] {
   if (config.primaryKey) {
     return normalizeSortingKey(config.primaryKey);
   }
@@ -219,6 +240,10 @@ export function getPrimaryKey(config: EngineConfig): readonly string[] {
  * Generate the engine clause for a datasource file
  */
 export function getEngineClause(config: EngineConfig): string {
+  if (config.type === "Null") {
+    return "ENGINE Null";
+  }
+
   const parts: string[] = [`ENGINE "${config.type}"`];
 
   if (config.partitionKey) {

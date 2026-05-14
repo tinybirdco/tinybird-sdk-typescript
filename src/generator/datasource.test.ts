@@ -51,6 +51,19 @@ describe('Datasource Generator', () => {
       expect(result.content).toContain('ENGINE_SORTING_KEY "id"');
     });
 
+    it('includes Null engine configuration without sorting key', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          id: t.string(),
+        },
+        engine: engine.null(),
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('ENGINE Null');
+      expect(result.content).not.toContain('ENGINE_SORTING_KEY');
+    });
+
     it('includes partition key in engine config', () => {
       const ds = defineDatasource('test_ds', {
         schema: {

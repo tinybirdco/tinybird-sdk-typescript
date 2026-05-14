@@ -962,6 +962,9 @@ engine.summingMergeTree({
 engine.aggregatingMergeTree({
   sortingKey: ["date"],
 });
+
+// Null (for materialized view source tables that discard raw input)
+engine.null();
 ```
 
 ## Next.js Integration

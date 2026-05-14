@@ -81,6 +81,10 @@ export function generateEngineCode(engine: {
   version?: string;
   summing_columns?: string;
 }): string {
+  if (engine.type === "Null") {
+    return "engine.null()";
+  }
+
   const sortingKey = parseSortingKey(engine.sorting_key);
 
   // Build options object
@@ -143,6 +147,7 @@ export function generateEngineCode(engine: {
     AggregatingMergeTree: "engine.aggregatingMergeTree",
     CollapsingMergeTree: "engine.collapsingMergeTree",
     VersionedCollapsingMergeTree: "engine.versionedCollapsingMergeTree",
+    Null: "engine.null",
   };
 
   const engineFunc = engineFunctionMap[engine.type] ?? "engine.mergeTree";

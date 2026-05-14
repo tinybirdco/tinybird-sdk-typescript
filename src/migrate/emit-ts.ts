@@ -196,6 +196,7 @@ function engineFunctionName(type: string): string {
     AggregatingMergeTree: "aggregatingMergeTree",
     CollapsingMergeTree: "collapsingMergeTree",
     VersionedCollapsingMergeTree: "versionedCollapsingMergeTree",
+    Null: "null",
   };
   const functionName = map[type];
   if (!functionName) {
@@ -205,6 +206,10 @@ function engineFunctionName(type: string): string {
 }
 
 function emitEngineOptions(engine: DatasourceEngineModel): string {
+  if (engine.type === "Null") {
+    return "engine.null()";
+  }
+
   const options: string[] = [];
 
   if (engine.sortingKey.length === 1) {
