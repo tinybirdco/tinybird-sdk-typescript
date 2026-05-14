@@ -59,6 +59,13 @@ async function waitForPipeData(
   return [];
 }
 
+function expectBuildSuccess(buildResult: Awaited<ReturnType<typeof runBuild>>): void {
+  if (!buildResult.success) {
+    throw new Error(buildResult.error ?? "Build failed without an error message.");
+  }
+  expect(buildResult.success).toBe(true);
+}
+
 describeLive("E2E Live: build", () => {
   const config = liveConfig as LiveE2EConfig;
 
@@ -68,7 +75,8 @@ describeLive("E2E Live: build", () => {
   let workspaceId = "";
   let workspaceName = "";
   let workspaceToken = "";
-  let tinybirdBranchName = "";
+  const tinybirdBranchNames: string[] = [];
+  let testBranchIndex = 0;
 
   beforeAll(async () => {
     ensureDistBuild();
@@ -82,7 +90,10 @@ describeLive("E2E Live: build", () => {
   beforeEach(() => {
     tempDir = createTempProjectDir();
     originalEnv = { ...process.env };
-    process.env.GITHUB_REF_NAME = `live-build/${workspaceName}`;
+    testBranchIndex += 1;
+    const testBranchName = `live-build/${workspaceName}/${testBranchIndex}`;
+    process.env.GITHUB_HEAD_REF = testBranchName;
+    process.env.GITHUB_REF_NAME = testBranchName;
     process.env.TINYBIRD_TOKEN = workspaceToken;
   });
 
@@ -92,7 +103,7 @@ describeLive("E2E Live: build", () => {
   });
 
   afterAll(async () => {
-    if (tinybirdBranchName) {
+    for (const tinybirdBranchName of tinybirdBranchNames) {
       try {
         await deleteBranch(
           { baseUrl: config.baseUrl, token: workspaceToken },
@@ -122,11 +133,12 @@ describeLive("E2E Live: build", () => {
     setConfigBaseUrl(tempDir, config.baseUrl);
 
     const buildResult = await runBuild({ cwd: tempDir });
-    expect(buildResult.success).toBe(true);
+    expectBuildSuccess(buildResult);
     expect(buildResult.deploy?.success).toBe(true);
     expect(buildResult.branchInfo?.tinybirdBranch).toBeTruthy();
 
-    tinybirdBranchName = buildResult.branchInfo?.tinybirdBranch ?? "";
+    const tinybirdBranchName = buildResult.branchInfo?.tinybirdBranch ?? "";
+    tinybirdBranchNames.push(tinybirdBranchName);
 
     const branch = await getBranch(
       { baseUrl: config.baseUrl, token: workspaceToken },

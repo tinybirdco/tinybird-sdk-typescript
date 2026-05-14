@@ -52,6 +52,14 @@ export interface TypeValidator<
     TTinybirdType,
     TModifiers & { hasDefault: true; defaultExpression: string }
   >;
+  /** Set a materialized SQL expression for the column */
+  materialized(
+    expression: string,
+  ): TypeValidator<
+    TType,
+    TTinybirdType,
+    TModifiers & { materializedExpression: string }
+  >;
   /** Set a codec for compression */
   codec(
     codec: string,
@@ -68,6 +76,7 @@ export interface TypeModifiers {
   hasDefault?: boolean;
   defaultValue?: unknown;
   defaultExpression?: string;
+  materializedExpression?: string;
   codec?: string;
   jsonPath?: string;
 }
@@ -154,6 +163,7 @@ function createValidator<TType, TTinybirdType extends string>(
         hasDefault: true,
         defaultValue: value,
         defaultExpression: undefined,
+        materializedExpression: undefined,
       }) as TypeValidator<
         TType,
         TTinybirdType,
@@ -171,10 +181,29 @@ function createValidator<TType, TTinybirdType extends string>(
         hasDefault: true,
         defaultValue: undefined,
         defaultExpression: trimmed,
+        materializedExpression: undefined,
       }) as TypeValidator<
         TType,
         TTinybirdType,
         TypeModifiers & { hasDefault: true; defaultExpression: string }
+      >;
+    },
+
+    materialized(expression: string) {
+      const trimmed = expression.trim();
+      if (!trimmed) {
+        throw new Error("Materialized expression cannot be empty.");
+      }
+      return createValidator<TType, TTinybirdType>(tinybirdType, {
+        ...modifiers,
+        hasDefault: undefined,
+        defaultValue: undefined,
+        defaultExpression: undefined,
+        materializedExpression: trimmed,
+      }) as TypeValidator<
+        TType,
+        TTinybirdType,
+        TypeModifiers & { materializedExpression: string }
       >;
     },
 
