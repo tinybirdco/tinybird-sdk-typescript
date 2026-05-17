@@ -121,6 +121,27 @@ function hasPositionalDefaultArg(args: string[]): boolean {
   return args.slice(1).some((arg) => !/^[a-zA-Z_][a-zA-Z0-9_]*\s*=/.test(arg.trim()));
 }
 
+const PARAM_METADATA_TEMPLATE_FUNCTIONS = new Set([
+  "String",
+  "UUID",
+  "Int8",
+  "Int16",
+  "Int32",
+  "Int64",
+  "UInt8",
+  "UInt16",
+  "UInt32",
+  "UInt64",
+  "Float32",
+  "Float64",
+  "Boolean",
+  "Date",
+  "DateTime",
+  "DateTime64",
+  "Array",
+  "JSON",
+]);
+
 function buildParamTemplateArgs(
   args: string[],
   validator: AnyParamValidator
@@ -165,7 +186,13 @@ function applyParamMetadataToSql(
     const expression = String(rawExpression);
     const rewritten = expression.replace(
       /([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^()]*)\)/g,
-      (call, _functionName, rawArgs) => {
+      (call, functionName, rawArgs) => {
+        if (!PARAM_METADATA_TEMPLATE_FUNCTIONS.has(String(functionName))) {
+          if (String(functionName) !== "column") {
+            return call;
+          }
+        }
+
         const args = splitTopLevelComma(String(rawArgs));
         if (args.length === 0) {
           return call;
@@ -178,6 +205,10 @@ function applyParamMetadataToSql(
 
         const validator = params[paramName];
         if (!validator) {
+          return call;
+        }
+
+        if (String(functionName) === "column" && getParamTinybirdType(validator) !== "column") {
           return call;
         }
 
