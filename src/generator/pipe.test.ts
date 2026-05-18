@@ -185,6 +185,35 @@ describe('Pipe Generator', () => {
       expect(result.content).toContain("{{ Date(start_date, '2025-03-01', required=False) }}");
       expect(result.content).toContain('{{ Int32(page, 0, required=False) }}');
     });
+
+    it('does not inject param metadata into non-param template helper functions', () => {
+      const pipe = definePipe('helper_params_pipe', {
+        params: {
+          siteIds: p
+            .string()
+            .optional()
+            .describe('Comma-separated list of framerSiteId. Only used for test isolation'),
+          groupBy: p.column().optional().describe('Column to group by'),
+        },
+        nodes: [
+          node({
+            name: 'endpoint',
+            sql: 'SELECT {{ column(groupBy) }}, {{ split_to_array(siteIds) }} AS site_ids FROM events',
+          }),
+        ],
+        output: simpleOutput,
+        endpoint: true,
+      });
+
+      const result = generatePipe(pipe);
+
+      expect(result.content).toContain('{{ column(groupBy) }}');
+      expect(result.content).toContain('{{ split_to_array(siteIds) }}');
+      expect(result.content).not.toContain('split_to_array(siteIds,');
+      expect(result.content).not.toContain('column(groupBy,');
+      expect(result.content).not.toContain('required=False');
+      expect(result.content).not.toContain('description=');
+    });
   });
 
   describe('Multiple nodes', () => {
