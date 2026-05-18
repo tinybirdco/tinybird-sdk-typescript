@@ -222,6 +222,36 @@ describe("Type Validators (t.*)", () => {
       expectTypeOf(type._type).toEqualTypeOf<string>();
     });
 
+    it("generates AggregateFunction with multiple explicit state types", () => {
+      const type = t.aggregateFunction("argMax", t.string(), t.dateTime());
+      expect(type._tinybirdType).toBe("AggregateFunction(argMax, String, DateTime)");
+      expectTypeOf(type._type).toEqualTypeOf<string>();
+    });
+
+    it("generates AggregateFunction with multiple explicit state types for other functions", () => {
+      expect(t.aggregateFunction("argMin", t.float64(), t.dateTime())._tinybirdType).toBe(
+        "AggregateFunction(argMin, Float64, DateTime)"
+      );
+      expect(t.aggregateFunction("corr", t.float64(), t.float64())._tinybirdType).toBe(
+        "AggregateFunction(corr, Float64, Float64)"
+      );
+      expect(t.aggregateFunction("sumMap", t.array(t.string()), t.array(t.uint64()))._tinybirdType).toBe(
+        "AggregateFunction(sumMap, Array(String), Array(UInt64))"
+      );
+    });
+
+    it("generates AggregateFunction with function parameters and multiple state types", () => {
+      const type = t.aggregateFunction(
+        "sequenceMatch('(?1)(?2)')",
+        t.dateTime(),
+        t.uint8(),
+        t.uint8()
+      );
+      expect(type._tinybirdType).toBe(
+        "AggregateFunction(sequenceMatch('(?1)(?2)'), DateTime, UInt8, UInt8)"
+      );
+    });
+
     it("generates AggregateFunction without an explicit state type", () => {
       const type = t.aggregateFunction("count");
       expect(type._tinybirdType).toBe("AggregateFunction(count)");

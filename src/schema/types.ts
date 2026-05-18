@@ -228,29 +228,59 @@ type AggregateFunctionValidator = {
   ): TypeValidator<unknown, `AggregateFunction(${TFunc})`, TypeModifiers>;
   <
     TFunc extends string,
-    TType extends TypeValidator<unknown, string, TypeModifiers>,
+    TTypes extends readonly [
+      TypeValidator<unknown, string, TypeModifiers>,
+      ...TypeValidator<unknown, string, TypeModifiers>[],
+    ],
   >(
     func: TFunc,
-    type: TType,
+    ...types: TTypes
   ): TypeValidator<
-    TType["_type"],
-    `AggregateFunction(${TFunc}, ${TType["_tinybirdType"]})`,
+    AggregateFunctionValue<TTypes>,
+    AggregateFunctionTinybirdType<TFunc, TTypes>,
     TypeModifiers
   >;
 };
 
+type AggregateFunctionValue<
+  TTypes extends readonly TypeValidator<unknown, string, TypeModifiers>[],
+> = TTypes extends readonly [
+  infer TFirst extends TypeValidator<unknown, string, TypeModifiers>,
+  ...TypeValidator<unknown, string, TypeModifiers>[],
+]
+  ? TFirst["_type"]
+  : unknown;
+
+type AggregateFunctionArgs<
+  TTypes extends readonly TypeValidator<unknown, string, TypeModifiers>[],
+> = TTypes extends readonly [
+  infer TFirst extends TypeValidator<unknown, string, TypeModifiers>,
+  ...infer TRest extends TypeValidator<unknown, string, TypeModifiers>[],
+]
+  ? TRest extends []
+    ? TFirst["_tinybirdType"]
+    : `${TFirst["_tinybirdType"]}, ${AggregateFunctionArgs<TRest>}`
+  : never;
+
+type AggregateFunctionTinybirdType<
+  TFunc extends string,
+  TTypes extends readonly TypeValidator<unknown, string, TypeModifiers>[],
+> = TTypes extends []
+  ? `AggregateFunction(${TFunc})`
+  : `AggregateFunction(${TFunc}, ${AggregateFunctionArgs<TTypes>})`;
+
 const aggregateFunction = ((
   func: string,
-  type?: TypeValidator<unknown, string, TypeModifiers>,
+  ...types: TypeValidator<unknown, string, TypeModifiers>[]
 ) => {
-  if (type === undefined) {
+  if (types.length === 0) {
     return createValidator<unknown, `AggregateFunction(${string})`>(
       `AggregateFunction(${func})`,
     );
   }
 
   return createValidator<unknown, `AggregateFunction(${string}, ${string})`>(
-    `AggregateFunction(${func}, ${type._tinybirdType})`,
+    `AggregateFunction(${func}, ${types.map((type) => type._tinybirdType).join(", ")})`,
   );
 }) as AggregateFunctionValidator;
 

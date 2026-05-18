@@ -244,20 +244,17 @@ export function clickhouseTypeToValidator(chType: string): string {
     return `t.simpleAggregateFunction("${func}", ${innerType})`;
   }
 
-  // AggregateFunction(func, T)
-  const aggMatch = chType.match(/^AggregateFunction\((\w+),\s*(.+)\)$/);
+  // AggregateFunction(func, T1, T2, ...)
+  const aggMatch = chType.match(/^AggregateFunction\((.+)\)$/);
   if (aggMatch) {
-    const func = aggMatch[1];
-    const innerType = clickhouseTypeToValidator(aggMatch[2]);
-    return `t.aggregateFunction("${func}", ${innerType})`;
-  }
-
-  // AggregateFunction(count)
-  const aggNoArgMatch = chType.match(/^AggregateFunction\((\w+)\)$/);
-  if (aggNoArgMatch) {
-    const func = aggNoArgMatch[1];
-    if (func === "count") {
-      return 't.aggregateFunction("count")';
+    const args = splitTopLevelComma(aggMatch[1]);
+    if (args.length === 1) {
+      return `t.aggregateFunction(${JSON.stringify(args[0])})`;
+    }
+    if (args.length > 1) {
+      const [func, ...stateTypes] = args;
+      const innerTypes = stateTypes.map((type) => clickhouseTypeToValidator(type));
+      return `t.aggregateFunction(${JSON.stringify(func)}, ${innerTypes.join(", ")})`;
     }
     return `t.string() /* TODO: Unknown type: ${chType} */`;
   }
