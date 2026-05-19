@@ -173,6 +173,30 @@ describe("clickhouseTypeToValidator", () => {
       );
     });
 
+    it("handles AggregateFunction with multiple state types", () => {
+      expect(clickhouseTypeToValidator("AggregateFunction(argMax, String, DateTime)")).toBe(
+        't.aggregateFunction("argMax", t.string(), t.dateTime())'
+      );
+    });
+
+    it("handles other AggregateFunction variants with multiple state types", () => {
+      expect(clickhouseTypeToValidator("AggregateFunction(argMin, Float64, DateTime)")).toBe(
+        't.aggregateFunction("argMin", t.float64(), t.dateTime())'
+      );
+      expect(clickhouseTypeToValidator("AggregateFunction(corr, Float64, Float64)")).toBe(
+        't.aggregateFunction("corr", t.float64(), t.float64())'
+      );
+      expect(clickhouseTypeToValidator("AggregateFunction(sumMap, Array(String), Array(UInt64))")).toBe(
+        't.aggregateFunction("sumMap", t.array(t.string()), t.array(t.uint64()))'
+      );
+    });
+
+    it("handles AggregateFunction names with parameters containing commas", () => {
+      expect(clickhouseTypeToValidator("AggregateFunction(quantiles(0.5, 0.9), UInt64)")).toBe(
+        't.aggregateFunction("quantiles(0.5, 0.9)", t.uint64())'
+      );
+    });
+
     it("handles AggregateFunction(count) without explicit state type", () => {
       expect(clickhouseTypeToValidator("AggregateFunction(count)")).toBe(
         't.aggregateFunction("count")'
