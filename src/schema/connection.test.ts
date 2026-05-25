@@ -60,6 +60,27 @@ describe("Connection Schema", () => {
       expect(oauthConn.options.saslMechanism).toBe("OAUTHBEARER");
     });
 
+    it("creates a Kafka connection with AWS IAM OAUTHBEARER auth", () => {
+      const conn = defineKafkaConnection("aws_msk", {
+        bootstrapServers: "b-1.msk.example.com:9098,b-2.msk.example.com:9098",
+        securityProtocol: "SASL_SSL",
+        saslMechanism: "OAUTHBEARER",
+        saslOauthbearerMethod: "AWS",
+        saslOauthbearerAwsRegion: "eu-west-1",
+        saslOauthbearerAwsRoleArn: '{{ tb_secret("KAFKA_AWS_ROLE_ARN") }}',
+        saslOauthbearerAwsExternalId: '{{ tb_secret("KAFKA_AWS_EXTERNAL_ID") }}',
+      });
+
+      expect(conn.options.saslOauthbearerMethod).toBe("AWS");
+      expect(conn.options.saslOauthbearerAwsRegion).toBe("eu-west-1");
+      expect(conn.options.saslOauthbearerAwsRoleArn).toBe(
+        '{{ tb_secret("KAFKA_AWS_ROLE_ARN") }}'
+      );
+      expect(conn.options.saslOauthbearerAwsExternalId).toBe(
+        '{{ tb_secret("KAFKA_AWS_EXTERNAL_ID") }}'
+      );
+    });
+
     it("supports different security protocols", () => {
       const plaintext = defineKafkaConnection("plaintext_kafka", {
         bootstrapServers: "localhost:9092",

@@ -845,6 +845,12 @@ INDEXES >
       "stream.connection",
       `TYPE kafka
 KAFKA_BOOTSTRAP_SERVERS kafka.example.com:9092
+KAFKA_SECURITY_PROTOCOL SASL_SSL
+KAFKA_SASL_MECHANISM OAUTHBEARER
+KAFKA_SASL_OAUTHBEARER_METHOD AWS
+KAFKA_SASL_OAUTHBEARER_AWS_REGION eu-west-1
+KAFKA_SASL_OAUTHBEARER_AWS_ROLE_ARN {{ tb_secret("KAFKA_AWS_ROLE_ARN") }}
+KAFKA_SASL_OAUTHBEARER_AWS_EXTERNAL_ID {{ tb_secret("KAFKA_AWS_EXTERNAL_ID") }}
 KAFKA_SCHEMA_REGISTRY_URL https://registry-user:registry-pass@registry.example.com
 # Optional registry auth details
 `
@@ -909,6 +915,11 @@ DATASOURCE events_state
     expect(output).toContain(
       'schemaRegistryUrl: "https://registry-user:registry-pass@registry.example.com"'
     );
+    expect(output).toContain('saslMechanism: "OAUTHBEARER"');
+    expect(output).toContain('saslOauthbearerMethod: "AWS"');
+    expect(output).toContain('saslOauthbearerAwsRegion: "eu-west-1"');
+    expect(output).toContain('saslOauthbearerAwsRoleArn: secret("KAFKA_AWS_ROLE_ARN")');
+    expect(output).toContain('saslOauthbearerAwsExternalId: secret("KAFKA_AWS_EXTERNAL_ID")');
     expect(output).toContain("storeRawValue: true");
     expect(output).toContain(
       'engine: engine.replacingMergeTree({ sortingKey: "event_id", ver: "version_ts", isDeleted: "_is_deleted" })'

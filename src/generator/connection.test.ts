@@ -152,6 +152,29 @@ describe("Connection Generator", () => {
       });
     });
 
+    it("generates Kafka AWS IAM OAUTHBEARER settings", () => {
+      const conn = defineKafkaConnection("aws_msk", {
+        bootstrapServers: "b-1.msk.example.com:9098,b-2.msk.example.com:9098",
+        securityProtocol: "SASL_SSL",
+        saslMechanism: "OAUTHBEARER",
+        saslOauthbearerMethod: "AWS",
+        saslOauthbearerAwsRegion: "eu-west-1",
+        saslOauthbearerAwsRoleArn: '{{ tb_secret("KAFKA_AWS_ROLE_ARN") }}',
+        saslOauthbearerAwsExternalId: '{{ tb_secret("KAFKA_AWS_EXTERNAL_ID") }}',
+      });
+
+      const result = generateConnection(conn);
+
+      expect(result.content).toContain("KAFKA_SASL_OAUTHBEARER_METHOD AWS");
+      expect(result.content).toContain("KAFKA_SASL_OAUTHBEARER_AWS_REGION eu-west-1");
+      expect(result.content).toContain(
+        'KAFKA_SASL_OAUTHBEARER_AWS_ROLE_ARN {{ tb_secret("KAFKA_AWS_ROLE_ARN") }}'
+      );
+      expect(result.content).toContain(
+        'KAFKA_SASL_OAUTHBEARER_AWS_EXTERNAL_ID {{ tb_secret("KAFKA_AWS_EXTERNAL_ID") }}'
+      );
+    });
+
     it("generates basic S3 connection with IAM role auth", () => {
       const conn = defineS3Connection("my_s3", {
         region: "us-east-1",

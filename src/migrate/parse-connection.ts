@@ -18,6 +18,10 @@ const CONNECTION_DIRECTIVES = new Set([
   "KAFKA_BOOTSTRAP_SERVERS",
   "KAFKA_SECURITY_PROTOCOL",
   "KAFKA_SASL_MECHANISM",
+  "KAFKA_SASL_OAUTHBEARER_METHOD",
+  "KAFKA_SASL_OAUTHBEARER_AWS_REGION",
+  "KAFKA_SASL_OAUTHBEARER_AWS_ROLE_ARN",
+  "KAFKA_SASL_OAUTHBEARER_AWS_EXTERNAL_ID",
   "KAFKA_KEY",
   "KAFKA_SECRET",
   "KAFKA_SCHEMA_REGISTRY_URL",
@@ -55,6 +59,10 @@ export function parseConnectionFile(
     | "SCRAM-SHA-512"
     | "OAUTHBEARER"
     | undefined;
+  let saslOauthbearerMethod: "AWS" | undefined;
+  let saslOauthbearerAwsRegion: string | undefined;
+  let saslOauthbearerAwsRoleArn: string | undefined;
+  let saslOauthbearerAwsExternalId: string | undefined;
   let key: string | undefined;
   let secret: string | undefined;
   let schemaRegistryUrl: string | undefined;
@@ -109,6 +117,26 @@ export function parseConnectionFile(
           );
         }
         saslMechanism = value;
+        break;
+      case "KAFKA_SASL_OAUTHBEARER_METHOD":
+        if (value !== "AWS") {
+          throw new MigrationParseError(
+            resource.filePath,
+            "connection",
+            resource.name,
+            `Unsupported KAFKA_SASL_OAUTHBEARER_METHOD: "${value}"`
+          );
+        }
+        saslOauthbearerMethod = value;
+        break;
+      case "KAFKA_SASL_OAUTHBEARER_AWS_REGION":
+        saslOauthbearerAwsRegion = value;
+        break;
+      case "KAFKA_SASL_OAUTHBEARER_AWS_ROLE_ARN":
+        saslOauthbearerAwsRoleArn = value;
+        break;
+      case "KAFKA_SASL_OAUTHBEARER_AWS_EXTERNAL_ID":
+        saslOauthbearerAwsExternalId = value;
         break;
       case "KAFKA_KEY":
         key = value;
@@ -196,6 +224,10 @@ export function parseConnectionFile(
       bootstrapServers,
       securityProtocol,
       saslMechanism,
+      saslOauthbearerMethod,
+      saslOauthbearerAwsRegion,
+      saslOauthbearerAwsRoleArn,
+      saslOauthbearerAwsExternalId,
       key,
       secret,
       schemaRegistryUrl,
@@ -208,6 +240,10 @@ export function parseConnectionFile(
       bootstrapServers ||
       securityProtocol ||
       saslMechanism ||
+      saslOauthbearerMethod ||
+      saslOauthbearerAwsRegion ||
+      saslOauthbearerAwsRoleArn ||
+      saslOauthbearerAwsExternalId ||
       key ||
       secret ||
       schemaRegistryUrl ||
@@ -266,6 +302,10 @@ export function parseConnectionFile(
       bootstrapServers ||
       securityProtocol ||
       saslMechanism ||
+      saslOauthbearerMethod ||
+      saslOauthbearerAwsRegion ||
+      saslOauthbearerAwsRoleArn ||
+      saslOauthbearerAwsExternalId ||
       key ||
       secret ||
       schemaRegistryUrl ||

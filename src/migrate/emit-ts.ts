@@ -64,6 +64,9 @@ function hasSecretTemplate(resources: ParsedResource[]): boolean {
         if (resource.secret) values.push(resource.secret);
         if (resource.sslCaPem) values.push(resource.sslCaPem);
         if (resource.schemaRegistryUrl) values.push(resource.schemaRegistryUrl);
+        if (resource.saslOauthbearerAwsRegion) values.push(resource.saslOauthbearerAwsRegion);
+        if (resource.saslOauthbearerAwsRoleArn) values.push(resource.saslOauthbearerAwsRoleArn);
+        if (resource.saslOauthbearerAwsExternalId) values.push(resource.saslOauthbearerAwsExternalId);
       } else if (resource.connectionType === "s3") {
         values.push(resource.region);
         if (resource.arn) values.push(resource.arn);
@@ -428,6 +431,24 @@ function emitConnection(
     }
     if (connection.saslMechanism) {
       lines.push(`  saslMechanism: ${emitStringOrSecret(connection.saslMechanism)},`);
+    }
+    if (connection.saslOauthbearerMethod) {
+      lines.push(`  saslOauthbearerMethod: ${emitStringOrSecret(connection.saslOauthbearerMethod)},`);
+    }
+    if (connection.saslOauthbearerAwsRegion) {
+      lines.push(
+        `  saslOauthbearerAwsRegion: ${emitStringOrSecret(connection.saslOauthbearerAwsRegion)},`
+      );
+    }
+    if (connection.saslOauthbearerAwsRoleArn) {
+      lines.push(
+        `  saslOauthbearerAwsRoleArn: ${emitStringOrSecret(connection.saslOauthbearerAwsRoleArn)},`
+      );
+    }
+    if (connection.saslOauthbearerAwsExternalId) {
+      lines.push(
+        `  saslOauthbearerAwsExternalId: ${emitStringOrSecret(connection.saslOauthbearerAwsExternalId)},`
+      );
     }
     if (connection.key) {
       lines.push(`  key: ${emitStringOrSecret(connection.key)},`);
