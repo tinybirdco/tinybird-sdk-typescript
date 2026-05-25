@@ -155,6 +155,10 @@ export interface KafkaConnectionModel {
   bootstrapServers: string;
   securityProtocol?: "SASL_SSL" | "PLAINTEXT" | "SASL_PLAINTEXT";
   saslMechanism?: "PLAIN" | "SCRAM-SHA-256" | "SCRAM-SHA-512" | "OAUTHBEARER";
+  saslOauthbearerMethod?: "AWS";
+  saslOauthbearerAwsRegion?: string;
+  saslOauthbearerAwsRoleArn?: string;
+  saslOauthbearerAwsExternalId?: string;
   key?: string;
   secret?: string;
   schemaRegistryUrl?: string;

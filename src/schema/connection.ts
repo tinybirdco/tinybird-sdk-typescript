@@ -18,6 +18,11 @@ export type KafkaSecurityProtocol = "SASL_SSL" | "PLAINTEXT" | "SASL_PLAINTEXT";
 export type KafkaSaslMechanism = "PLAIN" | "SCRAM-SHA-256" | "SCRAM-SHA-512" | "OAUTHBEARER";
 
 /**
+ * Kafka SASL OAUTHBEARER provider method options
+ */
+export type KafkaSaslOauthbearerMethod = "AWS";
+
+/**
  * Options for creating a Kafka connection
  */
 export interface KafkaConnectionOptions {
@@ -27,6 +32,14 @@ export interface KafkaConnectionOptions {
   securityProtocol?: KafkaSecurityProtocol;
   /** SASL mechanism for authentication */
   saslMechanism?: KafkaSaslMechanism;
+  /** SASL OAUTHBEARER provider method */
+  saslOauthbearerMethod?: KafkaSaslOauthbearerMethod;
+  /** AWS region for SASL OAUTHBEARER IAM authentication */
+  saslOauthbearerAwsRegion?: string;
+  /** AWS role ARN for SASL OAUTHBEARER IAM authentication */
+  saslOauthbearerAwsRoleArn?: string;
+  /** AWS external ID for SASL OAUTHBEARER IAM authentication */
+  saslOauthbearerAwsExternalId?: string;
   /** Kafka key/username - can use {{ tb_secret(...) }} */
   key?: string;
   /** Kafka secret/password - can use {{ tb_secret(...) }} */

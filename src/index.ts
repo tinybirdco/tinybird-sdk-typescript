@@ -137,6 +137,7 @@ export type {
   KafkaConnectionOptions,
   KafkaSecurityProtocol,
   KafkaSaslMechanism,
+  KafkaSaslOauthbearerMethod,
   S3ConnectionDefinition,
   S3ConnectionOptions,
   GCSConnectionDefinition,

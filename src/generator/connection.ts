@@ -42,6 +42,22 @@ function generateKafkaConnection(connection: KafkaConnectionDefinition): string 
     parts.push(`KAFKA_SASL_MECHANISM ${options.saslMechanism}`);
   }
 
+  if (options.saslOauthbearerMethod) {
+    parts.push(`KAFKA_SASL_OAUTHBEARER_METHOD ${options.saslOauthbearerMethod}`);
+  }
+
+  if (options.saslOauthbearerAwsRegion) {
+    parts.push(`KAFKA_SASL_OAUTHBEARER_AWS_REGION ${options.saslOauthbearerAwsRegion}`);
+  }
+
+  if (options.saslOauthbearerAwsRoleArn) {
+    parts.push(`KAFKA_SASL_OAUTHBEARER_AWS_ROLE_ARN ${options.saslOauthbearerAwsRoleArn}`);
+  }
+
+  if (options.saslOauthbearerAwsExternalId) {
+    parts.push(`KAFKA_SASL_OAUTHBEARER_AWS_EXTERNAL_ID ${options.saslOauthbearerAwsExternalId}`);
+  }
+
   if (options.key) {
     parts.push(`KAFKA_KEY ${options.key}`);
   }
