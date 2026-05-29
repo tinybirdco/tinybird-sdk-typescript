@@ -109,6 +109,18 @@ describe('Datasource Generator', () => {
       expect(result.content).toContain('    SELECT id');
     });
 
+    it('includes backfill skip when provided', () => {
+      const ds = defineDatasource('test_ds', {
+        schema: {
+          id: t.string(),
+        },
+        backfill: 'skip',
+      });
+
+      const result = generateDatasource(ds);
+      expect(result.content).toContain('BACKFILL skip');
+    });
+
     it("includes indexes block when provided", () => {
       const ds = defineDatasource("test_ds", {
         schema: {

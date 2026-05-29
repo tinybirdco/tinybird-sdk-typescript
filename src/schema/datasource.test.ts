@@ -170,6 +170,15 @@ describe("Datasource Schema", () => {
       ]);
     });
 
+    it("accepts backfill skip configuration", () => {
+      const ds = defineDatasource("events_rollup", {
+        schema: { id: t.string() },
+        backfill: "skip",
+      });
+
+      expect(ds.options.backfill).toBe("skip");
+    });
+
     it("validates datasource index fields", () => {
       expect(() =>
         defineDatasource("events", {
