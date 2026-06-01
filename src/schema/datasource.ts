@@ -144,6 +144,8 @@ export interface DatasourceOptions<TSchema extends SchemaDefinition> {
   forwardQuery?: string;
   /** Secondary indexes for MergeTree-family engines */
   indexes?: readonly DatasourceIndex[];
+  /** Skip backfilling data when creating a datasource targeted by a materialized view */
+  backfill?: "skip";
   /** Kafka ingestion configuration */
   kafka?: KafkaConfig;
   /** S3 ingestion configuration */

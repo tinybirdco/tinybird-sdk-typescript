@@ -346,6 +346,11 @@ export function generateDatasource(
     parts.push(indexes);
   }
 
+  if (datasource.options.backfill === "skip") {
+    parts.push("");
+    parts.push("BACKFILL skip");
+  }
+
   // Add Kafka configuration if present
   if (datasource.options.kafka) {
     parts.push("");
