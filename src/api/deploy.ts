@@ -217,37 +217,40 @@ export async function deployToMain(
     );
   }
 
-  // Step 0: Clean up any stale non-live deployments that might block the new deployment
-  try {
-    const deploymentsUrl = `${baseUrl}/v1/deployments`;
-    const deploymentsResponse = await tinybirdFetch(deploymentsUrl, {
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-      },
-    });
+  // Step 0: Clean up any stale non-live deployments that might block the new deployment.
+  // Skipped in check mode so validation runs don't tear down in-flight deployments.
+  if (!options?.check) {
+    try {
+      const deploymentsUrl = `${baseUrl}/v1/deployments`;
+      const deploymentsResponse = await tinybirdFetch(deploymentsUrl, {
+        headers: {
+          Authorization: `Bearer ${config.token}`,
+        },
+      });
 
-    if (deploymentsResponse.ok) {
-      const deploymentsBody = (await deploymentsResponse.json()) as DeploymentsListResponse;
-      const staleDeployments = deploymentsBody.deployments.filter(
-        (d) => !d.live && d.status !== "live"
-      );
+      if (deploymentsResponse.ok) {
+        const deploymentsBody = (await deploymentsResponse.json()) as DeploymentsListResponse;
+        const staleDeployments = deploymentsBody.deployments.filter(
+          (d) => !d.live && d.status !== "live"
+        );
 
-      for (const stale of staleDeployments) {
-        if (debug) {
-          console.log(`[debug] Cleaning up stale deployment: ${stale.id} (status: ${stale.status})`);
+        for (const stale of staleDeployments) {
+          if (debug) {
+            console.log(`[debug] Cleaning up stale deployment: ${stale.id} (status: ${stale.status})`);
+          }
+          await tinybirdFetch(`${baseUrl}/v1/deployments/${stale.id}`, {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${config.token}`,
+            },
+          });
         }
-        await tinybirdFetch(`${baseUrl}/v1/deployments/${stale.id}`, {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${config.token}`,
-          },
-        });
       }
-    }
-  } catch (e) {
-    // Ignore errors during cleanup - we'll try to deploy anyway
-    if (debug) {
-      console.log(`[debug] Failed to clean up stale deployments: ${e}`);
+    } catch (e) {
+      // Ignore errors during cleanup - we'll try to deploy anyway
+      if (debug) {
+        console.log(`[debug] Failed to clean up stale deployments: ${e}`);
+      }
     }
   }
 
