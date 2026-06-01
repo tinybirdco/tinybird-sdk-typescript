@@ -255,6 +255,72 @@ describe("Deploy API", () => {
       expect(parsed.searchParams.get("allow_destructive_operations")).toBe("true");
     });
 
+    it("skips stale deployment cleanup in check mode", async () => {
+      let listed = false;
+      const deletedIds: string[] = [];
+      let capturedUrl: string | null = null;
+
+      server.use(
+        http.get(`${BASE_URL}/v1/deployments`, () => {
+          listed = true;
+          return HttpResponse.json(
+            createDeploymentsListResponse({
+              deployments: [
+                { id: "in-flight", status: "pending", live: false },
+              ],
+            })
+          );
+        }),
+        http.delete(`${BASE_URL}/v1/deployments/:id`, ({ params }) => {
+          deletedIds.push(params.id as string);
+          return HttpResponse.json({ result: "success" });
+        }),
+        http.post(`${BASE_URL}/v1/deploy`, ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json(
+            createDeploySuccessResponse({ deploymentId: "deploy-check" })
+          );
+        })
+      );
+
+      await deployToMain(config, resources, {
+        pollIntervalMs: 1,
+        check: true,
+      });
+
+      expect(listed).toBe(false);
+      expect(deletedIds).toEqual([]);
+      const parsed = new URL(capturedUrl ?? "");
+      expect(parsed.searchParams.get("check")).toBe("true");
+    });
+
+    it("deletes stale non-live deployments on a normal deploy", async () => {
+      const deletedIds: string[] = [];
+
+      server.use(
+        http.get(`${BASE_URL}/v1/deployments`, () => {
+          return HttpResponse.json(
+            createDeploymentsListResponse({
+              deployments: [
+                { id: "stale-1", status: "pending", live: false },
+                { id: "live-1", status: "live", live: true },
+                { id: "stale-2", status: "failed", live: false },
+              ],
+            })
+          );
+        }),
+        http.delete(`${BASE_URL}/v1/deployments/:id`, ({ params }) => {
+          deletedIds.push(params.id as string);
+          return HttpResponse.json({ result: "success" });
+        })
+      );
+      setupSuccessfulDeployFlow("deploy-cleanup");
+
+      await deployToMain(config, resources, { pollIntervalMs: 1 });
+
+      expect(deletedIds).toEqual(["stale-1", "stale-2"]);
+    });
+
     it("adds actionable guidance to Forward/Classic workspace errors", async () => {
       server.use(
         http.post(`${BASE_URL}/v1/deploy`, () => {
