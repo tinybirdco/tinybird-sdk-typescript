@@ -169,6 +169,7 @@ export async function deployToMain(
   const pollIntervalMs = options?.pollIntervalMs ?? 1000;
   const maxPollAttempts = options?.maxPollAttempts ?? 120; // 2 minutes max
   const baseUrl = config.baseUrl.replace(/\/$/, "");
+  let previousLiveDeploymentId: string | undefined;
 
   const formData = new FormData();
 
@@ -230,6 +231,10 @@ export async function deployToMain(
 
       if (deploymentsResponse.ok) {
         const deploymentsBody = (await deploymentsResponse.json()) as DeploymentsListResponse;
+        const previousLiveDeployment = deploymentsBody.deployments.find(
+          (d) => d.live || d.status === "live"
+        );
+        previousLiveDeploymentId = previousLiveDeployment?.id;
         const staleDeployments = deploymentsBody.deployments.filter(
           (d) => !d.live && d.status !== "live"
         );
@@ -523,6 +528,35 @@ export async function deployToMain(
 
   if (debug) {
     console.log(`[debug] Deployment ${deploymentId} is now live`);
+  }
+
+  if (previousLiveDeploymentId && previousLiveDeploymentId !== deploymentId) {
+    if (debug) {
+      console.log(`[debug] Removing previous deployment: ${previousLiveDeploymentId}`);
+    }
+
+    const deletePreviousResponse = await tinybirdFetch(
+      `${baseUrl}/v1/deployments/${previousLiveDeploymentId}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${config.token}`,
+        },
+      }
+    );
+
+    if (!deletePreviousResponse.ok) {
+      const deletePreviousBody = await deletePreviousResponse.text();
+      return {
+        success: false,
+        result: "failed",
+        error: `Failed to remove previous deployment: ${deletePreviousResponse.status} ${deletePreviousResponse.statusText}\n${deletePreviousBody}`,
+        datasourceCount: resources.datasources.length,
+        pipeCount: resources.pipes.length,
+        connectionCount: resources.connections?.length ?? 0,
+        buildId: deploymentId,
+      };
+    }
   }
 
   options?.callbacks?.onDeploymentLive?.(deploymentId);

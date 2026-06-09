@@ -13,6 +13,7 @@ import { pathToFileURL } from "node:url";
 import { runInit } from "../src/cli/commands/init.js";
 import { runDeploy } from "../src/cli/commands/deploy.js";
 import { listDatasources, listPipesV1 } from "../src/api/resources.js";
+import { tinybirdFetch } from "../src/api/fetcher.js";
 import {
   getLiveE2EConfigFromEnv,
   assertWorkspaceAdminToken,
@@ -46,6 +47,12 @@ interface ProductionTinybirdClient {
       params: Record<string, never>
     ) => Promise<{ data: Array<Record<string, unknown>> }>;
   };
+}
+
+interface DeploymentListItem {
+  id: string;
+  status: string;
+  live?: boolean;
 }
 
 function toTinybirdDateTime(value: Date): string {
@@ -135,6 +142,58 @@ async function waitForEndpointRows(
   }
 
   return [];
+}
+
+async function listDeployments(
+  config: LiveE2EConfig,
+  workspaceToken: string,
+  options?: { includeDeleted?: boolean }
+): Promise<DeploymentListItem[]> {
+  const endpoint = new URL("/v1/deployments", config.baseUrl);
+  if (options?.includeDeleted) {
+    endpoint.searchParams.set("include_deleted", "true");
+  }
+
+  const response = await tinybirdFetch(endpoint.toString(), {
+    headers: {
+      Authorization: `Bearer ${workspaceToken}`,
+    },
+  });
+  const responseText = await response.text();
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to list deployments: ${response.status} ${response.statusText} - ${responseText}`
+    );
+  }
+
+  const payload = JSON.parse(responseText) as { deployments?: DeploymentListItem[] };
+  return payload.deployments ?? [];
+}
+
+async function waitForDeploymentStatus(
+  config: LiveE2EConfig,
+  workspaceToken: string,
+  deploymentId: string,
+  expectedStatus: string
+): Promise<DeploymentListItem> {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const deployments = await listDeployments(config, workspaceToken, { includeDeleted: true });
+    const deployment = deployments.find((item) => item.id === deploymentId);
+
+    if (deployment?.status === expectedStatus) {
+      return deployment;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+
+  const deployments = await listDeployments(config, workspaceToken, { includeDeleted: true });
+  const deployment = deployments.find((item) => item.id === deploymentId);
+  throw new Error(
+    `Timed out waiting for deployment ${deploymentId} to become ${expectedStatus}. ` +
+      `Last status: ${deployment?.status ?? "missing"}`
+  );
 }
 
 describeLive("E2E Live: deploy", () => {
@@ -233,6 +292,8 @@ describeLive("E2E Live: deploy", () => {
     const firstDeployResult = await runDeploy({ cwd: tempDir });
     expect(firstDeployResult.success).toBe(true);
     expect(firstDeployResult.deploy?.success).toBe(true);
+    const firstDeploymentId = firstDeployResult.deploy?.buildId;
+    expect(firstDeploymentId).toBeTruthy();
 
     const tinybird = await importTinybirdClient(tempDir);
     const runId = `prod_deploy_second_${Date.now()}`;
@@ -259,6 +320,15 @@ describeLive("E2E Live: deploy", () => {
     expect(secondDeployResult.deploy?.success).toBe(true);
     expect(secondDeployResult.deploy?.result).toBe("success");
     expect(secondDeployResult.deploy?.buildId).toBeTruthy();
+    expect(secondDeployResult.deploy?.buildId).not.toBe(firstDeploymentId);
+
+    const previousDeployment = await waitForDeploymentStatus(
+      config,
+      workspaceToken,
+      firstDeploymentId!,
+      "deleted"
+    );
+    expect(previousDeployment.live).not.toBe(true);
 
     const rowsAfterSecondDeploy = await waitForEndpointRows(tinybird, runId);
     expect(rowsAfterSecondDeploy.length).toBeGreaterThan(0);
