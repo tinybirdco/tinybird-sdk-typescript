@@ -196,6 +196,20 @@ async function waitForDeploymentStatus(
   );
 }
 
+async function getCurrentLiveDeployment(
+  config: LiveE2EConfig,
+  workspaceToken: string
+): Promise<DeploymentListItem> {
+  const deployments = await listDeployments(config, workspaceToken);
+  const liveDeployment = deployments.find((deployment) => deployment.live);
+
+  if (!liveDeployment) {
+    throw new Error("Expected a live deployment, but none was found.");
+  }
+
+  return liveDeployment;
+}
+
 describeLive("E2E Live: deploy", () => {
   const config = liveConfig as LiveE2EConfig;
 
@@ -292,8 +306,7 @@ describeLive("E2E Live: deploy", () => {
     const firstDeployResult = await runDeploy({ cwd: tempDir });
     expect(firstDeployResult.success).toBe(true);
     expect(firstDeployResult.deploy?.success).toBe(true);
-    const firstDeploymentId = firstDeployResult.deploy?.buildId;
-    expect(firstDeploymentId).toBeTruthy();
+    const previousLiveDeployment = await getCurrentLiveDeployment(config, workspaceToken);
 
     const tinybird = await importTinybirdClient(tempDir);
     const runId = `prod_deploy_second_${Date.now()}`;
@@ -320,12 +333,12 @@ describeLive("E2E Live: deploy", () => {
     expect(secondDeployResult.deploy?.success).toBe(true);
     expect(secondDeployResult.deploy?.result).toBe("success");
     expect(secondDeployResult.deploy?.buildId).toBeTruthy();
-    expect(secondDeployResult.deploy?.buildId).not.toBe(firstDeploymentId);
+    expect(secondDeployResult.deploy?.buildId).not.toBe(previousLiveDeployment.id);
 
     const previousDeployment = await waitForDeploymentStatus(
       config,
       workspaceToken,
-      firstDeploymentId!,
+      previousLiveDeployment.id,
       "deleted"
     );
     expect(previousDeployment.live).not.toBe(true);
