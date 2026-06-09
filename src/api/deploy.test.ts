@@ -294,7 +294,7 @@ describe("Deploy API", () => {
       expect(parsed.searchParams.get("check")).toBe("true");
     });
 
-    it("deletes stale non-live deployments on a normal deploy", async () => {
+    it("deletes stale non-live deployments before deploy and previous live deployment after promotion", async () => {
       const deletedIds: string[] = [];
 
       server.use(
@@ -318,7 +318,47 @@ describe("Deploy API", () => {
 
       await deployToMain(config, resources, { pollIntervalMs: 1 });
 
-      expect(deletedIds).toEqual(["stale-1", "stale-2"]);
+      expect(deletedIds).toEqual(["stale-1", "stale-2", "live-1"]);
+    });
+
+    it("deletes the previous live deployment after promoting the new deployment", async () => {
+      const events: string[] = [];
+
+      server.use(
+        http.get(`${BASE_URL}/v1/deployments`, () => {
+          return HttpResponse.json(
+            createDeploymentsListResponse({
+              deployments: [
+                { id: "previous-live", status: "live", live: true },
+              ],
+            })
+          );
+        }),
+        http.post(`${BASE_URL}/v1/deploy`, () => {
+          events.push("create");
+          return HttpResponse.json(
+            createDeploySuccessResponse({ deploymentId: "new-deploy", status: "pending" })
+          );
+        }),
+        http.get(`${BASE_URL}/v1/deployments/new-deploy`, () => {
+          return HttpResponse.json(
+            createDeploymentStatusResponse({ deploymentId: "new-deploy", status: "data_ready" })
+          );
+        }),
+        http.post(`${BASE_URL}/v1/deployments/new-deploy/set-live`, () => {
+          events.push("set-live");
+          return HttpResponse.json(createSetLiveSuccessResponse());
+        }),
+        http.delete(`${BASE_URL}/v1/deployments/:id`, ({ params }) => {
+          events.push(`delete:${params.id as string}`);
+          return HttpResponse.json({ result: "success" });
+        })
+      );
+
+      const result = await deployToMain(config, resources, { pollIntervalMs: 1 });
+
+      expect(result.success).toBe(true);
+      expect(events).toEqual(["create", "set-live", "delete:previous-live"]);
     });
 
     it("adds actionable guidance to Forward/Classic workspace errors", async () => {
