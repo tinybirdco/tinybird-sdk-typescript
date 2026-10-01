@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   createJWT,
+  deleteToken,
+  getToken,
+  getTokenValue,
+  listTokens,
+  refreshToken,
   TokenApiError,
+  updateTokenScopes,
   type TokenApiConfig,
 } from "./tokens.js";
 
@@ -248,6 +254,258 @@ describe("Token API client", () => {
       const [, init] = mockFetch.mock.calls[0];
       const body = JSON.parse(init.body);
       expect(body.limits).toBeUndefined();
+    });
+  });
+
+  describe("listTokens", () => {
+    it("lists tokens in the workspace", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            tokens: [
+              { id: "t1", name: "admin_token", token: "p.admin" },
+              { id: "t2", name: "read_token", scopes: [{ type: "PIPES:READ" }] },
+            ],
+          }),
+      });
+
+      const tokens = await listTokens(config);
+
+      expect(tokens).toHaveLength(2);
+      expect(tokens[0]).toEqual({
+        id: "t1",
+        name: "admin_token",
+        description: undefined,
+        scopes: undefined,
+        value: "p.admin",
+      });
+      expect(tokens[1].scopes).toEqual([
+        { type: "PIPES:READ", resource: undefined, filter: undefined },
+      ]);
+
+      const [url, init] = mockFetch.mock.calls[0];
+      const parsed = expectFromParam(url);
+      expect(parsed.pathname).toBe("/v0/tokens");
+      expect(init.method).toBe("GET");
+      const headers = new Headers(init.headers);
+      expect(headers.get("Authorization")).toBe("Bearer p.admin-token");
+    });
+
+    it("returns an empty array when the API returns no tokens field", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+
+      const tokens = await listTokens(config);
+      expect(tokens).toEqual([]);
+    });
+
+    it("throws TokenApiError on 403", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        statusText: "Forbidden",
+        text: () => Promise.resolve("Insufficient permissions"),
+      });
+
+      await expect(listTokens(config)).rejects.toThrow(TokenApiError);
+    });
+  });
+
+  describe("getToken", () => {
+    it("gets a token's details including scopes", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: "t1",
+            name: "user_token",
+            token: "p.user-token-value",
+            scopes: [{ type: "DATASOURCES:READ", resource: "events", filter: "org_id = 1" }],
+          }),
+      });
+
+      const result = await getToken(config, "user_token");
+
+      expect(result.name).toBe("user_token");
+      expect(result.value).toBe("p.user-token-value");
+      expect(result.scopes).toEqual([
+        { type: "DATASOURCES:READ", resource: "events", filter: "org_id = 1" },
+      ]);
+
+      const [url, init] = mockFetch.mock.calls[0];
+      const parsed = expectFromParam(url);
+      expect(parsed.pathname).toBe("/v0/tokens/user_token");
+      expect(init.method).toBe("GET");
+    });
+
+    it("URL-encodes the name/id", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ name: "weird token" }),
+      });
+
+      await getToken(config, "weird token");
+
+      const [url] = mockFetch.mock.calls[0];
+      const parsed = new URL(url);
+      expect(parsed.pathname).toBe("/v0/tokens/weird%20token");
+    });
+
+    it("throws TokenApiError on 404 with helpful message", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+        text: () => Promise.resolve("Token not found"),
+      });
+
+      await expect(getToken(config, "missing_token")).rejects.toThrow(TokenApiError);
+    });
+  });
+
+  describe("getTokenValue", () => {
+    it("returns the raw token value", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ name: "user_token", token: "p.user-token-value" }),
+      });
+
+      const value = await getTokenValue(config, "user_token");
+      expect(value).toBe("p.user-token-value");
+    });
+
+    it("throws TokenApiError when the token has no retrievable value", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ name: "admin_token" }),
+      });
+
+      await expect(getTokenValue(config, "admin_token")).rejects.toThrow(TokenApiError);
+    });
+  });
+
+  describe("deleteToken", () => {
+    it("deletes a token", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(""),
+      });
+
+      await deleteToken(config, "user_token");
+
+      const [url, init] = mockFetch.mock.calls[0];
+      const parsed = expectFromParam(url);
+      expect(parsed.pathname).toBe("/v0/tokens/user_token");
+      expect(init.method).toBe("DELETE");
+    });
+
+    it("throws TokenApiError on 403 with helpful message", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        statusText: "Forbidden",
+        text: () => Promise.resolve("Insufficient permissions"),
+      });
+
+      await expect(deleteToken(config, "user_token")).rejects.toThrow(TokenApiError);
+    });
+  });
+
+  describe("refreshToken", () => {
+    it("refreshes a token and returns its new value", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({ name: "user_token", token: "p.new-value" })
+          ),
+      });
+
+      const result = await refreshToken(config, "user_token");
+      expect(result.value).toBe("p.new-value");
+
+      const [url, init] = mockFetch.mock.calls[0];
+      const parsed = expectFromParam(url);
+      expect(parsed.pathname).toBe("/v0/tokens/user_token/refresh");
+      expect(init.method).toBe("POST");
+    });
+
+    it("handles an empty response body", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(""),
+      });
+
+      const result = await refreshToken(config, "user_token");
+      expect(result).toEqual({
+        id: undefined,
+        name: undefined,
+        description: undefined,
+        scopes: undefined,
+        value: undefined,
+      });
+    });
+
+    it("throws TokenApiError on 404", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+        text: () => Promise.resolve("Token not found"),
+      });
+
+      await expect(refreshToken(config, "missing_token")).rejects.toThrow(
+        TokenApiError
+      );
+    });
+  });
+
+  describe("updateTokenScopes", () => {
+    it("updates a token's scopes", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              name: "user_token",
+              scopes: [{ type: "DATASOURCES:READ", resource: "events" }],
+            })
+          ),
+      });
+
+      const result = await updateTokenScopes(config, "user_token", [
+        { type: "DATASOURCES:READ", resource: "events" },
+      ]);
+
+      expect(result.scopes).toEqual([
+        { type: "DATASOURCES:READ", resource: "events", filter: undefined },
+      ]);
+
+      const [url, init] = mockFetch.mock.calls[0];
+      const parsed = expectFromParam(url);
+      expect(parsed.pathname).toBe("/v0/tokens/user_token");
+      expect(init.method).toBe("PUT");
+      const headers = new Headers(init.headers);
+      expect(headers.get("Content-Type")).toBe("application/json");
+      const body = JSON.parse(init.body);
+      expect(body.scopes).toEqual([{ type: "DATASOURCES:READ", resource: "events" }]);
+    });
+
+    it("throws TokenApiError on 400 with validation error", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        statusText: "Bad Request",
+        text: () => Promise.resolve('{"error": "Invalid scope type"}'),
+      });
+
+      await expect(
+        updateTokenScopes(config, "user_token", [{ type: "INVALID" }])
+      ).rejects.toThrow(TokenApiError);
     });
   });
 });
