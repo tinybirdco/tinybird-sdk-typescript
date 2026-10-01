@@ -315,6 +315,16 @@ export type {
   CreateJWTResult,
 } from "./api/tokens.js";
 
+// ============ Job API ============
+export { listJobs, getJob, cancelJob, JobApiError } from "./api/jobs.js";
+export type {
+  JobApiConfig,
+  JobRequestOptions,
+  JobStatus,
+  Job,
+  ListJobsOptions,
+} from "./api/jobs.js";
+
 // ============ Config Types ============
 // Import from config-types.ts to avoid bundling esbuild in client code
 export type { TinybirdConfig, DevMode, BranchDataMode } from "./cli/config-types.js";
