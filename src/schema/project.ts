@@ -23,6 +23,7 @@ import type {
 } from "../client/types.js";
 import type { InferRow, InferParams, InferOutputRow } from "../infer/index.js";
 import type { TokensNamespace } from "../client/tokens.js";
+import type { SecretsNamespace } from "../client/secrets.js";
 
 // Symbol for brand typing - use Symbol.for() for global registry
 // This ensures the same symbol is used across module instances
@@ -96,6 +97,8 @@ type DatasourceAccessors<T extends DatasourcesDefinition> = {
 interface ProjectClientBase {
   /** Token operations (JWT creation, etc.) */
   readonly tokens: TokensNamespace;
+  /** Secret operations (list/set/remove secret values) */
+  readonly secrets: SecretsNamespace;
   /** Datasource operations (ingest/append/replace/delete/truncate) */
   readonly datasources: DatasourcesNamespace;
   /** Execute raw SQL queries */
@@ -246,7 +249,7 @@ export function isProjectDefinition(value: unknown): value is ProjectDefinition 
   );
 }
 
-const RESERVED_CLIENT_NAMES = new Set(["tokens", "datasources", "sql", "client"]);
+const RESERVED_CLIENT_NAMES = new Set(["tokens", "secrets", "datasources", "sql", "client"]);
 
 /**
  * Constructor interface for Tinybird class
@@ -427,6 +430,16 @@ export const Tinybird: TinybirdConstructor = class Tinybird<
       );
     }
     return this.#client.tokens;
+  }
+
+  /** Secret operations (list/set/remove secret values) */
+  get secrets(): SecretsNamespace {
+    if (!this.#client) {
+      throw new Error(
+        "Client not initialized. Call a query or ingest method first, or access client asynchronously."
+      );
+    }
+    return this.#client.secrets;
   }
 
   /** Datasource operations (ingest/append/replace/delete/truncate) */
