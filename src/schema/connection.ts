@@ -118,6 +118,34 @@ export interface GCSConnectionDefinition {
 }
 
 /**
+ * Options for creating a GCS HMAC connection.
+ *
+ * HMAC keys are an S3-compatible, access-key-id/secret auth mode for GCS,
+ * as an alternative to uploading a service account credentials JSON.
+ */
+export interface GCSHmacConnectionOptions {
+  /** GCS HMAC access key id - can use {{ tb_secret(...) }} */
+  accessId: string;
+  /** GCS HMAC secret - can use {{ tb_secret(...) }} */
+  secret: string;
+}
+
+/**
+ * GCS HMAC-specific connection definition
+ */
+export interface GCSHmacConnectionDefinition {
+  readonly [CONNECTION_BRAND]: true;
+  /** Connection name */
+  readonly _name: string;
+  /** Type marker for inference */
+  readonly _type: "connection";
+  /** Connection type */
+  readonly _connectionType: "gcs_hmac";
+  /** GCS HMAC options */
+  readonly options: GCSHmacConnectionOptions;
+}
+
+/**
  * Options for defining a DynamoDB connection
  */
 export interface DynamoDBConnectionOptions {
@@ -149,6 +177,7 @@ export type ConnectionDefinition =
   | KafkaConnectionDefinition
   | S3ConnectionDefinition
   | GCSConnectionDefinition
+  | GCSHmacConnectionDefinition
   | DynamoDBConnectionDefinition;
 
 function validateConnectionName(name: string): void {
@@ -258,6 +287,50 @@ export function defineGCSConnection(
 }
 
 /**
+ * Define a GCS HMAC connection
+ *
+ * HMAC connections authenticate to GCS using an S3-compatible access key id
+ * and secret, as an alternative to `defineGCSConnection`'s service account
+ * credentials JSON.
+ *
+ * @param name - The connection name (must be valid identifier)
+ * @param options - GCS HMAC connection configuration
+ * @returns A connection definition that can be used in a project
+ *
+ * @example
+ * ```ts
+ * import { defineGCSHmacConnection } from '@tinybirdco/sdk';
+ *
+ * export const myGcsHmac = defineGCSHmacConnection('my_gcs_hmac', {
+ *   accessId: '{{ tb_secret("GCS_ACCESS_ID") }}',
+ *   secret: '{{ tb_secret("GCS_SECRET") }}',
+ * });
+ * ```
+ */
+export function defineGCSHmacConnection(
+  name: string,
+  options: GCSHmacConnectionOptions
+): GCSHmacConnectionDefinition {
+  validateConnectionName(name);
+
+  if (!options.accessId?.trim()) {
+    throw new Error("GCS HMAC connection `accessId` is required.");
+  }
+
+  if (!options.secret?.trim()) {
+    throw new Error("GCS HMAC connection `secret` is required.");
+  }
+
+  return {
+    [CONNECTION_BRAND]: true,
+    _name: name,
+    _type: "connection",
+    _connectionType: "gcs_hmac",
+    options,
+  };
+}
+
+/**
  * Define a DynamoDB connection
  *
  * @param name - The connection name (must be valid identifier)
@@ -328,6 +401,15 @@ export function isS3ConnectionDefinition(value: unknown): value is S3ConnectionD
  */
 export function isGCSConnectionDefinition(value: unknown): value is GCSConnectionDefinition {
   return isConnectionDefinition(value) && value._connectionType === "gcs";
+}
+
+/**
+ * Check if a value is a GCS HMAC connection definition
+ */
+export function isGCSHmacConnectionDefinition(
+  value: unknown
+): value is GCSHmacConnectionDefinition {
+  return isConnectionDefinition(value) && value._connectionType === "gcs_hmac";
 }
 
 /**

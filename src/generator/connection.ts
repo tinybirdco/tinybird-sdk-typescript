@@ -7,11 +7,13 @@ import type {
   ConnectionDefinition,
   KafkaConnectionDefinition,
   GCSConnectionDefinition,
+  GCSHmacConnectionDefinition,
   DynamoDBConnectionDefinition,
 } from "../schema/connection.js";
 import {
   isS3ConnectionDefinition,
   isGCSConnectionDefinition,
+  isGCSHmacConnectionDefinition,
   isDynamoDBConnectionDefinition,
   type S3ConnectionDefinition,
 } from "../schema/connection.js";
@@ -126,6 +128,20 @@ function generateGCSConnection(connection: GCSConnectionDefinition): string {
 }
 
 /**
+ * Generate a GCS HMAC connection content
+ */
+function generateGCSHmacConnection(connection: GCSHmacConnectionDefinition): string {
+  const parts: string[] = [];
+  const options = connection.options;
+
+  parts.push("TYPE gcs_hmac");
+  parts.push(`GCS_HMAC_ACCESS_ID ${options.accessId}`);
+  parts.push(`GCS_HMAC_SECRET ${options.secret}`);
+
+  return parts.join("\n");
+}
+
+/**
  * Generate a DynamoDB connection content
  */
 function generateDynamoDBConnection(connection: DynamoDBConnectionDefinition): string {
@@ -176,6 +192,8 @@ export function generateConnection(
     content = generateS3Connection(connection);
   } else if (isGCSConnectionDefinition(connection)) {
     content = generateGCSConnection(connection);
+  } else if (isGCSHmacConnectionDefinition(connection)) {
+    content = generateGCSHmacConnection(connection);
   } else if (isDynamoDBConnectionDefinition(connection)) {
     content = generateDynamoDBConnection(connection);
   } else {

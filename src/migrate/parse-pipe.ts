@@ -492,7 +492,7 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
   let copyTargetDatasource: string | undefined;
   let copySchedule: string | undefined;
   let copyMode: "append" | "replace" | undefined;
-  let exportService: "kafka" | "s3" | undefined;
+  let exportService: "kafka" | "s3" | "gcs_hmac" | undefined;
   let exportConnectionName: string | undefined;
   let exportTopic: string | undefined;
   let exportBucketUri: string | undefined;
@@ -662,7 +662,7 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
         break;
       case "EXPORT_SERVICE": {
         const normalized = parseQuotedValue(value).toLowerCase();
-        if (normalized !== "kafka" && normalized !== "s3") {
+        if (normalized !== "kafka" && normalized !== "s3" && normalized !== "gcs_hmac") {
           throw new MigrationParseError(
             resource.filePath,
             "pipe",
@@ -813,23 +813,28 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
     }
 
     const hasKafkaDirectives = exportTopic !== undefined;
-    const hasS3Directives =
+    const hasBucketDirectives =
       exportBucketUri !== undefined ||
       exportFileTemplate !== undefined ||
       exportFormat !== undefined ||
       exportCompression !== undefined;
 
-    if (hasKafkaDirectives && hasS3Directives) {
+    if (hasKafkaDirectives && hasBucketDirectives) {
       throw new MigrationParseError(
         resource.filePath,
         "pipe",
         resource.name,
-        "Sink pipe cannot mix Kafka and S3 export directives."
+        "Sink pipe cannot mix Kafka and S3/GCS HMAC export directives."
       );
     }
 
+    // Bucket-based sinks (S3 and GCS HMAC) share the exact same EXPORT_* directive
+    // shape, so when EXPORT_SERVICE is omitted (it's deprecated/inferred from the
+    // connection by the Forward backend) we can't tell them apart from directives
+    // alone. Default to "s3" in that case, matching pre-existing behavior; an
+    // explicit EXPORT_SERVICE gcs_hmac is required to migrate a GCS HMAC sink.
     const inferredService =
-      exportService ?? (hasKafkaDirectives ? "kafka" : hasS3Directives ? "s3" : undefined);
+      exportService ?? (hasKafkaDirectives ? "kafka" : hasBucketDirectives ? "s3" : undefined);
 
     if (!inferredService) {
       throw new MigrationParseError(
@@ -841,12 +846,12 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
     }
 
     if (inferredService === "kafka") {
-      if (hasS3Directives) {
+      if (hasBucketDirectives) {
         throw new MigrationParseError(
           resource.filePath,
           "pipe",
           resource.name,
-          "S3 export directives are not valid for Kafka sinks."
+          "S3/GCS HMAC export directives are not valid for Kafka sinks."
         );
       }
       if (!exportTopic) {
@@ -870,7 +875,7 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
           resource.filePath,
           "pipe",
           resource.name,
-          "EXPORT_STRATEGY is only valid for S3 sinks."
+          "EXPORT_STRATEGY is only valid for S3/GCS HMAC sinks."
         );
       }
       if (exportCompression !== undefined) {
@@ -878,7 +883,7 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
           resource.filePath,
           "pipe",
           resource.name,
-          "EXPORT_COMPRESSION is only valid for S3 sinks."
+          "EXPORT_COMPRESSION is only valid for S3/GCS HMAC sinks."
         );
       }
 
@@ -894,7 +899,7 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
           resource.filePath,
           "pipe",
           resource.name,
-          "Kafka export directives are not valid for S3 sinks."
+          "Kafka export directives are not valid for S3/GCS HMAC sinks."
         );
       }
       if (!exportBucketUri || !exportFileTemplate || !exportFormat || !exportSchedule) {
@@ -902,20 +907,33 @@ export function parsePipeFile(resource: ResourceFile): PipeModel {
           resource.filePath,
           "pipe",
           resource.name,
-          "S3 sinks require EXPORT_BUCKET_URI, EXPORT_FILE_TEMPLATE, EXPORT_FORMAT, and EXPORT_SCHEDULE."
+          "S3/GCS HMAC sinks require EXPORT_BUCKET_URI, EXPORT_FILE_TEMPLATE, EXPORT_FORMAT, and EXPORT_SCHEDULE."
         );
       }
 
-      sink = {
-        service: "s3",
-        connectionName: exportConnectionName,
-        bucketUri: exportBucketUri,
-        fileTemplate: exportFileTemplate,
-        format: exportFormat,
-        schedule: exportSchedule,
-        strategy: exportStrategy,
-        compression: exportCompression,
-      };
+      if (inferredService === "gcs_hmac") {
+        sink = {
+          service: "gcs_hmac",
+          connectionName: exportConnectionName,
+          bucketUri: exportBucketUri,
+          fileTemplate: exportFileTemplate,
+          format: exportFormat,
+          schedule: exportSchedule,
+          strategy: exportStrategy,
+          compression: exportCompression,
+        };
+      } else {
+        sink = {
+          service: "s3",
+          connectionName: exportConnectionName,
+          bucketUri: exportBucketUri,
+          fileTemplate: exportFileTemplate,
+          format: exportFormat,
+          schedule: exportSchedule,
+          strategy: exportStrategy,
+          compression: exportCompression,
+        };
+      }
     }
   }
 

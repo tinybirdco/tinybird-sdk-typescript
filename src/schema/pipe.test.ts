@@ -15,7 +15,7 @@ import {
   sql,
 } from "./pipe.js";
 import { defineDatasource } from "./datasource.js";
-import { defineKafkaConnection, defineS3Connection } from "./connection.js";
+import { defineKafkaConnection, defineS3Connection, defineGCSHmacConnection } from "./connection.js";
 import { t } from "./types.js";
 import { p } from "./params.js";
 import { engine } from "./engines.js";
@@ -227,6 +227,51 @@ describe("Pipe Schema", () => {
       expect(sink).toBeTruthy();
       expect(sink && "bucketUri" in sink ? sink.bucketUri : undefined).toBe("s3://exports/events/");
       expect(isSinkPipe(pipe)).toBe(true);
+    });
+
+    it("creates a GCS HMAC sink pipe", () => {
+      const gcsHmac = defineGCSHmacConnection("exports_gcs_hmac", {
+        accessId: '{{ tb_secret("GCS_ACCESS_ID") }}',
+        secret: '{{ tb_secret("GCS_SECRET") }}',
+      });
+
+      const pipe = defineSinkPipe("exports_gcs_sink", {
+        nodes: [node({ name: "export", sql: "SELECT * FROM events" })],
+        sink: {
+          connection: gcsHmac,
+          bucketUri: "gcs://exports/events/",
+          fileTemplate: "events_{date}",
+          schedule: "@once",
+          format: "csv",
+          strategy: "create_new",
+          compression: "gzip",
+        },
+      });
+
+      const sink = getSinkConfig(pipe);
+      expect(sink).toBeTruthy();
+      expect(sink && "bucketUri" in sink ? sink.bucketUri : undefined).toBe("gcs://exports/events/");
+      expect(isSinkPipe(pipe)).toBe(true);
+    });
+
+    it("throws when bucket sink connection type is invalid", () => {
+      const kafka = defineKafkaConnection("events_kafka", {
+        bootstrapServers: "localhost:9092",
+      });
+
+      expect(() =>
+        defineSinkPipe("bad_bucket_sink", {
+          nodes: [node({ name: "export", sql: "SELECT * FROM events" })],
+          sink: {
+            // Runtime validation rejects mismatched connection/type
+            connection: kafka as unknown as ReturnType<typeof defineS3Connection>,
+            bucketUri: "s3://exports/events/",
+            fileTemplate: "events_{date}",
+            schedule: "@once",
+            format: "csv",
+          },
+        })
+      ).toThrow("requires an S3 or GCS HMAC connection");
     });
 
     it("throws when Kafka sink connection type is invalid", () => {

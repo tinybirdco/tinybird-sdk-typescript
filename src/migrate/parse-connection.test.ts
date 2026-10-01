@@ -163,4 +163,57 @@ S3_ARN arn:aws:iam::1:role/x`
       )
     ).toThrow("Kafka/S3/GCS directives are not valid for dynamodb connections.");
   });
+
+  it("parses basic GCS HMAC connection", () => {
+    const result = parseConnectionFile(
+      resource(
+        "my_gcs_hmac",
+        `TYPE gcs_hmac
+GCS_HMAC_ACCESS_ID {{ tb_secret("GCS_ACCESS_ID") }}
+GCS_HMAC_SECRET {{ tb_secret("GCS_SECRET") }}`
+      )
+    );
+
+    expect(result.connectionType).toBe("gcs_hmac");
+    expect(result).toHaveProperty("accessId", '{{ tb_secret("GCS_ACCESS_ID") }}');
+    expect(result).toHaveProperty("secret", '{{ tb_secret("GCS_SECRET") }}');
+  });
+
+  it("throws when GCS HMAC connection is missing GCS_HMAC_ACCESS_ID", () => {
+    expect(() =>
+      parseConnectionFile(
+        resource(
+          "my_gcs_hmac",
+          `TYPE gcs_hmac
+GCS_HMAC_SECRET {{ tb_secret("GCS_SECRET") }}`
+        )
+      )
+    ).toThrow("GCS_HMAC_ACCESS_ID is required");
+  });
+
+  it("throws when GCS HMAC connection is missing GCS_HMAC_SECRET", () => {
+    expect(() =>
+      parseConnectionFile(
+        resource(
+          "my_gcs_hmac",
+          `TYPE gcs_hmac
+GCS_HMAC_ACCESS_ID {{ tb_secret("GCS_ACCESS_ID") }}`
+        )
+      )
+    ).toThrow("GCS_HMAC_SECRET is required");
+  });
+
+  it("throws when GCS HMAC connection mixes GCS service account directives", () => {
+    expect(() =>
+      parseConnectionFile(
+        resource(
+          "my_gcs_hmac",
+          `TYPE gcs_hmac
+GCS_HMAC_ACCESS_ID {{ tb_secret("GCS_ACCESS_ID") }}
+GCS_HMAC_SECRET {{ tb_secret("GCS_SECRET") }}
+GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON {{ tb_secret("GCS_JSON") }}`
+        )
+      )
+    ).toThrow("Kafka/S3/GCS/DynamoDB directives are not valid for gcs_hmac connections.");
+  });
 });

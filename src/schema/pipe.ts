@@ -9,8 +9,16 @@ import type { DatasourceDefinition, SchemaDefinition, ColumnDefinition } from ".
 import { getColumnType } from "./datasource.js";
 import { getTinybirdType } from "./types.js";
 import type { TokenDefinition, PipeTokenScope } from "./token.js";
-import type { KafkaConnectionDefinition, S3ConnectionDefinition } from "./connection.js";
-import { isKafkaConnectionDefinition, isS3ConnectionDefinition } from "./connection.js";
+import type {
+  KafkaConnectionDefinition,
+  S3ConnectionDefinition,
+  GCSHmacConnectionDefinition,
+} from "./connection.js";
+import {
+  isKafkaConnectionDefinition,
+  isS3ConnectionDefinition,
+  isGCSHmacConnectionDefinition,
+} from "./connection.js";
 
 /** Symbol for brand typing pipes - use Symbol.for() for global registry */
 export const PIPE_BRAND = Symbol.for("tinybird.pipe");
@@ -202,9 +210,32 @@ export interface S3SinkConfig {
 }
 
 /**
- * Sink pipe configuration (Kafka or S3 only)
+ * GCS HMAC sink configuration
+ *
+ * GCS HMAC export uses the same kind of access-key-id/secret-based
+ * connection and bucket export shape as S3.
  */
-export type SinkConfig = KafkaSinkConfig | S3SinkConfig;
+export interface GCSHmacSinkConfig {
+  /** GCS HMAC connection used to write exported files */
+  connection: GCSHmacConnectionDefinition;
+  /** Destination bucket URI (for example: gcs://bucket/prefix/) */
+  bucketUri: string;
+  /** Output filename template (supports Tinybird placeholders) */
+  fileTemplate: string;
+  /** Output format (for example: csv, ndjson) */
+  format: string;
+  /** Sink schedule (for example: @on-demand, @once, cron expression) */
+  schedule: string;
+  /** Export strategy */
+  strategy?: SinkStrategy;
+  /** Compression codec */
+  compression?: SinkCompression;
+}
+
+/**
+ * Sink pipe configuration (Kafka, S3, or GCS HMAC)
+ */
+export type SinkConfig = KafkaSinkConfig | S3SinkConfig | GCSHmacSinkConfig;
 
 /**
  * Inline token configuration for pipe access
@@ -522,9 +553,9 @@ function validateSinkConfig(pipeName: string, sink: SinkConfig): void {
     return;
   }
 
-  if (!isS3ConnectionDefinition(sink.connection)) {
+  if (!isS3ConnectionDefinition(sink.connection) && !isGCSHmacConnectionDefinition(sink.connection)) {
     throw new Error(
-      `Pipe "${pipeName}" S3 sink requires an S3 connection.`
+      `Pipe "${pipeName}" bucket sink requires an S3 or GCS HMAC connection.`
     );
   }
   if (typeof sink.bucketUri !== "string" || !sink.bucketUri.trim()) {

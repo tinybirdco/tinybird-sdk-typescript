@@ -4,6 +4,7 @@ import {
   defineKafkaConnection,
   defineS3Connection,
   defineGCSConnection,
+  defineGCSHmacConnection,
   defineDynamoDBConnection,
 } from "../schema/connection.js";
 
@@ -217,6 +218,24 @@ describe("Connection Generator", () => {
       expect(result.content).toContain("TYPE gcs");
       expect(result.content).toContain(
         'GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON {{ tb_secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON") }}'
+      );
+    });
+
+    it("generates GCS HMAC connection with access id and secret", () => {
+      const conn = defineGCSHmacConnection("my_gcs_hmac", {
+        accessId: '{{ tb_secret("GCS_ACCESS_ID") }}',
+        secret: '{{ tb_secret("GCS_SECRET") }}',
+      });
+
+      const result = generateConnection(conn);
+
+      expect(result.name).toBe("my_gcs_hmac");
+      expect(result.content).toBe(
+        [
+          "TYPE gcs_hmac",
+          'GCS_HMAC_ACCESS_ID {{ tb_secret("GCS_ACCESS_ID") }}',
+          'GCS_HMAC_SECRET {{ tb_secret("GCS_SECRET") }}',
+        ].join("\n")
       );
     });
 

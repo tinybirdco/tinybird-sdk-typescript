@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { generatePipe, generateAllPipes } from './pipe.js';
 import { definePipe, defineEndpoint, defineMaterializedView, defineSinkPipe, node } from '../schema/pipe.js';
 import { defineDatasource } from '../schema/datasource.js';
-import { defineKafkaConnection, defineS3Connection } from '../schema/connection.js';
+import { defineKafkaConnection, defineS3Connection, defineGCSHmacConnection } from '../schema/connection.js';
 import { defineToken } from '../schema/token.js';
 import { t } from '../schema/types.js';
 import { p } from '../schema/params.js';
@@ -661,6 +661,36 @@ GROUP BY day, country
       expect(result.content).toContain('TYPE sink');
       expect(result.content).toContain('EXPORT_CONNECTION_NAME exports_s3');
       expect(result.content).toContain('EXPORT_BUCKET_URI s3://bucket/events/');
+      expect(result.content).toContain('EXPORT_FILE_TEMPLATE events_{date}');
+      expect(result.content).toContain('EXPORT_FORMAT csv');
+      expect(result.content).toContain('EXPORT_SCHEDULE @once');
+      expect(result.content).toContain('EXPORT_STRATEGY replace');
+      expect(result.content).toContain('EXPORT_COMPRESSION gzip');
+    });
+
+    it('generates GCS HMAC sink directives', () => {
+      const gcsHmac = defineGCSHmacConnection('exports_gcs_hmac', {
+        accessId: '{{ tb_secret("GCS_ACCESS_ID") }}',
+        secret: '{{ tb_secret("GCS_SECRET") }}',
+      });
+
+      const pipe = defineSinkPipe('events_gcs_sink', {
+        nodes: [node({ name: 'export', sql: 'SELECT * FROM events' })],
+        sink: {
+          connection: gcsHmac,
+          bucketUri: 'gcs://bucket/events/',
+          fileTemplate: 'events_{date}',
+          format: 'csv',
+          schedule: '@once',
+          compression: 'gzip',
+          strategy: 'replace',
+        },
+      });
+
+      const result = generatePipe(pipe);
+      expect(result.content).toContain('TYPE sink');
+      expect(result.content).toContain('EXPORT_CONNECTION_NAME exports_gcs_hmac');
+      expect(result.content).toContain('EXPORT_BUCKET_URI gcs://bucket/events/');
       expect(result.content).toContain('EXPORT_FILE_TEMPLATE events_{date}');
       expect(result.content).toContain('EXPORT_FORMAT csv');
       expect(result.content).toContain('EXPORT_SCHEDULE @once');

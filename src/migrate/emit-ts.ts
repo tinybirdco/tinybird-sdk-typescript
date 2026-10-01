@@ -6,6 +6,7 @@ import type {
   DatasourceEngineModel,
   DynamoDBConnectionModel,
   GCSConnectionModel,
+  GCSHmacConnectionModel,
   KafkaConnectionModel,
   ParsedResource,
   PipeModel,
@@ -76,6 +77,9 @@ function hasSecretTemplate(resources: ParsedResource[]): boolean {
       } else if (resource.connectionType === "dynamodb") {
         values.push(resource.region);
         values.push(resource.arn);
+      } else if (resource.connectionType === "gcs_hmac") {
+        values.push(resource.accessId);
+        values.push(resource.secret);
       } else {
         values.push(resource.serviceAccountCredentialsJson);
       }
@@ -437,6 +441,7 @@ function emitConnection(
     | KafkaConnectionModel
     | S3ConnectionModel
     | GCSConnectionModel
+    | GCSHmacConnectionModel
     | DynamoDBConnectionModel
 ): string {
   const variableName = toCamelCase(connection.name);
@@ -513,6 +518,17 @@ function emitConnection(
     );
     lines.push(`  region: ${emitStringOrSecret(connection.region)},`);
     lines.push(`  arn: ${emitStringOrSecret(connection.arn)},`);
+    lines.push("});");
+    lines.push("");
+    return lines.join("\n");
+  }
+
+  if (connection.connectionType === "gcs_hmac") {
+    lines.push(
+      `export const ${variableName} = defineGCSHmacConnection(${escapeString(connection.name)}, {`
+    );
+    lines.push(`  accessId: ${emitStringOrSecret(connection.accessId)},`);
+    lines.push(`  secret: ${emitStringOrSecret(connection.secret)},`);
     lines.push("});");
     lines.push("");
     return lines.join("\n");
@@ -663,6 +679,7 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
       | KafkaConnectionModel
       | S3ConnectionModel
       | GCSConnectionModel
+      | GCSHmacConnectionModel
       | DynamoDBConnectionModel => resource.kind === "connection"
   );
   const datasources = resources.filter(
@@ -691,6 +708,9 @@ export function emitMigrationFileContent(resources: ParsedResource[]): string {
   }
   if (connections.some((connection) => connection.connectionType === "gcs")) {
     imports.add("defineGCSConnection");
+  }
+  if (connections.some((connection) => connection.connectionType === "gcs_hmac")) {
+    imports.add("defineGCSHmacConnection");
   }
   if (connections.some((connection) => connection.connectionType === "dynamodb")) {
     imports.add("defineDynamoDBConnection");

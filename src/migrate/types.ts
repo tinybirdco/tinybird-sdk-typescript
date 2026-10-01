@@ -125,7 +125,18 @@ export interface PipeS3SinkModel {
   compression?: "none" | "gzip" | "snappy";
 }
 
-export type PipeSinkModel = PipeKafkaSinkModel | PipeS3SinkModel;
+export interface PipeGCSHmacSinkModel {
+  service: "gcs_hmac";
+  connectionName: string;
+  bucketUri: string;
+  fileTemplate: string;
+  format: string;
+  schedule: string;
+  strategy?: "create_new" | "replace";
+  compression?: "none" | "gzip" | "snappy";
+}
+
+export type PipeSinkModel = PipeKafkaSinkModel | PipeS3SinkModel | PipeGCSHmacSinkModel;
 
 export interface PipeParamModel {
   name: string;
@@ -191,6 +202,15 @@ export interface GCSConnectionModel {
   serviceAccountCredentialsJson: string;
 }
 
+export interface GCSHmacConnectionModel {
+  kind: "connection";
+  name: string;
+  filePath: string;
+  connectionType: "gcs_hmac";
+  accessId: string;
+  secret: string;
+}
+
 export interface DynamoDBConnectionModel {
   kind: "connection";
   name: string;
@@ -206,6 +226,7 @@ export type ParsedResource =
   | KafkaConnectionModel
   | S3ConnectionModel
   | GCSConnectionModel
+  | GCSHmacConnectionModel
   | DynamoDBConnectionModel;
 
 export interface MigrationResult {

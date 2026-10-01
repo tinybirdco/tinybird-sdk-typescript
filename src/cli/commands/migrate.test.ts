@@ -1942,6 +1942,103 @@ EXPORT_COMPRESSION gzip
     expect(output).toContain('compression: "gzip"');
   });
 
+  it("migrates GCS HMAC sink pipes and connections to TypeScript", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "exports_gcs_hmac.connection",
+      `TYPE gcs_hmac
+GCS_HMAC_ACCESS_ID {{ tb_secret("GCS_ACCESS_ID") }}
+GCS_HMAC_SECRET {{ tb_secret("GCS_SECRET") }}
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events_gcs_sink.pipe",
+      `NODE export
+SQL >
+    SELECT * FROM events
+TYPE sink
+EXPORT_SERVICE gcs_hmac
+EXPORT_CONNECTION_NAME exports_gcs_hmac
+EXPORT_BUCKET_URI gcs://exports/events/
+EXPORT_FILE_TEMPLATE events_{date}
+EXPORT_SCHEDULE @once
+EXPORT_FORMAT ndjson
+EXPORT_STRATEGY create_new
+EXPORT_COMPRESSION gzip
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+
+    const output = fs.readFileSync(result.outputPath, "utf-8");
+    expect(output).toContain("defineGCSHmacConnection");
+    expect(output).toContain(
+      'export const exportsGcsHmac = defineGCSHmacConnection("exports_gcs_hmac", {'
+    );
+    expect(output).toContain('export const eventsGcsSink = defineSinkPipe("events_gcs_sink", {');
+    expect(output).toContain("sink: {");
+    expect(output).toContain("connection: exportsGcsHmac");
+    expect(output).toContain('bucketUri: "gcs://exports/events/"');
+    expect(output).toContain('fileTemplate: "events_{date}"');
+    expect(output).toContain('schedule: "@once"');
+    expect(output).toContain('format: "ndjson"');
+    expect(output).toContain('strategy: "create_new"');
+    expect(output).toContain('compression: "gzip"');
+  });
+
+  it("reports an error when a gcs_hmac sink references an s3 connection", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      tempDir,
+      "exports_s3.connection",
+      `TYPE s3
+S3_REGION "us-east-1"
+S3_ARN "arn:aws:iam::123456789012:role/tinybird-s3-access"
+`
+    );
+
+    writeFile(
+      tempDir,
+      "events_gcs_sink.pipe",
+      `NODE export
+SQL >
+    SELECT * FROM events
+TYPE sink
+EXPORT_SERVICE gcs_hmac
+EXPORT_CONNECTION_NAME exports_s3
+EXPORT_BUCKET_URI gcs://exports/events/
+EXPORT_FILE_TEMPLATE events_{date}
+EXPORT_SCHEDULE @once
+EXPORT_FORMAT ndjson
+`
+    );
+
+    const result = await runMigrate({
+      cwd: tempDir,
+      patterns: ["."],
+      strict: true,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors.map((error) => error.message)).toContain(
+      'Sink pipe service "gcs_hmac" is incompatible with connection "exports_s3" type "s3".'
+    );
+  });
+
   it("migrates legacy EXPORT_WRITE_STRATEGY sink directives", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinybird-migrate-"));
     tempDirs.push(tempDir);
