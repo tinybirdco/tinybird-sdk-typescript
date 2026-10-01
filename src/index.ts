@@ -315,6 +315,22 @@ export type {
   CreateJWTResult,
 } from "./api/tokens.js";
 
+// ============ Secret API ============
+export {
+  listSecrets,
+  createSecret,
+  updateSecret,
+  setSecret,
+  removeSecret,
+  SecretApiError,
+} from "./api/secrets.js";
+export type {
+  SecretApiConfig,
+  SecretInfo,
+  SetSecretResult,
+  RemoveSecretResult,
+} from "./api/secrets.js";
+
 // ============ Config Types ============
 // Import from config-types.ts to avoid bundling esbuild in client code
 export type { TinybirdConfig, DevMode, BranchDataMode } from "./cli/config-types.js";
