@@ -292,6 +292,54 @@ export interface TruncateResult {
 }
 
 /**
+ * Options for starting a bounded sample import job on an S3/GCS/DynamoDB
+ * connected datasource.
+ *
+ * `rows` and `maxBytes` are mutually exclusive (DynamoDB only) and only one
+ * of them may be provided.
+ */
+export interface SampleOptions {
+  /**
+   * Maximum number of files to import for blob storage (S3/GCS) connectors.
+   * Defaults to 1 (max 10).
+   */
+  maxFiles?: number;
+  /**
+   * DynamoDB only: maximum number of rows to scan and import.
+   * Mutually exclusive with `maxBytes`.
+   */
+  rows?: number;
+  /**
+   * DynamoDB only: maximum approximate JSONEachRow bytes to import,
+   * e.g. `"500MB"`. Mutually exclusive with `rows`.
+   */
+  maxBytes?: string;
+  /**
+   * DynamoDB only: trigger a full PITR export of the whole table instead of
+   * a bounded scan. Defaults to false.
+   */
+  fullExport?: boolean;
+  /** Request timeout in milliseconds */
+  timeout?: number;
+  /** AbortController signal for cancellation */
+  signal?: AbortSignal;
+}
+
+/**
+ * Result of starting a datasource sample job
+ */
+export interface SampleResult {
+  /** Sample job ID */
+  id?: string;
+  /** Same value as id */
+  job_id?: string;
+  /** Job status URL */
+  job_url?: string;
+  /** Job status */
+  status?: string;
+}
+
+/**
  * Datasources namespace interface for raw client
  */
 export interface DatasourcesNamespace {
@@ -309,4 +357,6 @@ export interface DatasourcesNamespace {
   delete(datasourceName: string, options: DeleteOptions): Promise<DeleteResult>;
   /** Truncate all rows from a datasource */
   truncate(datasourceName: string, options?: TruncateOptions): Promise<TruncateResult>;
+  /** Start a bounded sample import job for an S3/GCS/DynamoDB connected datasource */
+  sample(datasourceName: string, options?: SampleOptions): Promise<SampleResult>;
 }

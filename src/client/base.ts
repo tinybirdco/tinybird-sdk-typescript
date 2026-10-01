@@ -14,6 +14,8 @@ import type {
   IngestResult,
   QueryOptions,
   IngestOptions,
+  SampleOptions,
+  SampleResult,
   TruncateOptions,
   TruncateResult,
 } from "./types.js";
@@ -112,6 +114,12 @@ export class TinybirdClient {
         options: TruncateOptions = {}
       ): Promise<TruncateResult> => {
         return this.truncateDatasource(datasourceName, options);
+      },
+      sample: (
+        datasourceName: string,
+        options: SampleOptions = {}
+      ): Promise<SampleResult> => {
+        return this.sampleDatasource(datasourceName, options);
       },
     };
 
@@ -214,6 +222,44 @@ export class TinybirdClient {
 
     try {
       return await this.getApi(token).truncateDatasource(datasourceName, options);
+    } catch (error) {
+      this.rethrowApiError(error);
+    }
+  }
+
+  /**
+   * Start a bounded sample import job for an S3/GCS/DynamoDB connected datasource
+   *
+   * For blob storage (S3/GCS) connectors, `maxFiles` bounds how many files are
+   * imported (default 1, max 10). For DynamoDB, the sample is bounded by either
+   * `rows` or `maxBytes` (mutually exclusive — passing both throws), or
+   * `fullExport` triggers a full PITR export of the whole table instead of a
+   * bounded scan.
+   *
+   * @param datasourceName - Name of the datasource
+   * @param options - Sample options (maxFiles, rows, maxBytes, fullExport)
+   * @returns Sample job result
+   *
+   * @example
+   * ```ts
+   * // Sample up to 3 files from an S3/GCS connected datasource
+   * await client.datasources.sample('s3_events', { maxFiles: 3 });
+   *
+   * // Bound a DynamoDB sample by row count
+   * await client.datasources.sample('ddb_events', { rows: 100_000 });
+   *
+   * // Trigger a full DynamoDB PITR export
+   * await client.datasources.sample('ddb_events', { fullExport: true });
+   * ```
+   */
+  private async sampleDatasource(
+    datasourceName: string,
+    options: SampleOptions = {}
+  ): Promise<SampleResult> {
+    const token = await this.getToken();
+
+    try {
+      return await this.getApi(token).sampleDatasource(datasourceName, options);
     } catch (error) {
       this.rethrowApiError(error);
     }

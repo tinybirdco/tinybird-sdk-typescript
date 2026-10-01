@@ -8,6 +8,8 @@ import type {
   IngestResult,
   QueryOptions,
   QueryResult,
+  SampleOptions,
+  SampleResult,
   TruncateOptions,
   TruncateResult,
   TinybirdErrorResponse,
@@ -84,6 +86,15 @@ export interface TinybirdApiDeleteOptions extends Omit<DeleteOptions, 'deleteCon
 export interface TinybirdApiTruncateOptions extends TruncateOptions {
   /** Optional token override for this request */
   token?: string;
+}
+
+export interface TinybirdApiSampleOptions {
+  /** Optional token override for this request */
+  token?: string;
+  /** Request timeout in milliseconds */
+  timeout?: number;
+  /** AbortController signal for cancellation */
+  signal?: AbortSignal;
 }
 
 /**
@@ -503,6 +514,61 @@ export class TinybirdApi {
     }
 
     return this.parseOptionalJson(response);
+  }
+
+  /**
+   * Start a bounded sample import job for an S3/GCS/DynamoDB connected datasource.
+   *
+   * For blob storage (S3/GCS) connectors, `maxFiles` bounds how many files are
+   * imported (default 1, max 10). For DynamoDB, the sample is bounded by either
+   * `rows` or `maxBytes` (mutually exclusive), or `fullExport` triggers a full
+   * PITR export of the whole table instead of a bounded scan.
+   */
+  async sampleDatasource(
+    datasourceName: string,
+    options: SampleOptions = {},
+    apiOptions: TinybirdApiSampleOptions = {}
+  ): Promise<SampleResult> {
+    if (options.rows !== undefined && options.maxBytes !== undefined) {
+      throw new Error("'rows' and 'maxBytes' are mutually exclusive; pass only one");
+    }
+
+    const url = new URL(
+      `/v0/datasources/${encodeURIComponent(datasourceName)}/sample`,
+      `${this.baseUrl}/`
+    );
+
+    const payload: Record<string, unknown> = {
+      max_files: options.maxFiles ?? 1,
+      full_export: options.fullExport ?? false,
+    };
+
+    if (options.rows !== undefined) {
+      payload.rows = options.rows;
+    }
+
+    if (options.maxBytes !== undefined) {
+      payload.max_bytes = options.maxBytes;
+    }
+
+    const response = await this.request(url.toString(), {
+      method: "POST",
+      token: apiOptions.token,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: this.createAbortSignal(
+        options.timeout ?? apiOptions.timeout,
+        options.signal ?? apiOptions.signal
+      ),
+    });
+
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+
+    return (await response.json()) as SampleResult;
   }
 
   /**
