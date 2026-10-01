@@ -1225,4 +1225,141 @@ describe("TinybirdApi", () => {
       expect(authorizationHeader).toBe("Bearer p.override-token");
     });
   });
+
+  describe("sampleDatasource", () => {
+    it("sends default payload (max_files=1, full_export=false)", async () => {
+      let body: unknown;
+      let contentType: string | null = null;
+
+      server.use(
+        http.post(`${BASE_URL}/v0/datasources/events/sample`, async ({ request }) => {
+          contentType = request.headers.get("Content-Type");
+          body = await request.json();
+          return HttpResponse.json({ job_id: "job-1", status: "waiting" });
+        })
+      );
+
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      const result = await api.sampleDatasource("events");
+
+      expect(result).toEqual({ job_id: "job-1", status: "waiting" });
+      expect(contentType).toBe("application/json");
+      expect(body).toEqual({ max_files: 1, full_export: false });
+    });
+
+    it("forwards maxFiles for blob storage connectors", async () => {
+      let body: unknown;
+
+      server.use(
+        http.post(`${BASE_URL}/v0/datasources/events/sample`, async ({ request }) => {
+          body = await request.json();
+          return HttpResponse.json({ job_id: "job-1" });
+        })
+      );
+
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      await api.sampleDatasource("events", { maxFiles: 3 });
+
+      expect(body).toEqual({ max_files: 3, full_export: false });
+    });
+
+    it("forwards DynamoDB rows option", async () => {
+      let body: unknown;
+
+      server.use(
+        http.post(`${BASE_URL}/v0/datasources/ddb_ds/sample`, async ({ request }) => {
+          body = await request.json();
+          return HttpResponse.json({ job_id: "job-1" });
+        })
+      );
+
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      await api.sampleDatasource("ddb_ds", { rows: 100000 });
+
+      expect(body).toEqual({ max_files: 1, full_export: false, rows: 100000 });
+    });
+
+    it("forwards DynamoDB maxBytes option", async () => {
+      let body: unknown;
+
+      server.use(
+        http.post(`${BASE_URL}/v0/datasources/ddb_ds/sample`, async ({ request }) => {
+          body = await request.json();
+          return HttpResponse.json({ job_id: "job-1" });
+        })
+      );
+
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      await api.sampleDatasource("ddb_ds", { maxBytes: "1GB" });
+
+      expect(body).toEqual({ max_files: 1, full_export: false, max_bytes: "1GB" });
+    });
+
+    it("forwards DynamoDB fullExport option", async () => {
+      let body: unknown;
+
+      server.use(
+        http.post(`${BASE_URL}/v0/datasources/ddb_ds/sample`, async ({ request }) => {
+          body = await request.json();
+          return HttpResponse.json({ job_id: "job-1" });
+        })
+      );
+
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      await api.sampleDatasource("ddb_ds", { fullExport: true });
+
+      expect(body).toEqual({ max_files: 1, full_export: true });
+    });
+
+    it("throws when rows and maxBytes are both provided", async () => {
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      await expect(
+        api.sampleDatasource("ddb_ds", { rows: 10, maxBytes: "1GB" })
+      ).rejects.toThrow("'rows' and 'maxBytes' are mutually exclusive; pass only one");
+    });
+
+    it("allows per-request token override", async () => {
+      let authorizationHeader: string | null = null;
+
+      server.use(
+        http.post(`${BASE_URL}/v0/datasources/events/sample`, ({ request }) => {
+          authorizationHeader = request.headers.get("Authorization");
+          return HttpResponse.json({ job_id: "job-1" });
+        })
+      );
+
+      const api = createTinybirdApi({
+        baseUrl: BASE_URL,
+        token: "p.default-token",
+      });
+
+      await api.sampleDatasource("events", {}, { token: "p.override-token" });
+
+      expect(authorizationHeader).toBe("Bearer p.override-token");
+    });
+  });
 });

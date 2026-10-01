@@ -235,7 +235,7 @@ describe("TinybirdClient", () => {
       expect(client.datasources).toBeDefined();
     });
 
-    it("datasources namespace has ingest/append/replace/delete/truncate methods", () => {
+    it("datasources namespace has ingest/append/replace/delete/truncate/sample methods", () => {
       const client = createClient({
         baseUrl: "https://api.tinybird.co",
         token: "test-token",
@@ -246,6 +246,7 @@ describe("TinybirdClient", () => {
       expect(typeof client.datasources.replace).toBe("function");
       expect(typeof client.datasources.delete).toBe("function");
       expect(typeof client.datasources.truncate).toBe("function");
+      expect(typeof client.datasources.sample).toBe("function");
     });
 
     it("datasources conforms to DatasourcesNamespace interface", () => {
@@ -261,6 +262,7 @@ describe("TinybirdClient", () => {
       expect(typeof datasources.replace).toBe("function");
       expect(typeof datasources.delete).toBe("function");
       expect(typeof datasources.truncate).toBe("function");
+      expect(typeof datasources.sample).toBe("function");
     });
   });
 });
