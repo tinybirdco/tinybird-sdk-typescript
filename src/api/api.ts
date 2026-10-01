@@ -135,6 +135,35 @@ export interface TinybirdApiCreateTokenResult {
 }
 
 /**
+ * Raw token representation returned by the Tinybird Token API
+ * (GET /v0/tokens, GET /v0/tokens/{id}, POST .../refresh, PUT /v0/tokens/{id}).
+ */
+export interface TinybirdApiTokenInfo {
+  /** Token ID */
+  id?: string;
+  /** Token name */
+  name: string;
+  /** Human-readable description */
+  description?: string;
+  /** Raw token secret value (only present when the API exposes it) */
+  token?: string;
+  /** Scopes granted to the token */
+  scopes?: TinybirdApiTokenScope[];
+}
+
+/**
+ * Options shared by the single-token read/write operations below
+ */
+export interface TinybirdApiTokenRequestOptions {
+  /** Optional token override for this request */
+  token?: string;
+  /** Request timeout in milliseconds */
+  timeout?: number;
+  /** AbortController signal for cancellation */
+  signal?: AbortSignal;
+}
+
+/**
  * Error thrown by TinybirdApi when a response is not OK
  */
 export class TinybirdApiError extends Error {
@@ -534,6 +563,129 @@ export class TinybirdApi {
     }
 
     return (await response.json()) as TinybirdApiCreateTokenResult;
+  }
+
+  /**
+   * List all tokens in the workspace.
+   * GET /v0/tokens
+   */
+  async listTokens(
+    options: TinybirdApiTokenRequestOptions = {}
+  ): Promise<TinybirdApiTokenInfo[]> {
+    const url = new URL("/v0/tokens", `${this.baseUrl}/`);
+
+    const response = await this.request(url.toString(), {
+      method: "GET",
+      token: options.token,
+      signal: this.createAbortSignal(options.timeout, options.signal),
+    });
+
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+
+    const data = (await response.json()) as { tokens?: TinybirdApiTokenInfo[] };
+    return data.tokens ?? [];
+  }
+
+  /**
+   * Get a single token's details, including its scopes.
+   * GET /v0/tokens/{name_or_id}
+   */
+  async getToken(
+    nameOrId: string,
+    options: TinybirdApiTokenRequestOptions = {}
+  ): Promise<TinybirdApiTokenInfo> {
+    const url = new URL(`/v0/tokens/${encodeURIComponent(nameOrId)}`, `${this.baseUrl}/`);
+
+    const response = await this.request(url.toString(), {
+      method: "GET",
+      token: options.token,
+      signal: this.createAbortSignal(options.timeout, options.signal),
+    });
+
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+
+    return (await response.json()) as TinybirdApiTokenInfo;
+  }
+
+  /**
+   * Delete (revoke) a token.
+   * DELETE /v0/tokens/{name_or_id}
+   */
+  async deleteToken(
+    nameOrId: string,
+    options: TinybirdApiTokenRequestOptions = {}
+  ): Promise<void> {
+    const url = new URL(`/v0/tokens/${encodeURIComponent(nameOrId)}`, `${this.baseUrl}/`);
+
+    const response = await this.request(url.toString(), {
+      method: "DELETE",
+      token: options.token,
+      signal: this.createAbortSignal(options.timeout, options.signal),
+    });
+
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+
+    await this.discardResponseBody(response);
+  }
+
+  /**
+   * Refresh (rotate) a token's value.
+   * POST /v0/tokens/{name_or_id}/refresh
+   */
+  async refreshToken(
+    nameOrId: string,
+    options: TinybirdApiTokenRequestOptions = {}
+  ): Promise<TinybirdApiTokenInfo> {
+    const url = new URL(
+      `/v0/tokens/${encodeURIComponent(nameOrId)}/refresh`,
+      `${this.baseUrl}/`
+    );
+
+    const response = await this.request(url.toString(), {
+      method: "POST",
+      token: options.token,
+      signal: this.createAbortSignal(options.timeout, options.signal),
+    });
+
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+
+    return this.parseOptionalJson<TinybirdApiTokenInfo>(response);
+  }
+
+  /**
+   * Update a token's scopes.
+   * PUT /v0/tokens/{name_or_id}
+   */
+  async updateTokenScopes(
+    nameOrId: string,
+    scopes: TinybirdApiTokenScope[],
+    options: TinybirdApiTokenRequestOptions = {}
+  ): Promise<TinybirdApiTokenInfo> {
+    const url = new URL(`/v0/tokens/${encodeURIComponent(nameOrId)}`, `${this.baseUrl}/`);
+
+    const response = await this.request(url.toString(), {
+      method: "PUT",
+      token: options.token,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ scopes }),
+      signal: this.createAbortSignal(options.timeout, options.signal),
+    });
+
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+
+    return this.parseOptionalJson<TinybirdApiTokenInfo>(response);
   }
 
   /**

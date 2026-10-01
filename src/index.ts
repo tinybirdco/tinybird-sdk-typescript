@@ -285,6 +285,8 @@ export type {
   TinybirdApiCreateTokenRequest,
   TinybirdApiCreateTokenOptions,
   TinybirdApiCreateTokenResult,
+  TinybirdApiTokenInfo,
+  TinybirdApiTokenRequestOptions,
 } from "./api/api.js";
 
 // ============ Preview Environment ============
@@ -305,7 +307,16 @@ export {
 export type { RegionInfo } from "./api/dashboard.js";
 
 // ============ Token API ============
-export { createJWT, TokenApiError } from "./api/tokens.js";
+export {
+  createJWT,
+  deleteToken,
+  getToken,
+  getTokenValue,
+  listTokens,
+  refreshToken,
+  TokenApiError,
+  updateTokenScopes,
+} from "./api/tokens.js";
 export type {
   TokenApiConfig,
   JWTScope,
@@ -313,6 +324,8 @@ export type {
   JWTLimits,
   CreateJWTOptions,
   CreateJWTResult,
+  TokenInfo,
+  TokenScope,
 } from "./api/tokens.js";
 
 // ============ Config Types ============
