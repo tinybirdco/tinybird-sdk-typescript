@@ -3,11 +3,13 @@ import {
   defineKafkaConnection,
   defineS3Connection,
   defineGCSConnection,
+  defineGCSHmacConnection,
   defineDynamoDBConnection,
   isConnectionDefinition,
   isKafkaConnectionDefinition,
   isS3ConnectionDefinition,
   isGCSConnectionDefinition,
+  isGCSHmacConnectionDefinition,
   isDynamoDBConnectionDefinition,
   getConnectionType,
 } from "./connection.js";
@@ -201,6 +203,48 @@ describe("Connection Schema", () => {
     });
   });
 
+  describe("defineGCSHmacConnection", () => {
+    it("creates a GCS HMAC connection with required fields", () => {
+      const conn = defineGCSHmacConnection("my_gcs_hmac", {
+        accessId: '{{ tb_secret("GCS_ACCESS_ID") }}',
+        secret: '{{ tb_secret("GCS_SECRET") }}',
+      });
+
+      expect(conn._name).toBe("my_gcs_hmac");
+      expect(conn._type).toBe("connection");
+      expect(conn._connectionType).toBe("gcs_hmac");
+      expect(conn.options.accessId).toBe('{{ tb_secret("GCS_ACCESS_ID") }}');
+      expect(conn.options.secret).toBe('{{ tb_secret("GCS_SECRET") }}');
+    });
+
+    it("throws when accessId is missing", () => {
+      expect(() =>
+        defineGCSHmacConnection("my_gcs_hmac", {
+          accessId: "   ",
+          secret: '{{ tb_secret("GCS_SECRET") }}',
+        })
+      ).toThrow("GCS HMAC connection `accessId` is required.");
+    });
+
+    it("throws when secret is missing", () => {
+      expect(() =>
+        defineGCSHmacConnection("my_gcs_hmac", {
+          accessId: '{{ tb_secret("GCS_ACCESS_ID") }}',
+          secret: "",
+        })
+      ).toThrow("GCS HMAC connection `secret` is required.");
+    });
+
+    it("throws for invalid connection name", () => {
+      expect(() =>
+        defineGCSHmacConnection("123-invalid", {
+          accessId: '{{ tb_secret("GCS_ACCESS_ID") }}',
+          secret: '{{ tb_secret("GCS_SECRET") }}',
+        })
+      ).toThrow("Invalid connection name");
+    });
+  });
+
   describe("defineDynamoDBConnection", () => {
     it("creates a DynamoDB connection with required fields", () => {
       const conn = defineDynamoDBConnection("my_dynamo", {
@@ -308,6 +352,29 @@ describe("Connection Schema", () => {
     });
   });
 
+  describe("isGCSHmacConnectionDefinition", () => {
+    it("returns true for GCS HMAC connection", () => {
+      const conn = defineGCSHmacConnection("my_gcs_hmac", {
+        accessId: '{{ tb_secret("GCS_ACCESS_ID") }}',
+        secret: '{{ tb_secret("GCS_SECRET") }}',
+      });
+
+      expect(isGCSHmacConnectionDefinition(conn)).toBe(true);
+    });
+
+    it("returns false for non-GCS-HMAC objects", () => {
+      expect(isGCSHmacConnectionDefinition({})).toBe(false);
+      expect(isGCSHmacConnectionDefinition(null)).toBe(false);
+      expect(
+        isGCSHmacConnectionDefinition(
+          defineGCSConnection("my_gcs", {
+            serviceAccountCredentialsJson: '{{ tb_secret("GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON") }}',
+          })
+        )
+      ).toBe(false);
+    });
+  });
+
   describe("isDynamoDBConnectionDefinition", () => {
     it("returns true for DynamoDB connection", () => {
       const conn = defineDynamoDBConnection("my_dynamo", {
@@ -353,6 +420,15 @@ describe("Connection Schema", () => {
       });
 
       expect(getConnectionType(conn)).toBe("gcs");
+    });
+
+    it("returns the gcs_hmac connection type", () => {
+      const conn = defineGCSHmacConnection("my_gcs_hmac", {
+        accessId: '{{ tb_secret("GCS_ACCESS_ID") }}',
+        secret: '{{ tb_secret("GCS_SECRET") }}',
+      });
+
+      expect(getConnectionType(conn)).toBe("gcs_hmac");
     });
   });
 });

@@ -1,6 +1,7 @@
 import type {
   DynamoDBConnectionModel,
   GCSConnectionModel,
+  GCSHmacConnectionModel,
   KafkaConnectionModel,
   ResourceFile,
   S3ConnectionModel,
@@ -32,6 +33,8 @@ const CONNECTION_DIRECTIVES = new Set([
   "S3_ACCESS_KEY",
   "S3_SECRET",
   "GCS_SERVICE_ACCOUNT_CREDENTIALS_JSON",
+  "GCS_HMAC_ACCESS_ID",
+  "GCS_HMAC_SECRET",
   "DYNAMODB_ARN",
   "DYNAMODB_REGION",
 ]);
@@ -46,7 +49,12 @@ function isConnectionDirectiveLine(line: string): boolean {
 
 export function parseConnectionFile(
   resource: ResourceFile
-): KafkaConnectionModel | S3ConnectionModel | GCSConnectionModel | DynamoDBConnectionModel {
+):
+  | KafkaConnectionModel
+  | S3ConnectionModel
+  | GCSConnectionModel
+  | GCSHmacConnectionModel
+  | DynamoDBConnectionModel {
   const lines = splitLines(resource.content);
   let connectionType: string | undefined;
 
@@ -76,6 +84,9 @@ export function parseConnectionFile(
   let accessKey: string | undefined;
   let accessSecret: string | undefined;
   let serviceAccountCredentialsJson: string | undefined;
+
+  let gcsHmacAccessId: string | undefined;
+  let gcsHmacSecret: string | undefined;
 
   let dynamodbArn: string | undefined;
   let dynamodbRegion: string | undefined;
@@ -183,6 +194,12 @@ export function parseConnectionFile(
         }
         serviceAccountCredentialsJson = parseQuotedValue(value);
         break;
+      case "GCS_HMAC_ACCESS_ID":
+        gcsHmacAccessId = parseQuotedValue(value);
+        break;
+      case "GCS_HMAC_SECRET":
+        gcsHmacSecret = parseQuotedValue(value);
+        break;
       case "DYNAMODB_ARN":
         dynamodbArn = parseQuotedValue(value);
         break;
@@ -216,6 +233,8 @@ export function parseConnectionFile(
       accessKey ||
       accessSecret ||
       serviceAccountCredentialsJson ||
+      gcsHmacAccessId ||
+      gcsHmacSecret ||
       dynamodbArn ||
       dynamodbRegion
     ) {
@@ -269,6 +288,8 @@ export function parseConnectionFile(
       schemaRegistryUrl ||
       sslCaPem ||
       serviceAccountCredentialsJson ||
+      gcsHmacAccessId ||
+      gcsHmacSecret ||
       dynamodbArn ||
       dynamodbRegion
     ) {
@@ -336,6 +357,8 @@ export function parseConnectionFile(
       arn ||
       accessKey ||
       accessSecret ||
+      gcsHmacAccessId ||
+      gcsHmacSecret ||
       dynamodbArn ||
       dynamodbRegion
     ) {
@@ -365,6 +388,63 @@ export function parseConnectionFile(
     };
   }
 
+  if (connectionType === "gcs_hmac") {
+    if (
+      bootstrapServers ||
+      securityProtocol ||
+      saslMechanism ||
+      saslOauthbearerMethod ||
+      saslOauthbearerAwsRegion ||
+      saslOauthbearerAwsRoleArn ||
+      saslOauthbearerAwsExternalId ||
+      key ||
+      secret ||
+      schemaRegistryUrl ||
+      sslCaPem ||
+      region ||
+      arn ||
+      accessKey ||
+      accessSecret ||
+      serviceAccountCredentialsJson ||
+      dynamodbArn ||
+      dynamodbRegion
+    ) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "connection",
+        resource.name,
+        "Kafka/S3/GCS/DynamoDB directives are not valid for gcs_hmac connections."
+      );
+    }
+
+    if (!gcsHmacAccessId) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "connection",
+        resource.name,
+        "GCS_HMAC_ACCESS_ID is required for gcs_hmac connections."
+      );
+    }
+
+    if (!gcsHmacSecret) {
+      throw new MigrationParseError(
+        resource.filePath,
+        "connection",
+        resource.name,
+        "GCS_HMAC_SECRET is required for gcs_hmac connections."
+      );
+    }
+
+    return {
+      kind: "connection",
+      name: resource.name,
+      filePath: resource.filePath,
+      connectionType: "gcs_hmac",
+      accessId: gcsHmacAccessId,
+      secret: gcsHmacSecret,
+    };
+  }
+
   if (connectionType === "dynamodb") {
     if (
       bootstrapServers ||
@@ -382,7 +462,9 @@ export function parseConnectionFile(
       arn ||
       accessKey ||
       accessSecret ||
-      serviceAccountCredentialsJson
+      serviceAccountCredentialsJson ||
+      gcsHmacAccessId ||
+      gcsHmacSecret
     ) {
       throw new MigrationParseError(
         resource.filePath,
