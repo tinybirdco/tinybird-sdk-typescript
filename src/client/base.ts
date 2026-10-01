@@ -21,6 +21,7 @@ import { TinybirdError } from "./types.js";
 import { TinybirdApi, TinybirdApiError } from "../api/api.js";
 import type { CreateBranchOptions } from "../api/branches.js";
 import { TokensNamespace } from "./tokens.js";
+import { JobsNamespace } from "./jobs.js";
 
 /**
  * Resolved token info from dev mode
@@ -74,6 +75,9 @@ export class TinybirdClient {
   /** Token operations (JWT creation, etc.) */
   public readonly tokens: TokensNamespace;
 
+  /** Job management operations (list, get, cancel) */
+  public readonly jobs: JobsNamespace;
+
   constructor(config: ClientConfig) {
     // Validate required config
     if (!config.baseUrl) {
@@ -117,6 +121,14 @@ export class TinybirdClient {
 
     // Initialize tokens namespace
     this.tokens = new TokensNamespace(
+      () => this.getToken(),
+      this.config.baseUrl,
+      this.config.fetch,
+      this.config.timeout
+    );
+
+    // Initialize jobs namespace
+    this.jobs = new JobsNamespace(
       () => this.getToken(),
       this.config.baseUrl,
       this.config.fetch,
