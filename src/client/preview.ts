@@ -25,6 +25,9 @@ let cachedBranchName: string | null = null;
 
 /**
  * Detect if we're running in a preview/CI environment
+ *
+ * Recognizes Vercel, GitHub Actions, GitLab, CircleCI, Azure DevOps,
+ * Bitbucket Pipelines, and generic CI (with an explicit preview flag).
  */
 export function isPreviewEnvironment(): boolean {
   return !!(
@@ -34,6 +37,12 @@ export function isPreviewEnvironment(): boolean {
     process.env.GITHUB_HEAD_REF ||
     // GitLab CI (merge requests)
     process.env.CI_MERGE_REQUEST_SOURCE_BRANCH_NAME ||
+    // CircleCI (PRs)
+    process.env.CIRCLE_PULL_REQUEST ||
+    // Azure Pipelines (PRs)
+    process.env.SYSTEM_PULLREQUEST_PULLREQUESTID ||
+    // Bitbucket Pipelines (PRs)
+    process.env.BITBUCKET_PR_ID ||
     // Generic CI with preview indicator
     (process.env.CI && process.env.TINYBIRD_PREVIEW_MODE === "true")
   );

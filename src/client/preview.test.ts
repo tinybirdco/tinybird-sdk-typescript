@@ -20,8 +20,11 @@ describe("Preview environment detection", () => {
     delete process.env.GITHUB_REF_NAME;
     delete process.env.CI_COMMIT_BRANCH;
     delete process.env.CIRCLE_BRANCH;
+    delete process.env.CIRCLE_PULL_REQUEST;
     delete process.env.BUILD_SOURCEBRANCHNAME;
+    delete process.env.SYSTEM_PULLREQUEST_PULLREQUESTID;
     delete process.env.BITBUCKET_BRANCH;
+    delete process.env.BITBUCKET_PR_ID;
     delete process.env.TINYBIRD_BRANCH_NAME;
     delete process.env.TINYBIRD_BRANCH_TOKEN;
     delete process.env.TINYBIRD_TOKEN;
@@ -68,6 +71,36 @@ describe("Preview environment detection", () => {
 
     it("returns false for generic CI without preview mode", () => {
       process.env.CI = "true";
+      expect(isPreviewEnvironment()).toBe(false);
+    });
+
+    it("returns true for CircleCI pull requests", () => {
+      process.env.CIRCLE_PULL_REQUEST = "https://github.com/org/repo/pull/1";
+      expect(isPreviewEnvironment()).toBe(true);
+    });
+
+    it("returns false for CircleCI builds without a pull request", () => {
+      process.env.CIRCLE_BRANCH = "feature-branch";
+      expect(isPreviewEnvironment()).toBe(false);
+    });
+
+    it("returns true for Azure DevOps pull requests", () => {
+      process.env.SYSTEM_PULLREQUEST_PULLREQUESTID = "42";
+      expect(isPreviewEnvironment()).toBe(true);
+    });
+
+    it("returns false for Azure DevOps builds without a pull request", () => {
+      process.env.BUILD_SOURCEBRANCHNAME = "feature-branch";
+      expect(isPreviewEnvironment()).toBe(false);
+    });
+
+    it("returns true for Bitbucket Pipelines pull requests", () => {
+      process.env.BITBUCKET_PR_ID = "7";
+      expect(isPreviewEnvironment()).toBe(true);
+    });
+
+    it("returns false for Bitbucket Pipelines builds without a pull request", () => {
+      process.env.BITBUCKET_BRANCH = "feature-branch";
       expect(isPreviewEnvironment()).toBe(false);
     });
   });
