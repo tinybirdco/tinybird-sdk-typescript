@@ -1,11 +1,35 @@
 /**
- * Deploy resources to Tinybird main workspace
- * Uses the /v1/deploy endpoint to create a deployment, then sets it live
+ * Deploy resources to Tinybird main workspace via the `tb` CLI binary
+ * (https://gitlab.com/tinybird/analytics/-/merge_requests/23765, PROTM-471).
+ *
+ * This used to POST directly to /v1/deploy. It now delegates deployment
+ * *creation* to the downloaded `tb` binary, which hits the exact same
+ * endpoint with the exact same multipart layout (verified against
+ * tinybird/tb/modules/deployment_common.py), so the heavy lifting lives in
+ * one place instead of being reimplemented here. Two things stay local:
+ * - Stale-deployment cleanup (Step 0 below): `create_deployment()` on the
+ *   Python side has no equivalent, so this is purely an SDK-side workaround
+ *   and still applies regardless of which client calls /v1/deploy.
+ * - Status polling (Step 2 below): the binary's own --wait mode would block
+ *   without giving us anything to drive progress callbacks from, so
+ *   deployment creation is always submitted with --no-wait and polled here.
+ *
+ * No HTTP fallback: if the binary can't be resolved (unsupported platform,
+ * no network, checksum mismatch), this returns a clear, specific failure
+ * instead of silently falling back to a direct POST.
+ *
+ * DRAFT: there is no published `tb` binary yet (the MR above hasn't
+ * merged), so this has only been exercised against test fakes, not a real
+ * binary. See the two VERIFY comments below for the specific things to
+ * re-check once one exists.
  */
 
 import type { GeneratedResources } from "../generator/index.js";
 import type { BuildConfig, BuildApiResult } from "./build.js";
 import { tinybirdFetch } from "./fetcher.js";
+import { materializeResourcesToTempProject } from "../cli-binary/resources-to-project.js";
+import { CliBinaryUnavailableError, resolveTbBinaryPath } from "../cli-binary/index.js";
+import { runTbBinary } from "../cli-binary/run.js";
 
 const FORWARD_CLASSIC_GUIDANCE =
   "Use the Tinybird Classic CLI (`tb`) from a Tinybird Classic workspace for this operation.";
@@ -53,6 +77,11 @@ export interface DeploymentsListResponse {
 
 /**
  * Response from /v1/deploy endpoint
+ *
+ * @deprecated no longer produced internally (deployment creation goes
+ * through the `tb` binary now, which emits a `DeploymentDetails` object
+ * directly, not this `{result, deployment}` envelope). Kept exported for
+ * backwards compatibility with existing imports.
  */
 export interface DeployResponse {
   result: "success" | "failed" | "no_changes";
@@ -96,41 +125,6 @@ export interface DeploymentStatusResponse {
 }
 
 /**
- * Deploy generated resources to Tinybird main workspace
- *
- * Uses the /v1/deploy endpoint which accepts all resources in a single
- * multipart form request. After creating the deployment, this function:
- * 1. When `auto` is true (default), sends `auto_promote=true` so the
- *    server promotes the deployment as soon as it's ready.
- * 2. When `wait` is true (default), polls until the deployment reaches
- *    `data_ready` (and, if `auto` is also true, until it becomes live).
- *
- * @param config - Build configuration with API URL and token
- * @param resources - Generated resources to deploy
- * @returns Build result
- *
- * @example
- * ```ts
- * const result = await deployToMain(
- *   {
- *     baseUrl: 'https://api.tinybird.co',
- *     token: 'p.xxx',
- *   },
- *   {
- *     datasources: [{ name: 'events', content: '...' }],
- *     pipes: [{ name: 'top_events', content: '...' }],
- *   }
- * );
- *
- * if (result.success) {
- *   console.log('Deployed to main workspace!');
- * }
- * ```
- */
-/**
- * Callbacks for deploy progress updates
- */
-/**
  * Resource changes from deployment
  */
 export interface DeploymentChanges {
@@ -151,6 +145,9 @@ export interface DeploymentChanges {
   };
 }
 
+/**
+ * Callbacks for deploy progress updates
+ */
 export interface DeployCallbacks {
   /** Called when deployment is created and changes are available */
   onChanges?: (changes: DeploymentChanges) => void;
@@ -170,6 +167,69 @@ export interface DeployCallbacks {
   onValidating?: () => void;
 }
 
+function emptyChanges(): DeploymentChanges {
+  return {
+    datasources: { created: [], changed: [], deleted: [] },
+    pipes: { created: [], changed: [], deleted: [] },
+    connections: { created: [], changed: [], deleted: [] },
+  };
+}
+
+function normalizeDeployErrorMessage(message: string): string {
+  const trimmedMessage = message.trim();
+  const isForwardClassicError =
+    trimmedMessage.includes("Tinybird Forward workspace") &&
+    trimmedMessage.includes("Tinybird Classic workspaces");
+
+  if (!isForwardClassicError || trimmedMessage.includes(FORWARD_CLASSIC_GUIDANCE)) {
+    return message;
+  }
+
+  return `${trimmedMessage}\n${FORWARD_CLASSIC_GUIDANCE}`;
+}
+
+function parseTbDeploymentJson(stdout: string): DeploymentDetails | null {
+  const trimmed = stdout.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed) as DeploymentDetails;
+  } catch {
+    return null;
+  }
+}
+
+function formatTbErrors(parsed: DeploymentDetails, fallback: string): string {
+  if (parsed.errors && parsed.errors.length > 0) {
+    return parsed.errors
+      .map((e) => (e.filename ? `[${e.filename}] ${normalizeDeployErrorMessage(e.error)}` : normalizeDeployErrorMessage(e.error)))
+      .join("\n");
+  }
+  if (parsed.feedback && parsed.feedback.length > 0) {
+    const errors = parsed.feedback.filter((f) => f.level === "ERROR");
+    if (errors.length > 0) {
+      return errors
+        .map((f) => {
+          const resourceName = f.resource?.split(" ").pop() ?? f.resource ?? "unknown";
+          return `${resourceName}: ${normalizeDeployErrorMessage(f.message)}`;
+        })
+        .join("\n");
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Deploy generated resources to Tinybird main workspace
+ *
+ * 1. Cleans up any stale (non-live) deployments that might block the new one.
+ * 2. Submits the deployment via `tb deployment create --no-wait --output json`.
+ * 3. When `wait` is true (default), polls /v1/deployments/{id} until the
+ *    deployment reaches `data_ready` (and, if `auto` is also true, `live`).
+ *
+ * @param config - Deploy configuration with API URL and token
+ * @param resources - Generated resources to deploy
+ * @returns Deploy result
+ */
 export async function deployToMain(
   config: BuildConfig,
   resources: GeneratedResources,
@@ -187,62 +247,23 @@ export async function deployToMain(
   const auto = options?.auto ?? true;
   const baseUrl = config.baseUrl.replace(/\/$/, "");
 
-  const formData = new FormData();
-
-  // Add datasources
-  for (const ds of resources.datasources) {
-    const fieldName = `data_project://`;
-    const fileName = `${ds.name}.datasource`;
-    if (debug) {
-      console.log(`[debug] Adding datasource: ${fieldName} (filename: ${fileName})`);
-      console.log(`[debug] Content:\n${ds.content}\n`);
-    }
-    formData.append(
-      fieldName,
-      new Blob([ds.content], { type: "text/plain" }),
-      fileName
-    );
-  }
-
-  // Add pipes
-  for (const pipe of resources.pipes) {
-    const fieldName = `data_project://`;
-    const fileName = `${pipe.name}.pipe`;
-    if (debug) {
-      console.log(`[debug] Adding pipe: ${fieldName} (filename: ${fileName})`);
-      console.log(`[debug] Content:\n${pipe.content}\n`);
-    }
-    formData.append(
-      fieldName,
-      new Blob([pipe.content], { type: "text/plain" }),
-      fileName
-    );
-  }
-
-  // Add connections
-  for (const conn of resources.connections ?? []) {
-    const fieldName = `data_project://`;
-    const fileName = `${conn.name}.connection`;
-    if (debug) {
-      console.log(`[debug] Adding connection: ${fieldName} (filename: ${fileName})`);
-      console.log(`[debug] Content:\n${conn.content}\n`);
-    }
-    formData.append(
-      fieldName,
-      new Blob([conn.content], { type: "text/plain" }),
-      fileName
-    );
-  }
+  const counts = {
+    datasourceCount: resources.datasources.length,
+    pipeCount: resources.pipes.length,
+    connectionCount: resources.connections?.length ?? 0,
+  };
 
   // Step 0: Clean up any stale non-live deployments that might block the new deployment.
   // Skipped in check mode so validation runs don't tear down in-flight deployments.
+  // The `tb` binary doesn't do this itself (verified against
+  // tinybird/tb/modules/deployment_common.py's create_deployment()) — it's an
+  // SDK-side workaround that applies regardless of which client creates the
+  // deployment, so it stays here rather than moving into the binary call.
   if (!options?.check) {
     try {
       const deploymentsUrl = `${baseUrl}/v1/deployments`;
       const deploymentsResponse = await tinybirdFetch(deploymentsUrl, {
-        headers: {
-          Authorization: `Bearer ${config.token}`,
-        },
+        headers: { Authorization: `Bearer ${config.token}` },
       });
 
       if (deploymentsResponse.ok) {
@@ -257,9 +278,7 @@ export async function deployToMain(
           }
           await tinybirdFetch(`${baseUrl}/v1/deployments/${stale.id}`, {
             method: "DELETE",
-            headers: {
-              Authorization: `Bearer ${config.token}`,
-            },
+            headers: { Authorization: `Bearer ${config.token}` },
           });
         }
       }
@@ -271,215 +290,134 @@ export async function deployToMain(
     }
   }
 
-  // Step 1: Create deployment via /v1/deploy
-  const deployUrlBase = `${baseUrl}/v1/deploy`;
-  const urlParams = new URLSearchParams();
-  if (options?.check) {
-    urlParams.set("check", "true");
-  } else if (auto) {
-    // Server will auto-promote the deployment when it's ready
-    urlParams.set("auto_promote", "true");
-  }
-  if (options?.allowDestructiveOperations) {
-    urlParams.set("allow_destructive_operations", "true");
-  }
-  const queryString = urlParams.toString();
-  const deployUrl = queryString ? `${deployUrlBase}?${queryString}` : deployUrlBase;
-
-  if (debug) {
-    console.log(`[debug] POST ${deployUrl}`);
-  }
-
-  const response = await tinybirdFetch(deployUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.token}`,
-    },
-    body: formData,
-  });
-
-  // Parse response
-  let body: DeployResponse;
-  const rawBody = await response.text();
-
-  if (debug) {
-    console.log(`[debug] Response status: ${response.status}`);
-    console.log(`[debug] Response body: ${rawBody}`);
-  }
+  // Step 1: Submit the deployment via the tb binary.
+  const project = await materializeResourcesToTempProject(resources);
 
   try {
-    body = JSON.parse(rawBody) as DeployResponse;
-  } catch {
-    throw new Error(
-      `Failed to parse response from Tinybird API: ${response.status} ${response.statusText}\nBody: ${rawBody}`
-    );
-  }
-
-  // Helper to format feedback from deployment
-  const formatFeedback = (feedback: DeploymentFeedback[]): string => {
-    return feedback
-      .map((f) => {
-        // Extract just the filename from "Datasource events.datasource" format
-        const resourceName = f.resource?.split(" ").pop() ?? f.resource ?? "unknown";
-        return `${resourceName}: ${normalizeDeployErrorMessage(f.message)}`;
-      })
-      .join("\n");
-  };
-
-  // Helper to format errors
-  const formatErrors = (): string => {
-    // Check for feedback in deployment (most detailed error info)
-    if (body.deployment?.feedback && body.deployment.feedback.length > 0) {
-      const errors = body.deployment.feedback.filter((f) => f.level === "ERROR");
-      if (errors.length > 0) {
-        return formatFeedback(errors);
+    let binaryPath: string;
+    try {
+      binaryPath = await resolveTbBinaryPath();
+    } catch (error) {
+      if (error instanceof CliBinaryUnavailableError) {
+        return { success: false, result: "failed", error: error.message, ...counts };
       }
+      throw error;
     }
-    if (body.errors && body.errors.length > 0) {
-      return body.errors
-        .map((e) => {
-          const prefix = e.filename ? `[${e.filename}] ` : "";
-          return `${prefix}${normalizeDeployErrorMessage(e.error)}`;
-        })
-        .join("\n");
+
+    const args = ["deployment", "create", "--no-wait"];
+    if (options?.check) {
+      args.push("--check");
+    } else if (auto) {
+      args.push("--auto");
+    } else {
+      args.push("--no-auto");
     }
-    if (body.error) {
-      return normalizeDeployErrorMessage(body.error);
+    if (options?.allowDestructiveOperations) {
+      args.push("--allow-destructive-operations");
     }
-    // Include raw response body for debugging when no structured error is available
-    return `HTTP ${response.status}: ${response.statusText}\nResponse: ${rawBody}`;
-  };
 
-  // Handle non-OK responses
-  if (!response.ok) {
-    return {
-      success: false,
-      result: "failed",
-      error: formatErrors(),
-      datasourceCount: resources.datasources.length,
-      pipeCount: resources.pipes.length,
-      connectionCount: resources.connections?.length ?? 0,
-    };
-  }
+    const run = await runTbBinary(binaryPath, args, {
+      cwd: project.dir,
+      token: config.token,
+      host: baseUrl,
+    });
 
-  if (options?.check) {
-    options.callbacks?.onValidating?.();
+    if (debug) {
+      console.log(`[debug] tb exit code: ${run.exitCode}`);
+      console.log(`[debug] tb stdout: ${run.stdout}`);
+      console.log(`[debug] tb stderr: ${run.stderr}`);
+    }
 
-    if (body.result === "failed") {
+    const parsed = parseTbDeploymentJson(run.stdout);
+
+    if (!parsed) {
+      if (run.exitCode === 0) {
+        // VERIFY once a real binary exists: deployment_common.py's
+        // `no_changes` branch doesn't call echo_json, so empty stdout + exit
+        // 0 is inferred (not confirmed) to mean "nothing to deploy".
+        return { success: true, result: "no_changes", ...counts, ...emptyChanges() };
+      }
+      // VERIFY once a real binary exists: a failed --check run also doesn't
+      // call echo_json in deployment_common.py, so this covers both that
+      // case and any other no-JSON failure.
+      const message = run.stderr.trim() || run.stdout.trim() || `tb exited with code ${run.exitCode}`;
+      return { success: false, result: "failed", error: message, ...counts };
+    }
+
+    if (run.exitCode !== 0) {
       return {
         success: false,
         result: "failed",
-        error: formatErrors(),
-        datasourceCount: resources.datasources.length,
-        pipeCount: resources.pipes.length,
-        connectionCount: resources.connections?.length ?? 0,
+        error: formatTbErrors(parsed, run.stderr.trim() || `tb exited with code ${run.exitCode}`),
+        ...counts,
       };
     }
 
-    return {
-      success: true,
-      result: body.result ?? "success",
-      datasourceCount: resources.datasources.length,
-      pipeCount: resources.pipes.length,
-      connectionCount: resources.connections?.length ?? 0,
-    };
-  }
+    if (options?.check) {
+      options.callbacks?.onValidating?.();
+      return { success: true, result: "success", ...counts };
+    }
 
-  // Handle no changes - no deployment was created, so we can return early
-  if (body.result === "no_changes") {
-    return {
-      success: true,
-      result: "no_changes",
-      datasourceCount: resources.datasources.length,
-      pipeCount: resources.pipes.length,
-      connectionCount: resources.connections?.length ?? 0,
-      pipes: {
-        changed: [],
-        created: [],
-        deleted: [],
-      },
+    const changes: DeploymentChanges = {
       datasources: {
-        changed: [],
-        created: [],
-        deleted: [],
-      },
-    };
-  }
-
-  // Handle API result
-  if (body.result === "failed" || !body.deployment) {
-    return {
-      success: false,
-      result: "failed",
-      error: formatErrors(),
-      datasourceCount: resources.datasources.length,
-      pipeCount: resources.pipes.length,
-      connectionCount: resources.connections?.length ?? 0,
-    };
-  }
-
-  const deploymentId = body.deployment.id;
-  const deploymentDetails = body.deployment;
-
-  if (debug) {
-    console.log(`[debug] Deployment created with ID: ${deploymentId}`);
-  }
-
-  // Notify about changes immediately after deployment is created
-  if (options?.callbacks?.onChanges) {
-    options.callbacks.onChanges({
-      datasources: {
-        created: deploymentDetails.new_datasource_names ?? [],
-        changed: deploymentDetails.changed_datasource_names ?? [],
-        deleted: deploymentDetails.deleted_datasource_names ?? [],
+        created: parsed.new_datasource_names ?? [],
+        changed: parsed.changed_datasource_names ?? [],
+        deleted: parsed.deleted_datasource_names ?? [],
       },
       pipes: {
-        created: deploymentDetails.new_pipe_names ?? [],
-        changed: deploymentDetails.changed_pipe_names ?? [],
-        deleted: deploymentDetails.deleted_pipe_names ?? [],
+        created: parsed.new_pipe_names ?? [],
+        changed: parsed.changed_pipe_names ?? [],
+        deleted: parsed.deleted_pipe_names ?? [],
       },
       connections: {
-        created: deploymentDetails.new_data_connector_names ?? [],
-        changed: deploymentDetails.changed_data_connector_names ?? [],
-        deleted: deploymentDetails.deleted_data_connector_names ?? [],
+        created: parsed.new_data_connector_names ?? [],
+        changed: parsed.changed_data_connector_names ?? [],
+        deleted: parsed.deleted_data_connector_names ?? [],
       },
-    });
-  }
-
-  const deploymentChanges = {
-    pipes: {
-      changed: deploymentDetails.changed_pipe_names ?? [],
-      created: deploymentDetails.new_pipe_names ?? [],
-      deleted: deploymentDetails.deleted_pipe_names ?? [],
-    },
-    datasources: {
-      changed: deploymentDetails.changed_datasource_names ?? [],
-      created: deploymentDetails.new_datasource_names ?? [],
-      deleted: deploymentDetails.deleted_datasource_names ?? [],
-    },
-  };
-
-  // If we're not waiting, return as soon as the server accepted the deployment.
-  if (!wait) {
-    options?.callbacks?.onDeploymentSubmitted?.(deploymentId);
-    return {
-      success: true,
-      result: "success",
-      datasourceCount: resources.datasources.length,
-      pipeCount: resources.pipes.length,
-      connectionCount: resources.connections?.length ?? 0,
-      buildId: deploymentId,
-      ...deploymentChanges,
     };
-  }
 
-  // Step 2: Poll until the deployment reaches a terminal state.
-  let deployment = body.deployment;
+    options?.callbacks?.onChanges?.(changes);
+
+    const deploymentId = parsed.id;
+
+    if (!wait) {
+      options?.callbacks?.onDeploymentSubmitted?.(deploymentId);
+      return { success: true, result: "success", buildId: deploymentId, ...counts, ...changes };
+    }
+
+    // Step 2: poll until the deployment reaches a terminal state.
+    return await pollDeploymentUntilDone({
+      config,
+      deploymentId,
+      auto,
+      debug,
+      callbacks: options?.callbacks,
+      counts,
+      changes,
+    });
+  } finally {
+    await project.cleanup();
+  }
+}
+
+async function pollDeploymentUntilDone(args: {
+  config: BuildConfig;
+  deploymentId: string;
+  auto: boolean;
+  debug?: boolean;
+  callbacks?: DeployCallbacks;
+  counts: { datasourceCount: number; pipeCount: number; connectionCount: number };
+  changes: DeploymentChanges;
+}): Promise<BuildApiResult> {
+  const { config, deploymentId, auto, debug, callbacks, counts, changes } = args;
+  const baseUrl = config.baseUrl.replace(/\/$/, "");
+
+  let deployment: Deployment = { id: deploymentId, status: "pending" };
   let timesSeenFailed = 0;
   let notifiedReady = false;
   let notifiedWaitingForPromote = false;
 
-  options?.callbacks?.onWaitingForReady?.();
+  callbacks?.onWaitingForReady?.();
 
   const isDone = (): boolean => {
     if (deployment.status !== "data_ready") {
@@ -496,10 +434,8 @@ export async function deployToMain(
     success: false,
     result: "failed",
     error: message,
-    datasourceCount: resources.datasources.length,
-    pipeCount: resources.pipes.length,
-    connectionCount: resources.connections?.length ?? 0,
     buildId: deploymentId,
+    ...counts,
   });
 
   while (!isDone()) {
@@ -511,9 +447,7 @@ export async function deployToMain(
 
     const statusUrl = `${baseUrl}/v1/deployments/${deploymentId}`;
     const statusResponse = await tinybirdFetch(statusUrl, {
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-      },
+      headers: { Authorization: `Bearer ${config.token}` },
     });
 
     if (!statusResponse.ok) {
@@ -562,36 +496,27 @@ export async function deployToMain(
       !notifiedWaitingForPromote
     ) {
       if (!notifiedReady) {
-        options?.callbacks?.onDeploymentReady?.();
+        callbacks?.onDeploymentReady?.();
         notifiedReady = true;
       }
-      options?.callbacks?.onWaitingForPromote?.();
+      callbacks?.onWaitingForPromote?.();
       notifiedWaitingForPromote = true;
     }
   }
 
   if (!notifiedReady) {
-    options?.callbacks?.onDeploymentReady?.();
-    notifiedReady = true;
+    callbacks?.onDeploymentReady?.();
   }
 
   if (auto) {
     if (debug) {
       console.log(`[debug] Deployment ${deploymentId} is now live`);
     }
-    options?.callbacks?.onDeploymentPromoted?.();
-    options?.callbacks?.onDeploymentLive?.(deploymentId);
+    callbacks?.onDeploymentPromoted?.();
+    callbacks?.onDeploymentLive?.(deploymentId);
   }
 
-  return {
-    success: true,
-    result: "success",
-    datasourceCount: resources.datasources.length,
-    pipeCount: resources.pipes.length,
-    connectionCount: resources.connections?.length ?? 0,
-    buildId: deploymentId,
-    ...deploymentChanges,
-  };
+  return { success: true, result: "success", buildId: deploymentId, ...counts, ...changes };
 }
 
 /**
@@ -599,17 +524,4 @@ export async function deployToMain(
  */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function normalizeDeployErrorMessage(message: string): string {
-  const trimmedMessage = message.trim();
-  const isForwardClassicError =
-    trimmedMessage.includes("Tinybird Forward workspace") &&
-    trimmedMessage.includes("Tinybird Classic workspaces");
-
-  if (!isForwardClassicError || trimmedMessage.includes(FORWARD_CLASSIC_GUIDANCE)) {
-    return message;
-  }
-
-  return `${trimmedMessage}\n${FORWARD_CLASSIC_GUIDANCE}`;
 }
