@@ -11,6 +11,12 @@ vi.mock("../../generator/index.js", () => ({
 }));
 
 vi.mock("../../api/branches.js", () => ({
+  BranchApiError: class BranchApiError extends Error {
+    constructor(message: string, public readonly status: number) {
+      super(message);
+      this.name = "BranchApiError";
+    }
+  },
   createBranch: vi.fn(),
   deleteBranch: vi.fn(),
   getBranch: vi.fn(),
@@ -77,7 +83,7 @@ describe("Preview command", () => {
     it("uses config-only last_partition when creating cloud preview branch", async () => {
       const { loadConfigAsync } = await import("../config.js");
       const { buildFromInclude } = await import("../../generator/index.js");
-      const { getBranch, createBranch } = await import("../../api/branches.js");
+      const { getBranch, createBranch, BranchApiError } = await import("../../api/branches.js");
       const { deployToMain } = await import("../../api/deploy.js");
 
       vi.mocked(loadConfigAsync).mockResolvedValue({
@@ -97,7 +103,7 @@ describe("Preview command", () => {
         entities: { datasources: {}, pipes: {}, connections: {}, rawDatasources: [], rawPipes: [], sourceFiles: [] },
         stats: { datasourceCount: 0, pipeCount: 0, connectionCount: 0 },
       });
-      vi.mocked(getBranch).mockRejectedValue(new Error("not found"));
+      vi.mocked(getBranch).mockRejectedValue(new BranchApiError("not found", 404));
       vi.mocked(createBranch).mockResolvedValue({
         id: "b1",
         name: "tmp_ci_feature_test",
@@ -123,7 +129,7 @@ describe("Preview command", () => {
     it("creates cloud preview branch without data when branch_data_mode is not set", async () => {
       const { loadConfigAsync } = await import("../config.js");
       const { buildFromInclude } = await import("../../generator/index.js");
-      const { getBranch, createBranch } = await import("../../api/branches.js");
+      const { getBranch, createBranch, BranchApiError } = await import("../../api/branches.js");
       const { deployToMain } = await import("../../api/deploy.js");
 
       vi.mocked(loadConfigAsync).mockResolvedValue({
@@ -143,7 +149,7 @@ describe("Preview command", () => {
         entities: { datasources: {}, pipes: {}, connections: {}, rawDatasources: [], rawPipes: [], sourceFiles: [] },
         stats: { datasourceCount: 0, pipeCount: 0, connectionCount: 0 },
       });
-      vi.mocked(getBranch).mockRejectedValue(new Error("not found"));
+      vi.mocked(getBranch).mockRejectedValue(new BranchApiError("not found", 404));
       vi.mocked(createBranch).mockResolvedValue({
         id: "b1",
         name: "tmp_ci_feature_test",
@@ -208,6 +214,92 @@ describe("Preview command", () => {
       });
 
       await runPreview();
+      expect(createBranch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("existing preview branch cleanup", () => {
+    const setupCloudPreview = async () => {
+      const { loadConfigAsync } = await import("../config.js");
+      const { buildFromInclude } = await import("../../generator/index.js");
+      const { BranchApiError, createBranch, deleteBranch, getBranch } = await import("../../api/branches.js");
+      const { deployToMain } = await import("../../api/deploy.js");
+
+      vi.mocked(loadConfigAsync).mockResolvedValue({
+        include: ["test.ts"],
+        token: "p.test-token",
+        baseUrl: "https://api.tinybird.co",
+        configPath: "/test/tinybird.config.json",
+        devMode: "branch",
+        cwd: "/test",
+        gitBranch: "feature-test",
+        tinybirdBranch: "feature_test",
+        isMainBranch: false,
+        branchDataMode: null,
+      });
+      vi.mocked(buildFromInclude).mockResolvedValue({
+        resources: { datasources: [], pipes: [], connections: [] },
+        entities: { datasources: {}, pipes: {}, connections: {}, rawDatasources: [], rawPipes: [], sourceFiles: [] },
+        stats: { datasourceCount: 0, pipeCount: 0, connectionCount: 0 },
+      });
+      vi.mocked(createBranch).mockResolvedValue({
+        id: "b1",
+        name: "tmp_ci_feature_test",
+        token: "p.branch",
+        created_at: "2024-01-01T00:00:00Z",
+      });
+      vi.mocked(deployToMain).mockResolvedValue({
+        success: true,
+        result: "success",
+        datasourceCount: 0,
+        pipeCount: 0,
+        connectionCount: 0,
+      });
+
+      return { BranchApiError, createBranch, deleteBranch, getBranch };
+    };
+
+    it("creates a preview branch when the existing branch lookup returns 404", async () => {
+      const { BranchApiError, createBranch, getBranch } = await setupCloudPreview();
+      vi.mocked(getBranch).mockRejectedValue(new BranchApiError("branch not found", 404));
+
+      const result = await runPreview();
+
+      expect(result.success).toBe(true);
+      expect(createBranch).toHaveBeenCalled();
+    });
+
+    it("creates a preview branch when the existing branch is deleted concurrently", async () => {
+      const { BranchApiError, createBranch, deleteBranch, getBranch } = await setupCloudPreview();
+      vi.mocked(getBranch).mockResolvedValue({
+        id: "existing",
+        name: "tmp_ci_feature_test",
+        created_at: "2024-01-01T00:00:00Z",
+      });
+      vi.mocked(deleteBranch).mockRejectedValue(new BranchApiError("branch not found", 404));
+
+      const result = await runPreview();
+
+      expect(result.success).toBe(true);
+      expect(createBranch).toHaveBeenCalled();
+    });
+
+    it("reports a non-404 failure when deleting the existing preview branch", async () => {
+      const { BranchApiError, createBranch, deleteBranch, getBranch } = await setupCloudPreview();
+      vi.mocked(getBranch).mockResolvedValue({
+        id: "existing",
+        name: "tmp_ci_feature_test",
+        created_at: "2024-01-01T00:00:00Z",
+      });
+      vi.mocked(deleteBranch).mockRejectedValue(
+        new BranchApiError("deletion rejected with 422", 422)
+      );
+
+      const result = await runPreview();
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Failed to delete existing preview branch");
+      expect(result.error).toContain("deletion rejected with 422");
       expect(createBranch).not.toHaveBeenCalled();
     });
   });

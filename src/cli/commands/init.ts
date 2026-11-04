@@ -143,6 +143,10 @@ on:
       - "${pathPrefix}tinybird.json"
       - "${pathPrefix}**/*.ts"
 
+concurrency:
+  group: tinybird-preview-\${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 env:
   TINYBIRD_TOKEN: \${{ secrets.TINYBIRD_TOKEN }}
 
@@ -226,6 +230,7 @@ function generateGitlabCiWorkflow(workingDirectory?: string): string {
 
 tinybird_ci:
   stage: tinybird
+  resource_group: tinybird-preview-\${CI_COMMIT_REF_SLUG}
   image: node:22
   rules:
     - changes:
