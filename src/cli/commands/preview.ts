@@ -4,7 +4,14 @@
 
 import { loadConfigAsync, LOCAL_BASE_URL, type ResolvedConfig, type DevMode } from "../config.js";
 import { buildFromInclude, type BuildFromIncludeResult } from "../../generator/index.js";
-import { createBranch, deleteBranch, getBranch, type CreateBranchOptions, type TinybirdBranch } from "../../api/branches.js";
+import {
+  BranchApiError,
+  createBranch,
+  deleteBranch,
+  getBranch,
+  type CreateBranchOptions,
+  type TinybirdBranch,
+} from "../../api/branches.js";
 import { deployToMain } from "../../api/deploy.js";
 import { buildToTinybird } from "../../api/build.js";
 import {
@@ -224,6 +231,7 @@ export async function runPreview(options: PreviewCommandOptions = {}): Promise<P
 
   // Cloud mode - delete existing branch if it exists, then create fresh and deploy
   let branch: TinybirdBranch;
+  const previewBranchPhase: { current: "delete" | "create" } = { current: "create" };
   try {
     const apiConfig = { baseUrl: config.baseUrl, token: config.token };
     const branchOptions: CreateBranchOptions | undefined =
@@ -233,6 +241,7 @@ export async function runPreview(options: PreviewCommandOptions = {}): Promise<P
 
     // Check if branch already exists and delete it for a fresh start
     try {
+      previewBranchPhase.current = "delete";
       const existingBranch = await getBranch(apiConfig, previewBranchName);
       if (existingBranch) {
         if (debug) {
@@ -243,13 +252,16 @@ export async function runPreview(options: PreviewCommandOptions = {}): Promise<P
           console.log(`[debug] Existing branch deleted`);
         }
       }
-    } catch {
-      // Branch doesn't exist, that's fine
+    } catch (error) {
+      if (!(error instanceof BranchApiError && error.status === 404)) {
+        throw error;
+      }
       if (debug) {
         console.log(`[debug] No existing branch to delete`);
       }
     }
 
+    previewBranchPhase.current = "create";
     if (debug) {
       console.log(`[debug] Creating preview branch: ${previewBranchName}`);
     }
@@ -262,7 +274,11 @@ export async function runPreview(options: PreviewCommandOptions = {}): Promise<P
   } catch (error) {
     return {
       success: false,
-      error: `Failed to create preview branch: ${(error as Error).message}`,
+      error: `${
+        previewBranchPhase.current === "delete"
+          ? "Failed to delete existing preview branch"
+          : "Failed to create preview branch"
+      }: ${(error as Error).message}`,
       durationMs: Date.now() - startTime,
     };
   }

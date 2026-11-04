@@ -318,6 +318,57 @@ describe("Init Command", () => {
     });
   });
 
+  describe("CI workflow generation", () => {
+    async function readGeneratedWorkflow(
+      workflowProvider: "github" | "gitlab",
+      workflowPath: string
+    ): Promise<string> {
+      const originalCwd = process.cwd();
+      process.chdir(tempDir);
+
+      try {
+        const result = await runInit({
+          cwd: tempDir,
+          skipLogin: true,
+          devMode: "branch",
+          clientPath: "lib/tinybird.ts",
+          includeCiWorkflow: true,
+          workflowProvider,
+          skipWorkflowPrompt: true,
+        });
+
+        expect(result.success).toBe(true);
+        return fs.readFileSync(path.join(tempDir, workflowPath), "utf-8");
+      } finally {
+        process.chdir(originalCwd);
+      }
+    }
+
+    it("serializes GitHub preview workflows by ref", async () => {
+      const content = await readGeneratedWorkflow(
+        "github",
+        ".github/workflows/tinybird-ci.yaml"
+      );
+
+      expect(content).toContain("concurrency:");
+      expect(content).toContain(
+        "group: tinybird-preview-${{ github.head_ref || github.ref }}"
+      );
+      expect(content).toContain("cancel-in-progress: true");
+    });
+
+    it("serializes GitLab preview jobs by branch", async () => {
+      const content = await readGeneratedWorkflow(
+        "gitlab",
+        ".gitlab/tinybird-ci.yaml"
+      );
+
+      expect(content).toContain(
+        "resource_group: tinybird-preview-${CI_COMMIT_REF_SLUG}"
+      );
+    });
+  });
+
   describe("directory creation", () => {
     it("creates lib directory if it does not exist", async () => {
       expect(fs.existsSync(path.join(tempDir, "lib"))).toBe(false);
