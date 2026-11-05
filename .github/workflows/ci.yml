@@ -7,6 +7,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['22', '24']
 
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -64,7 +67,7 @@ jobs:
         uses: actions/setup-node@v4
         if: ${{ steps.check-secrets.outputs.run_e2e_tests == 'true' }}
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'pnpm'
 
       - name: Install dependencies
