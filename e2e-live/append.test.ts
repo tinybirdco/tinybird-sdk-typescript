@@ -5,7 +5,6 @@ import {
   beforeAll,
   beforeEach,
   afterEach,
-  afterAll,
 } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -15,9 +14,7 @@ import { getBranch, deleteBranch, BranchApiError } from "../src/api/branches.js"
 import { createClient } from "../src/client/base.js";
 import {
   getLiveE2EConfigFromEnv,
-  assertWorkspaceAdminToken,
-  createWorkspaceWithToken,
-  deleteWorkspace,
+  createRunScopedName,
   type LiveE2EConfig,
 } from "./cloud-workspace.js";
 import {
@@ -63,26 +60,21 @@ describeLive("E2E Live: append", () => {
   let tempDir = "";
   let originalEnv: NodeJS.ProcessEnv;
 
-  let workspaceId = "";
-  let workspaceName = "";
-  let workspaceToken = "";
+  const workspaceToken = liveConfig?.workspaceToken ?? "";
+  const runName = createRunScopedName("sdk_append");
   let branchName = "";
   let branchToken = "";
 
-  beforeAll(async () => {
+  beforeAll(() => {
     ensureDistBuild();
-    await assertWorkspaceAdminToken(config);
-
-    const workspace = await createWorkspaceWithToken(config, "sdk_append");
-    workspaceId = workspace.id;
-    workspaceName = workspace.name;
-    workspaceToken = workspace.token;
   });
 
   beforeEach(async () => {
     tempDir = createTempProjectDir();
     originalEnv = { ...process.env };
-    process.env.GITHUB_REF_NAME = `live-append/${workspaceName}`;
+    // The SDK prefers GITHUB_HEAD_REF (set on pull_request runs) over GITHUB_REF_NAME.
+    delete process.env.GITHUB_HEAD_REF;
+    process.env.GITHUB_REF_NAME = `live-append/${runName}`;
     process.env.TINYBIRD_TOKEN = workspaceToken;
 
     const initResult = await runInit({
@@ -130,16 +122,10 @@ describeLive("E2E Live: append", () => {
     cleanupTempProjectDir(tempDir);
   });
 
-  afterAll(async () => {
-    if (workspaceId && workspaceName) {
-      await deleteWorkspace(config, workspaceId, workspaceName);
-    }
-  });
-
   it("appends rows from a local CSV file and serves them via endpoint query", async () => {
     const csvPath = path.join(tempDir, "page_views.csv");
     const timestamp = toTinybirdDateTime(new Date());
-    const pathname = "/append-live-e2e";
+    const pathname = `/append-live-e2e/${runName}`;
 
     fs.writeFileSync(
       csvPath,

@@ -5,7 +5,6 @@ import {
   beforeAll,
   beforeEach,
   afterEach,
-  afterAll,
 } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -13,9 +12,7 @@ import { runInit } from "../src/cli/commands/init.js";
 import { getWorkspace } from "../src/api/workspaces.js";
 import {
   getLiveE2EConfigFromEnv,
-  assertWorkspaceAdminToken,
-  createWorkspaceWithToken,
-  deleteWorkspace,
+  createRunScopedName,
   type LiveE2EConfig,
 } from "./cloud-workspace.js";
 import {
@@ -34,23 +31,19 @@ describeLive("E2E Live: init", () => {
   let tempDir = "";
   let originalEnv: NodeJS.ProcessEnv;
 
-  let workspaceId = "";
-  let workspaceName = "";
-  let workspaceToken = "";
+  const workspaceToken = liveConfig?.workspaceToken ?? "";
+  const runName = createRunScopedName("sdk_init");
 
-  beforeAll(async () => {
+  beforeAll(() => {
     ensureDistBuild();
-    await assertWorkspaceAdminToken(config);
-    const workspace = await createWorkspaceWithToken(config, "sdk_init");
-    workspaceId = workspace.id;
-    workspaceName = workspace.name;
-    workspaceToken = workspace.token;
   });
 
   beforeEach(() => {
     tempDir = createTempProjectDir();
     originalEnv = { ...process.env };
-    process.env.GITHUB_REF_NAME = `live-init/${workspaceName}`;
+    // The SDK prefers GITHUB_HEAD_REF (set on pull_request runs) over GITHUB_REF_NAME.
+    delete process.env.GITHUB_HEAD_REF;
+    process.env.GITHUB_REF_NAME = `live-init/${runName}`;
     process.env.TINYBIRD_TOKEN = workspaceToken;
   });
 
@@ -59,19 +52,12 @@ describeLive("E2E Live: init", () => {
     cleanupTempProjectDir(tempDir);
   });
 
-  afterAll(async () => {
-    if (!workspaceId || !workspaceName) {
-      return;
-    }
-    await deleteWorkspace(config, workspaceId, workspaceName);
-  });
-
   it("initializes a project against a real workspace token", async () => {
     const workspaceInfo = await getWorkspace({
       baseUrl: config.baseUrl,
       token: workspaceToken,
     });
-    expect(workspaceInfo.id).toBe(workspaceId);
+    expect(workspaceInfo.id).toBeTruthy();
 
     const initResult = await runInit({
       cwd: tempDir,

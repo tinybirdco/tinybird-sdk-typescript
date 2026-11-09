@@ -5,20 +5,16 @@ import {
   beforeAll,
   beforeEach,
   afterEach,
-  afterAll,
 } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import { runInit } from "../src/cli/commands/init.js";
-import { runDeploy } from "../src/cli/commands/deploy.js";
 import { listDatasources, listPipesV1 } from "../src/api/resources.js";
 import { tinybirdFetch } from "../src/api/fetcher.js";
 import {
   getLiveE2EConfigFromEnv,
-  assertWorkspaceAdminToken,
-  createWorkspaceWithToken,
-  deleteWorkspace,
+  deployToProduction,
   type LiveE2EConfig,
 } from "./cloud-workspace.js";
 import {
@@ -216,22 +212,17 @@ describeLive("E2E Live: deploy", () => {
   let tempDir = "";
   let originalEnv: NodeJS.ProcessEnv;
 
-  let workspaceId = "";
-  let workspaceName = "";
-  let workspaceToken = "";
+  const workspaceToken = liveConfig?.workspaceToken ?? "";
 
-  beforeAll(async () => {
+  beforeAll(() => {
     ensureDistBuild();
-    await assertWorkspaceAdminToken(config);
-    const workspace = await createWorkspaceWithToken(config, "sdk_deploy");
-    workspaceId = workspace.id;
-    workspaceName = workspace.name;
-    workspaceToken = workspace.token;
   });
 
   beforeEach(() => {
     tempDir = createTempProjectDir();
     originalEnv = { ...process.env };
+    // The SDK prefers GITHUB_HEAD_REF (set on pull_request runs) over GITHUB_REF_NAME.
+    delete process.env.GITHUB_HEAD_REF;
     process.env.GITHUB_REF_NAME = "main";
     process.env.TINYBIRD_TOKEN = workspaceToken;
     process.env.TINYBIRD_URL = config.baseUrl;
@@ -240,12 +231,6 @@ describeLive("E2E Live: deploy", () => {
   afterEach(() => {
     process.env = originalEnv;
     cleanupTempProjectDir(tempDir);
-  });
-
-  afterAll(async () => {
-    if (workspaceId && workspaceName) {
-      await deleteWorkspace(config, workspaceId, workspaceName);
-    }
   });
 
   it("deploys custom TypeScript entities to production and serves ingested data", async () => {
@@ -260,7 +245,7 @@ describeLive("E2E Live: deploy", () => {
     setConfigBaseUrl(tempDir, config.baseUrl);
     writeProductionTestEntities(tempDir);
 
-    const deployResult = await runDeploy({ cwd: tempDir });
+    const deployResult = await deployToProduction(config, tempDir);
     expect(deployResult.success).toBe(true);
     expect(deployResult.deploy?.success).toBe(true);
 
@@ -303,7 +288,7 @@ describeLive("E2E Live: deploy", () => {
     setConfigBaseUrl(tempDir, config.baseUrl);
     writeProductionTestEntities(tempDir);
 
-    const firstDeployResult = await runDeploy({ cwd: tempDir });
+    const firstDeployResult = await deployToProduction(config, tempDir);
     expect(firstDeployResult.success).toBe(true);
     expect(firstDeployResult.deploy?.success).toBe(true);
     const previousLiveDeployment = await getCurrentLiveDeployment(config, workspaceToken);
@@ -328,7 +313,7 @@ describeLive("E2E Live: deploy", () => {
 
     writeProductionTestEntities(tempDir, { requireNonNegativeMetric: true });
 
-    const secondDeployResult = await runDeploy({ cwd: tempDir });
+    const secondDeployResult = await deployToProduction(config, tempDir);
     expect(secondDeployResult.success).toBe(true);
     expect(secondDeployResult.deploy?.success).toBe(true);
     expect(secondDeployResult.deploy?.result).toBe("success");
