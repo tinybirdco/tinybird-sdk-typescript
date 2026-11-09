@@ -1,5 +1,10 @@
 name: Publish
 
+# Publishing uses npm trusted publishing (OIDC): npm exchanges the job's GitHub
+# OIDC token for a short-lived, package-scoped publish token. No npm token is stored.
+# Each package on npmjs.com trusts this repo, this workflow file and the `release`
+# environment, which is restricted to the main branch.
+
 on:
   push:
     branches: [main]
@@ -7,6 +12,7 @@ on:
 jobs:
   publish-sdk:
     runs-on: ubuntu-latest
+    environment: release
 
     permissions:
       contents: read
@@ -24,6 +30,10 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing requires npm >= 11.5.1; Node 20 ships npm 10.
+      - name: Upgrade npm
+        run: npm install -g npm@^11.5.1
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -32,12 +42,21 @@ jobs:
         run: pnpm run build
 
       - name: Publish SDK to npm
-        run: pnpm publish --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          # npm publish fails on an existing version, unlike pnpm's filtered publish, which skipped it.
+          if [ -n "$(npm view "$name@$version" version 2>/dev/null)" ]; then
+            echo "$name@$version is already published, skipping."
+            exit 0
+          fi
+          # pnpm pack resolves workspace: protocol dependencies; npm publish uses OIDC and adds provenance.
+          pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+          npm publish "$RUNNER_TEMP"/pack/*.tgz --access public
 
   publish-mcp:
     runs-on: ubuntu-latest
+    environment: release
 
     permissions:
       contents: read
@@ -55,6 +74,10 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing requires npm >= 11.5.1; Node 20 ships npm 10.
+      - name: Upgrade npm
+        run: npm install -g npm@^11.5.1
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -66,6 +89,15 @@ jobs:
         run: pnpm --filter @tinybirdco/devtools-mcp build
 
       - name: Publish MCP to npm
-        run: pnpm --filter @tinybirdco/devtools-mcp publish --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        working-directory: mcp
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          # npm publish fails on an existing version, unlike pnpm's filtered publish, which skipped it.
+          if [ -n "$(npm view "$name@$version" version 2>/dev/null)" ]; then
+            echo "$name@$version is already published, skipping."
+            exit 0
+          fi
+          # pnpm pack rewrites "@tinybirdco/sdk": "workspace:*" to the real version.
+          pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+          npm publish "$RUNNER_TEMP"/pack/*.tgz --access public

@@ -2,6 +2,11 @@
   "name": "@tinybirdco/devtools-mcp",
   "version": "0.0.3",
   "description": "Tinybird DevTools MCP Server",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tinybirdco/tinybird-sdk-typescript.git",
+    "directory": "mcp"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
