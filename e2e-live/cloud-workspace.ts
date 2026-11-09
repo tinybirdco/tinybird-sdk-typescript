@@ -1,182 +1,61 @@
 import { loadEnvFiles } from "../src/cli/config.js";
-import { tinybirdFetch } from "../src/api/fetcher.js";
+import { runDeploy } from "../src/cli/commands/deploy.js";
 
+/**
+ * Live E2E suites run against a single, dedicated CI workspace.
+ *
+ * - TINYBIRD_E2E_WORKSPACE_TOKEN: the workspace's admin token. Used for branch
+ *   operations (create/get/delete require ADMIN scope), ingestion, queries and pull.
+ * - TINYBIRD_E2E_DEPLOY_TOKEN: a static token with WORKSPACE:DEPLOY scope, used for
+ *   production deployments. Optional locally; falls back to the workspace token.
+ *
+ * No user tokens are needed: suites never create or delete workspaces.
+ */
 export interface LiveE2EConfig {
   baseUrl: string;
-  userToken: string;
-  workspaceAdminToken: string;
-}
-
-export interface WorkspaceResponse {
-  id: string;
-  name: string;
-  token?: string;
-}
-
-interface WorkspaceTokenInfo {
-  id: string;
-  name: string;
-  scope?: string;
-}
-
-interface JsonRequestOptions {
-  method: "GET" | "POST" | "DELETE";
-  token: string;
-  body?: string;
-  contentType?: string;
+  workspaceToken: string;
+  deployToken: string;
 }
 
 // Load env from repository root where tinybird.config.* usually lives.
 loadEnvFiles(process.cwd());
 
-function parseJsonOrThrow(responseText: string, endpoint: string): unknown {
-  try {
-    return JSON.parse(responseText);
-  } catch {
-    throw new Error(`Expected JSON from ${endpoint}, got: ${responseText || "<empty>"}`);
-  }
-}
-
-async function requestJson(endpoint: string, options: JsonRequestOptions): Promise<unknown> {
-  const response = await tinybirdFetch(endpoint, {
-    method: options.method,
-    headers: {
-      Authorization: `Bearer ${options.token}`,
-      ...(options.contentType ? { "Content-Type": options.contentType } : {}),
-    },
-    body: options.body,
-  });
-
-  const responseText = await response.text();
-  if (!response.ok) {
-    throw new Error(
-      `Request failed (${options.method} ${endpoint}): ` +
-        `${response.status} ${response.statusText} - ${responseText || "<empty>"}`
-    );
-  }
-
-  return parseJsonOrThrow(responseText, endpoint);
-}
-
 export function getLiveE2EConfigFromEnv(): LiveE2EConfig | null {
-  const userToken = process.env.TINYBIRD_E2E_USER_TOKEN;
-  const workspaceAdminToken = process.env.TINYBIRD_E2E_WORKSPACE_ADMIN_TOKEN;
+  const workspaceToken = process.env.TINYBIRD_E2E_WORKSPACE_TOKEN;
   const baseUrl = process.env.TINYBIRD_E2E_BASE_URL ?? "https://api.tinybird.co";
 
-  if (!userToken || !workspaceAdminToken) {
+  if (!workspaceToken) {
     return null;
   }
 
   return {
     baseUrl,
-    userToken,
-    workspaceAdminToken,
+    workspaceToken,
+    deployToken: process.env.TINYBIRD_E2E_DEPLOY_TOKEN || workspaceToken,
   };
 }
 
-export function createWorkspaceName(prefix = "sdk_e2e"): string {
+/**
+ * Unique, branch-safe identifier for this run so concurrent CI runs sharing the
+ * workspace never collide on branch names.
+ */
+export function createRunScopedName(prefix: string): string {
+  const runId = process.env.GITHUB_RUN_ID ?? "local";
   const suffix = Math.random().toString(36).slice(2, 8);
-  return `${prefix}_${Date.now()}_${suffix}`.replace(/[^a-zA-Z0-9_]/g, "_");
+  return `${prefix}_${runId}_${suffix}`.replace(/[^a-zA-Z0-9_]/g, "_");
 }
 
-export async function assertWorkspaceAdminToken(config: LiveE2EConfig): Promise<void> {
-  const endpoint = new URL("/v1/workspace", config.baseUrl).toString();
-  const payload = (await requestJson(endpoint, {
-    method: "GET",
-    token: config.workspaceAdminToken,
-  })) as WorkspaceTokenInfo;
-
-  if (!payload.id || !payload.name) {
-    throw new Error("Workspace admin token validation failed: missing workspace identity in response.");
+/**
+ * Deploy to production with the WORKSPACE:DEPLOY token, then switch back to the
+ * workspace admin token for ingestion, queries and pull. The workspace is shared
+ * across suites and runs, so destructive operations are allowed: each deploy
+ * replaces whatever the previous one left behind.
+ */
+export async function deployToProduction(config: LiveE2EConfig, cwd: string) {
+  process.env.TINYBIRD_TOKEN = config.deployToken;
+  try {
+    return await runDeploy({ cwd, allowDestructiveOperations: true });
+  } finally {
+    process.env.TINYBIRD_TOKEN = config.workspaceToken;
   }
-
-  if (payload.scope !== "admin") {
-    throw new Error(
-      `Workspace admin token validation failed: expected scope=admin, got scope=${payload.scope ?? "unknown"}.`
-    );
-  }
-}
-
-export async function createWorkspace(
-  config: LiveE2EConfig,
-  workspaceName: string
-): Promise<WorkspaceResponse> {
-  const endpoint = new URL("/v1/workspaces", config.baseUrl).toString();
-  const body = new URLSearchParams({ name: workspaceName }).toString();
-
-  const payload = (await requestJson(endpoint, {
-    method: "POST",
-    token: config.userToken,
-    body,
-    contentType: "application/x-www-form-urlencoded",
-  })) as WorkspaceResponse;
-
-  if (!payload.id || !payload.name) {
-    throw new Error("Workspace creation failed: response missing id or name.");
-  }
-
-  return payload;
-}
-
-export async function getWorkspaceWithToken(
-  config: LiveE2EConfig,
-  workspaceId: string
-): Promise<WorkspaceResponse> {
-  const endpoint = new URL(`/v1/workspaces/${encodeURIComponent(workspaceId)}`, config.baseUrl);
-  endpoint.searchParams.set("with_token", "true");
-
-  const payload = (await requestJson(endpoint.toString(), {
-    method: "GET",
-    token: config.userToken,
-  })) as WorkspaceResponse;
-
-  if (!payload.id || !payload.name) {
-    throw new Error(`Failed to fetch workspace ${workspaceId}: response missing id or name.`);
-  }
-
-  return payload;
-}
-
-export async function waitForWorkspaceToken(
-  config: LiveE2EConfig,
-  workspaceId: string,
-  maxAttempts = 15,
-  delayMs = 1_000
-): Promise<string> {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const workspace = await getWorkspaceWithToken(config, workspaceId);
-    if (workspace.token) {
-      return workspace.token;
-    }
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-  }
-
-  throw new Error(`Timed out waiting for workspace token (workspace=${workspaceId}).`);
-}
-
-export async function createWorkspaceWithToken(
-  config: LiveE2EConfig,
-  namePrefix = "sdk_e2e"
-): Promise<Required<WorkspaceResponse>> {
-  const workspace = await createWorkspace(config, createWorkspaceName(namePrefix));
-  const token = await waitForWorkspaceToken(config, workspace.id);
-  return {
-    id: workspace.id,
-    name: workspace.name,
-    token,
-  };
-}
-
-export async function deleteWorkspace(
-  config: LiveE2EConfig,
-  workspaceId: string,
-  workspaceName: string
-): Promise<void> {
-  const endpoint = new URL(`/v1/workspaces/${encodeURIComponent(workspaceId)}`, config.baseUrl);
-  endpoint.searchParams.set("confirmation", workspaceName);
-
-  await requestJson(endpoint.toString(), {
-    method: "DELETE",
-    token: config.userToken,
-  });
 }

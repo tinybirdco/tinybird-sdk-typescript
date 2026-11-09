@@ -14,9 +14,7 @@ import { getBranch, deleteBranch, BranchApiError } from "../src/api/branches.js"
 import { createClient } from "../src/client/base.js";
 import {
   getLiveE2EConfigFromEnv,
-  assertWorkspaceAdminToken,
-  createWorkspaceWithToken,
-  deleteWorkspace,
+  createRunScopedName,
   type LiveE2EConfig,
 } from "./cloud-workspace.js";
 import {
@@ -65,24 +63,20 @@ describeLive("E2E Live: build", () => {
   let tempDir = "";
   let originalEnv: NodeJS.ProcessEnv;
 
-  let workspaceId = "";
-  let workspaceName = "";
-  let workspaceToken = "";
+  const workspaceToken = liveConfig?.workspaceToken ?? "";
+  const runName = createRunScopedName("sdk_build");
   let tinybirdBranchName = "";
 
-  beforeAll(async () => {
+  beforeAll(() => {
     ensureDistBuild();
-    await assertWorkspaceAdminToken(config);
-    const workspace = await createWorkspaceWithToken(config, "sdk_build");
-    workspaceId = workspace.id;
-    workspaceName = workspace.name;
-    workspaceToken = workspace.token;
   });
 
   beforeEach(() => {
     tempDir = createTempProjectDir();
     originalEnv = { ...process.env };
-    process.env.GITHUB_REF_NAME = `live-build/${workspaceName}`;
+    // The SDK prefers GITHUB_HEAD_REF (set on pull_request runs) over GITHUB_REF_NAME.
+    delete process.env.GITHUB_HEAD_REF;
+    process.env.GITHUB_REF_NAME = `live-build/${runName}`;
     process.env.TINYBIRD_TOKEN = workspaceToken;
   });
 
@@ -103,10 +97,6 @@ describeLive("E2E Live: build", () => {
           throw error;
         }
       }
-    }
-
-    if (workspaceId && workspaceName) {
-      await deleteWorkspace(config, workspaceId, workspaceName);
     }
   });
 
@@ -153,14 +143,15 @@ describeLive("E2E Live: build", () => {
       token: branchToken,
     });
 
+    const pathname = `/live-e2e/${runName}`;
     await client.ingest("page_views", {
       timestamp: toTinybirdDateTime(new Date()),
       session_id: "live_test_session",
-      pathname: "/live-e2e",
+      pathname,
       referrer: null,
     });
 
     const rows = await waitForPipeData(branchToken, config.baseUrl);
-    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.map((row) => row.pathname)).toContain(pathname);
   });
 });

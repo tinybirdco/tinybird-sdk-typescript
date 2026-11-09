@@ -5,7 +5,6 @@ import {
   beforeAll,
   beforeEach,
   afterEach,
-  afterAll,
 } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -15,9 +14,7 @@ import { getBranch, deleteBranch, BranchApiError } from "../src/api/branches.js"
 import { createClient } from "../src/client/base.js";
 import {
   getLiveE2EConfigFromEnv,
-  assertWorkspaceAdminToken,
-  createWorkspaceWithToken,
-  deleteWorkspace,
+  createRunScopedName,
   type LiveE2EConfig,
 } from "./cloud-workspace.js";
 import {
@@ -155,25 +152,20 @@ describeLive("E2E Live: Null engine", () => {
   let tempDir = "";
   let originalEnv: NodeJS.ProcessEnv;
 
-  let workspaceId = "";
-  let workspaceName = "";
-  let workspaceToken = "";
+  const workspaceToken = liveConfig?.workspaceToken ?? "";
+  const runName = createRunScopedName("sdk_null_engine");
   let branchName = "";
 
-  beforeAll(async () => {
+  beforeAll(() => {
     ensureDistBuild();
-    await assertWorkspaceAdminToken(config);
-
-    const workspace = await createWorkspaceWithToken(config, "sdk_null_engine");
-    workspaceId = workspace.id;
-    workspaceName = workspace.name;
-    workspaceToken = workspace.token;
   });
 
   beforeEach(() => {
     tempDir = createTempProjectDir();
     originalEnv = { ...process.env };
-    process.env.GITHUB_REF_NAME = `live-null-engine/${workspaceName}`;
+    // The SDK prefers GITHUB_HEAD_REF (set on pull_request runs) over GITHUB_REF_NAME.
+    delete process.env.GITHUB_HEAD_REF;
+    process.env.GITHUB_REF_NAME = `live-null-engine/${runName}`;
     process.env.TINYBIRD_TOKEN = workspaceToken;
   });
 
@@ -194,12 +186,6 @@ describeLive("E2E Live: Null engine", () => {
     branchName = "";
     process.env = originalEnv;
     cleanupTempProjectDir(tempDir);
-  });
-
-  afterAll(async () => {
-    if (workspaceId && workspaceName) {
-      await deleteWorkspace(config, workspaceId, workspaceName);
-    }
   });
 
   it("builds a Null engine source and ingests through its materialized view target", async () => {

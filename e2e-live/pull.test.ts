@@ -5,12 +5,10 @@ import {
   beforeAll,
   beforeEach,
   afterEach,
-  afterAll,
 } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { runInit } from "../src/cli/commands/init.js";
-import { runDeploy } from "../src/cli/commands/deploy.js";
 import { runPull } from "../src/cli/commands/pull.js";
 import {
   listDatasources,
@@ -22,9 +20,7 @@ import {
 } from "../src/api/resources.js";
 import {
   getLiveE2EConfigFromEnv,
-  assertWorkspaceAdminToken,
-  createWorkspaceWithToken,
-  deleteWorkspace,
+  deployToProduction,
   type LiveE2EConfig,
 } from "./cloud-workspace.js";
 import {
@@ -83,18 +79,10 @@ describeLive("E2E Live: pull", () => {
   let tempDir = "";
   let originalEnv: NodeJS.ProcessEnv;
 
-  let workspaceId = "";
-  let workspaceName = "";
-  let workspaceToken = "";
+  const workspaceToken = liveConfig?.workspaceToken ?? "";
 
-  beforeAll(async () => {
+  beforeAll(() => {
     ensureDistBuild();
-    await assertWorkspaceAdminToken(config);
-
-    const workspace = await createWorkspaceWithToken(config, "sdk_pull");
-    workspaceId = workspace.id;
-    workspaceName = workspace.name;
-    workspaceToken = workspace.token;
   });
 
   beforeEach(() => {
@@ -102,6 +90,8 @@ describeLive("E2E Live: pull", () => {
     originalEnv = { ...process.env };
 
     // Force main branch detection so deploy runs against production workspace.
+    // The SDK prefers GITHUB_HEAD_REF (set on pull_request runs) over GITHUB_REF_NAME.
+    delete process.env.GITHUB_HEAD_REF;
     process.env.GITHUB_REF_NAME = "main";
     process.env.TINYBIRD_TOKEN = workspaceToken;
   });
@@ -109,12 +99,6 @@ describeLive("E2E Live: pull", () => {
   afterEach(() => {
     process.env = originalEnv;
     cleanupTempProjectDir(tempDir);
-  });
-
-  afterAll(async () => {
-    if (workspaceId && workspaceName) {
-      await deleteWorkspace(config, workspaceId, workspaceName);
-    }
   });
 
   it("deploys to production and pulls matching datasource/pipe files", async () => {
@@ -128,7 +112,7 @@ describeLive("E2E Live: pull", () => {
 
     setConfigBaseUrl(tempDir, config.baseUrl);
 
-    const deployResult = await runDeploy({ cwd: tempDir });
+    const deployResult = await deployToProduction(config, tempDir);
     expect(deployResult.success).toBe(true);
     expect(deployResult.deploy?.success).toBe(true);
 
