@@ -270,6 +270,50 @@ describe("TinybirdApi", () => {
     ).rejects.toThrow("Date values are not supported in ingest payloads");
   });
 
+  it.each([
+    {
+      name: "bigint entries",
+      payload: new Map([["total", 9007199254740993n], ["pending", 0n]]),
+      expected: { total: "9007199254740993", pending: "0" },
+    },
+    {
+      name: "nested maps",
+      payload: new Map([["current", new Map([["count", 42]])]]),
+      expected: { current: { count: 42 } },
+    },
+  ])("serializes $name in ingested maps", async ({ payload, expected }) => {
+    let event: unknown;
+    server.use(
+      http.post(`${BASE_URL}/v0/events`, async ({ request }) => {
+        event = JSON.parse(await request.text());
+        return HttpResponse.json({ successful_rows: 1, quarantined_rows: 0 });
+      })
+    );
+
+    const api = createTinybirdApi({ baseUrl: BASE_URL, token: "p.default-token" });
+    await api.ingest("events", { payload });
+
+    expect(event).toEqual({ payload: expected });
+  });
+
+  it("rejects Date values inside ingest maps before making a request", async () => {
+    let requests = 0;
+    server.use(
+      http.post(`${BASE_URL}/v0/events`, () => {
+        requests += 1;
+        return HttpResponse.json({ successful_rows: 1, quarantined_rows: 0 });
+      })
+    );
+
+    const api = createTinybirdApi({ baseUrl: BASE_URL, token: "p.default-token" });
+    await expect(
+      api.ingest("events", {
+        payload: new Map([["when", new Date("2024-01-01T00:00:00.000Z")]]),
+      })
+    ).rejects.toThrow("Date values are not supported in ingest payloads");
+    expect(requests).toBe(0);
+  });
+
   it("does not retry ingest on 503 when retry is disabled", async () => {
     let attempts = 0;
 

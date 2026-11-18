@@ -790,7 +790,9 @@ export class TinybirdApi {
     }
 
     if (value instanceof Map) {
-      return Object.fromEntries(value);
+      return Object.fromEntries(
+        Array.from(value, ([key, entry]) => [key, this.serializeValue(entry)])
+      );
     }
 
     if (typeof value === "bigint") {
